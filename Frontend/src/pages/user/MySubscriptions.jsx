@@ -346,26 +346,13 @@ export default function MySubscriptions() {
             </p>
 
             {/* Live Budget Tracking Box */}
-            <div className={`p-4 border rounded-xl text-sm ${isOverBudget ? "border-red-500/50 bg-red-950/20 text-red-200" : "border-fresh-700/50 bg-fresh-950/20 text-fresh-200"}`}>
-              <div className="flex justify-between items-center">
-                <span>Total Delivery Budget (per service):</span>
-                <span className="font-bold text-white">₹{perServiceAmount.toFixed(2)}</span>
+            {isOverBudget && (
+              <div className="p-4 border rounded-xl text-sm border-red-500/50 bg-red-950/20 text-red-200">
+                <p className="text-xs text-red-400 font-medium mt-1">
+                  ⚠️ Limit exceeded. Please reduce product quantities.
+                </p>
               </div>
-              {isOverBudget && (
-                <>
-                  <div className="border-t border-gray-800 my-1.5"></div>
-                  <div className="flex justify-between items-center font-semibold">
-                    <span>Overage (Exceeded):</span>
-                    <span className="font-bold text-red-400">
-                      ₹{Math.abs(remainingBudget).toFixed(2)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-red-400 font-medium mt-1">
-                    ⚠️ Limit exceeded. Please reduce product quantities.
-                  </p>
-                </>
-              )}
-            </div>
+            )}
 
             {seasonalMsg && (
               <div className={`rounded-xl px-4 py-3 text-sm ${seasonalMsg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
@@ -746,23 +733,13 @@ export default function MySubscriptions() {
                               </div>
 
                               {/* Budget Status */}
-                              <div className={`p-3 border rounded-xl text-xs ${isActiveOverBudget ? "border-red-500/50 bg-red-950/20 text-red-200" : "border-fresh-700/50 bg-fresh-950/20 text-fresh-200"}`}>
-                                <div className="flex justify-between items-center">
-                                  <span>Total Delivery Budget (per service):</span>
-                                  <span className="font-bold text-white">₹{schedulesPerServiceAmount.toFixed(2)}</span>
+                              {isActiveOverBudget && (
+                                <div className="p-3 border rounded-xl text-xs border-red-500/50 bg-red-950/20 text-red-200">
+                                  <p className="text-xs text-red-400 font-medium mt-1">
+                                    ⚠️ Limit exceeded. Please reduce product quantities.
+                                  </p>
                                 </div>
-                                {isActiveOverBudget && (
-                                  <>
-                                    <div className="border-t border-gray-800 my-1.5"></div>
-                                    <div className="flex justify-between items-center font-semibold">
-                                      <span>Overage (Exceeded):</span>
-                                      <span className="font-bold text-red-400">
-                                        ₹{Math.abs(activeRemainingBudget).toFixed(2)}
-                                      </span>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
+                              )}
 
                               {/* 1. Customize Fixed Items */}
                               <div className="space-y-2">
@@ -883,7 +860,7 @@ export default function MySubscriptions() {
                                                     })}
                                                     className="text-[9px] text-fresh-400 hover:text-fresh-300 bg-fresh-950/40 border border-fresh-800/30 px-1.5 py-0.5 rounded cursor-pointer transition-all"
                                                   >
-                                                    💡 {maxAddable}g add
+                                                    💡 {maxAddable}g add kar sakte ho
                                                   </button>
                                                 ) : null;
                                               })()}

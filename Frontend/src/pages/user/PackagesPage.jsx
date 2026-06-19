@@ -310,26 +310,13 @@ export default function PackagesPage() {
         )}
 
         {/* Live Budget Tracking Box */}
-        <div className={`card p-5 border ${isOverBudget ? "border-red-500/50 bg-red-950/20 text-red-200" : "border-fresh-700/50 bg-fresh-950/20 text-fresh-200"} flex flex-col gap-2 rounded-2xl`}>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-gray-400">Total Delivery Budget (per service):</span>
-            <span className="font-bold text-white">₹{perServiceAmount.toFixed(2)}</span>
+        {isOverBudget && (
+          <div className="card p-5 border border-red-500/50 bg-red-950/20 text-red-200 flex flex-col gap-2 rounded-2xl">
+            <p className="text-xs text-red-400 font-medium mt-1 animate-pulse">
+              ⚠️ You have exceeded the delivery budget limit. Please reduce product quantities.
+            </p>
           </div>
-          {isOverBudget && (
-            <>
-              <div className="border-t border-gray-800/80 my-1"></div>
-              <div className="flex justify-between items-center text-sm font-semibold">
-                <span>Overage (Exceeded):</span>
-                <span className="font-bold text-red-400">
-                  ₹{Math.abs(remainingBudget).toFixed(2)}
-                </span>
-              </div>
-              <p className="text-xs text-red-400 font-medium mt-1 animate-pulse">
-                ⚠️ You have exceeded the delivery budget limit. Please reduce product quantities.
-              </p>
-            </>
-          )}
-        </div>
+        )}
 
         {/* 1. Customize Fixed Items */}
         <div className="card space-y-4">

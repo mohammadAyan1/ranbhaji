@@ -44,7 +44,7 @@ export default function AdminPackages() {
     if (fixedItems.length === 0 || !form.price || !form.services_per_month) {
       setValidationResult(null); return;
     }
-    const per_service = (parseFloat(form.price) / parseInt(form.services_per_month)) * (1 - parseFloat(form.margin_percent || 0) / 100);
+    const per_service = (parseFloat(form.price) / parseInt(form.services_per_month)) * (1 - parseFloat(form.margin_percent || 0) / 200);
     let fixed_cost = 0;
     fixedItems.forEach(fi => {
       const product = products.find(p => p.id === parseInt(fi.product_id));
@@ -394,7 +394,7 @@ export default function AdminPackages() {
                   <p className="text-gray-400 text-sm">{pkg.num_persons} persons · {pkg.services_per_month} deliveries/month · <span className="text-white font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%</p>
                   <p className="text-gray-500 text-xs mt-1">
                     Raw Per-service: ₹{(parseFloat(pkg.price) / pkg.services_per_month).toFixed(2)} ·
-                    Visible Budget: ₹{((parseFloat(pkg.price) / pkg.services_per_month) * (1 - (pkg.margin_percent || 0) / 100)).toFixed(2)}
+                    Visible Budget: ₹{((parseFloat(pkg.price) / pkg.services_per_month) * (1 - (pkg.margin_percent || 0) / 200)).toFixed(2)}
                   </p>
                 </div>
                 <div className="flex gap-2">

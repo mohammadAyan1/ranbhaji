@@ -584,7 +584,7 @@ export const getSeasonalOptions = async (req, res) => {
         const maxCount = pkg.SeasonalConfig?.max_select_count;
 
         // Calculate package price details
-        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 100);
+        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // Extract fixed items from subscription (if present) or fallback to package fixed items
         const subFixedItems = subscription.Items.filter(i => i.is_fixed);
@@ -648,7 +648,7 @@ export const selectSeasonalItems = async (req, res) => {
         if (!subscription) { await t.rollback(); return res.status(404).json({ success: false, message: "Subscription not found" }); }
 
         const pkg = subscription.Package;
-        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 100);
+        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // 1. Validate fixed items (cannot completely delete or leave empty)
         const pkgFixedItemIds = pkg.FixedItems.map(fi => fi.product_id);
@@ -770,7 +770,7 @@ export const getUpcomingSelections = async (req, res) => {
 
         const pool = pkg.SeasonalPool;
         const maxCount = pkg.SeasonalConfig?.max_select_count;
-        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 100);
+        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // Extract fixed items from subscription (if present) or fallback to package fixed items
         const subFixedItems = subscription.Items.filter(i => i.is_fixed);
@@ -905,7 +905,7 @@ export const saveScheduleSeasonal = async (req, res) => {
         }
 
         const pkg = subscription.Package;
-        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 100);
+        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // 1. Validate fixed items (cannot completely delete or leave empty)
         const pkgFixedItemIds = pkg.FixedItems.map(fi => fi.product_id);
