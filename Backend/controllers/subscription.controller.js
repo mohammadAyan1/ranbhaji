@@ -135,7 +135,7 @@ export const getAvailableDates = async (req, res) => {
             const schedules = await DeliverySchedule.findAll({
                 where: {
                     subscription_id: { [Op.in]: subIds },
-                    scheduled_date: { [Op.gte]: new Date().toISOString().split('T')[0] },
+                    scheduled_date: { [Op.gt]: new Date().toISOString().split('T')[0] },
                     status: 'pending'
                 },
                 attributes: ['scheduled_date'],
@@ -729,6 +729,54 @@ export const selectSeasonalItems = async (req, res) => {
             is_seasonal: true
         }));
         if (rows.length > 0) await SubscriptionItem.bulkCreate(rows, { transaction: t });
+
+        // 4. Update the earliest pending unlocked delivery schedule with these selections
+        const earliestSchedule = await DeliverySchedule.findOne({
+            where: {
+                subscription_id,
+                status: 'pending',
+                is_locked: false
+            },
+            order: [['scheduled_date', 'ASC']],
+            transaction: t
+        });
+
+        if (earliestSchedule) {
+            // Delete existing selections for this schedule
+            await ScheduleSeasonalSelection.destroy({
+                where: { schedule_id: earliestSchedule.id },
+                transaction: t
+            });
+
+            // Insert new selections (both seasonal and fixed)
+            const scheduleSelections = [];
+
+            // Add seasonal selections
+            scheduleSelections.push(...inputSeasonalItems
+                .filter(item => parseFloat(item.qty_gm) > 0)
+                .map(i => ({
+                    schedule_id: earliestSchedule.id,
+                    product_id: i.product_id,
+                    qty_gm: i.qty_gm,
+                    is_auto: false
+                }))
+            );
+
+            // Add fixed selections
+            scheduleSelections.push(...inputFixedItems
+                .filter(item => parseFloat(item.qty_gm) > 0)
+                .map(i => ({
+                    schedule_id: earliestSchedule.id,
+                    product_id: i.product_id,
+                    qty_gm: i.qty_gm,
+                    is_auto: false
+                }))
+            );
+
+            if (scheduleSelections.length > 0) {
+                await ScheduleSeasonalSelection.bulkCreate(scheduleSelections, { transaction: t });
+            }
+        }
 
         await t.commit();
         res.status(200).json({ success: true, message: "Custom selections saved successfully" });
