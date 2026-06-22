@@ -63,7 +63,7 @@ export default function PackagesPage() {
         // Only keep active/paused ones
         setMySubscriptions(subs.filter(s => s.status === 'active' || s.status === 'paused'));
       })
-      .catch(() => {}); // silently ignore if fails
+      .catch(() => { }); // silently ignore if fails
   }, []);
 
   // Helper: check if user already has this package active/paused
@@ -149,7 +149,7 @@ export default function PackagesPage() {
         api.get("/my-subscriptions").then(r => {
           const subs = r.data.subscriptions || [];
           setMySubscriptions(subs.filter(s => s.status === 'active' || s.status === 'paused'));
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } finally {
       setSubscribing(null);
@@ -276,8 +276,8 @@ export default function PackagesPage() {
                   key={date}
                   onClick={() => setSelectedDate(date)}
                   className={`p-3 rounded-xl border text-left transition-all duration-200 ${selectedDate === date
-                      ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
-                      : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
+                    ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
+                    : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
                     }`}
                 >
                   <p className="font-semibold text-sm">{dayName}</p>
@@ -419,8 +419,8 @@ export default function PackagesPage() {
                 <div
                   key={sp.id}
                   className={`rounded-xl p-4 border transition-all duration-200 ${isSelected
-                      ? "border-fresh-600/50 bg-fresh-900/20"
-                      : "border-gray-700 bg-gray-800/30"
+                    ? "border-fresh-600/50 bg-fresh-900/20"
+                    : "border-gray-700 bg-gray-800/30"
                     }`}
                 >
                   <div className="flex items-center gap-4">
@@ -560,97 +560,96 @@ export default function PackagesPage() {
         {packages.map(pkg => {
           const alreadyActive = isPackageAlreadyActive(pkg.id);
           return (
-          <div key={pkg.id} className={`card transition-all duration-300 flex flex-col ${
-            alreadyActive
+            <div key={pkg.id} className={`card transition-all duration-300 flex flex-col ${alreadyActive
               ? "border-fresh-600/60 bg-fresh-950/20 hover:scale-[1.005]"
               : "hover:border-fresh-700/50 hover:scale-[1.01]"
-          }`}>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-white">{pkg.name}</h2>
-                <p className="text-gray-400 text-sm">
-                  {pkg.num_persons_max
-                    ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
-                    : `${pkg.num_persons} persons`
-                  } · {pkg.services_per_month} deliveries/month
-                </p>
+              }`}>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">{pkg.name}</h2>
+                  <p className="text-gray-400 text-sm">
+                    {pkg.num_persons_max
+                      ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
+                      : `${pkg.num_persons} persons`
+                    } · {pkg.services_per_month} deliveries/month
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
+                  {alreadyActive && (
+                    <span className="inline-flex items-center gap-1 bg-fresh-900/60 text-fresh-400 border border-fresh-600/50 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      ✅ Active
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
-                {alreadyActive && (
-                  <span className="inline-flex items-center gap-1 bg-fresh-900/60 text-fresh-400 border border-fresh-600/50 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    ✅ Active
-                  </span>
+
+              {/* Price */}
+              <div className="bg-gray-800/60 rounded-xl p-4 mb-4">
+                {selectedType === "yearly" ? (
+                  <div>
+                    <p className="text-gray-400 text-xs line-through">₹{(pkg.price * 12).toFixed(0)}/year</p>
+                    <p className="text-2xl font-bold text-gradient">₹{calcYearly(pkg.price)}<span className="text-sm text-gray-400 font-normal">/year</span></p>
+                    <p className="text-fresh-400 text-xs mt-1">💰 Save ₹{(pkg.price * 12 * 0.25).toFixed(0)} (25% off)</p>
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-gradient">₹{pkg.price}<span className="text-sm text-gray-400 font-normal">/month</span></p>
+                )}
+                <p className="text-gray-500 text-xs mt-1">₹{(pkg.price / pkg.services_per_month).toFixed(1)} per delivery</p>
+              </div>
+
+              {/* Fixed items */}
+              {pkg.FixedItems?.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Fixed Items (every delivery)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {pkg.FixedItems.map(fi => (
+                      <span key={fi.id} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700">
+                        {fi.Product?.name} ({fi.default_qty_gm}g)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Seasonal pool */}
+              {pkg.SeasonalPool?.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
+                    Seasonal Options <span className="text-fresh-400">(choose {pkg.SeasonalConfig?.max_select_count})</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pkg.SeasonalPool.map(sp => (
+                      <span key={sp.id} className="bg-fresh-900/30 text-fresh-400 text-xs px-2 py-1 rounded-lg border border-fresh-800/50">
+                        🌿 {sp.Product?.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-auto">
+                {alreadyActive ? (
+                  <div className="space-y-2">
+                    <div className="w-full py-2.5 bg-fresh-900/30 border border-fresh-700/40 text-fresh-400 font-semibold rounded-xl text-sm text-center">
+                      ✅ Already Subscribed
+                    </div>
+                    <p className="text-[11px] text-gray-500 text-center">
+                      Subscription end hone ke baad renew kar sakte hain
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    id={`subscribe-${pkg.id}`}
+                    onClick={() => handleOpenPayment(pkg)}
+                    disabled={subscribing === pkg.id}
+                    className="btn-primary w-full"
+                  >
+                    {subscribing === pkg.id ? "Processing..." : `Subscribe ${selectedType === "yearly" ? "Yearly 🏆" : "Monthly"}`}
+                  </button>
                 )}
               </div>
             </div>
-
-            {/* Price */}
-            <div className="bg-gray-800/60 rounded-xl p-4 mb-4">
-              {selectedType === "yearly" ? (
-                <div>
-                  <p className="text-gray-400 text-xs line-through">₹{(pkg.price * 12).toFixed(0)}/year</p>
-                  <p className="text-2xl font-bold text-gradient">₹{calcYearly(pkg.price)}<span className="text-sm text-gray-400 font-normal">/year</span></p>
-                  <p className="text-fresh-400 text-xs mt-1">💰 Save ₹{(pkg.price * 12 * 0.25).toFixed(0)} (25% off)</p>
-                </div>
-              ) : (
-                <p className="text-2xl font-bold text-gradient">₹{pkg.price}<span className="text-sm text-gray-400 font-normal">/month</span></p>
-              )}
-              <p className="text-gray-500 text-xs mt-1">₹{(pkg.price / pkg.services_per_month).toFixed(1)} per delivery</p>
-            </div>
-
-            {/* Fixed items */}
-            {pkg.FixedItems?.length > 0 && (
-              <div className="mb-3">
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Fixed Items (every delivery)</p>
-                <div className="flex flex-wrap gap-2">
-                  {pkg.FixedItems.map(fi => (
-                    <span key={fi.id} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700">
-                      {fi.Product?.name} ({fi.default_qty_gm}g)
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Seasonal pool */}
-            {pkg.SeasonalPool?.length > 0 && (
-              <div className="mb-4">
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-                  Seasonal Options <span className="text-fresh-400">(choose {pkg.SeasonalConfig?.max_select_count})</span>
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {pkg.SeasonalPool.map(sp => (
-                    <span key={sp.id} className="bg-fresh-900/30 text-fresh-400 text-xs px-2 py-1 rounded-lg border border-fresh-800/50">
-                      🌿 {sp.Product?.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mt-auto">
-              {alreadyActive ? (
-                <div className="space-y-2">
-                  <div className="w-full py-2.5 bg-fresh-900/30 border border-fresh-700/40 text-fresh-400 font-semibold rounded-xl text-sm text-center">
-                    ✅ Already Subscribed
-                  </div>
-                  <p className="text-[11px] text-gray-500 text-center">
-                    Subscription end hone ke baad renew kar sakte hain
-                  </p>
-                </div>
-              ) : (
-                <button
-                  id={`subscribe-${pkg.id}`}
-                  onClick={() => handleOpenPayment(pkg)}
-                  disabled={subscribing === pkg.id}
-                  className="btn-primary w-full"
-                >
-                  {subscribing === pkg.id ? "Processing..." : `Subscribe ${selectedType === "yearly" ? "Yearly 🏆" : "Monthly"}`}
-                </button>
-              )}
-            </div>
-          </div>
           );
         })}
       </div>

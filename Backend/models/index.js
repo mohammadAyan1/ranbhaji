@@ -20,8 +20,8 @@ const Product = sequelize.define('Product', {
   name: { type: DataTypes.STRING(100) },
   category: { type: DataTypes.ENUM('vegetable', 'fruit', 'water', 'exotic', 'salad') },
   sub_category: { type: DataTypes.STRING(50) },
-  purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 2) },
-  selling_price_per_gm: { type: DataTypes.DECIMAL(10, 2) },
+  purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
+  selling_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
   unit: { type: DataTypes.ENUM('gm', 'ml', 'piece') },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
