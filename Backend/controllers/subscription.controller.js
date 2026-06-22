@@ -31,6 +31,24 @@ export const subscribe = async (req, res) => {
             return res.status(403).json({ success: false, message: "This package is not available for you" });
         }
 
+        // 🚫 Prevent duplicate: check if user already has active/paused subscription for this package
+        const existingSubscription = await Subscription.findOne({
+            where: {
+                user_id,
+                package_id,
+                status: { [Op.in]: ['active', 'paused'] }
+            }
+        });
+        if (existingSubscription) {
+            await t.rollback();
+            return res.status(409).json({
+                success: false,
+                message: `Aap pehle se is package ke subscriber hain. Aapka current subscription end hone ke baad aap ise renew kar sakte hain.`,
+                existing_subscription_id: existingSubscription.id,
+                existing_status: existingSubscription.status
+            });
+        }
+
         // Calculate amount
         let amount = parseFloat(pkg.price);
         let yearly_amount_paid = null;
@@ -224,7 +242,7 @@ export const getMySubscriptions = async (req, res) => {
                         {
                             model: ScheduleSeasonalSelection,
                             as: 'SeasonalSelections',
-                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }]
+                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
                         }
                     ]
                 }
@@ -234,7 +252,7 @@ export const getMySubscriptions = async (req, res) => {
                 [{ model: DeliverySchedule, as: 'Schedules' }, 'scheduled_date', 'ASC']
             ]
         });
-        
+
         const serialized = subscriptions.map(s => {
             const obj = s.toJSON();
             if (obj.Package) {
@@ -566,13 +584,13 @@ export const getSeasonalOptions = async (req, res) => {
                 {
                     model: SubscriptionItem,
                     as: 'Items',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] }
                     ]
                 }
             ]
@@ -603,7 +621,7 @@ export const getSeasonalOptions = async (req, res) => {
         // Calculate default fixed cost
         let fixed_cost = 0;
         for (const fi of fixed_items) {
-            fixed_cost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.selling_price_per_gm);
+            fixed_cost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.purchase_price_per_gm);
         }
         const seasonal_budget = per_service_amount - fixed_cost;
 
@@ -671,14 +689,14 @@ export const selectSeasonalItems = async (req, res) => {
         for (const item of inputFixedItems) {
             const product = await Product.findByPk(item.product_id);
             if (!product) { await t.rollback(); return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` }); }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.selling_price_per_gm);
+            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
         }
 
         const inputSeasonalItems = items || [];
         for (const item of inputSeasonalItems) {
             const product = await Product.findByPk(item.product_id);
             if (!product) { await t.rollback(); return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` }); }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.selling_price_per_gm);
+            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
         }
 
         let overage = total_cost - per_service_amount;
@@ -795,13 +813,13 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: SubscriptionItem,
                     as: 'Items',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] }
                     ]
                 }
             ]
@@ -836,7 +854,7 @@ export const getUpcomingSelections = async (req, res) => {
 
         let fixed_cost = 0;
         for (const fi of fixed_items) {
-            fixed_cost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.selling_price_per_gm);
+            fixed_cost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.purchase_price_per_gm);
         }
         const seasonal_budget = per_service_amount - fixed_cost;
 
@@ -852,7 +870,7 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: ScheduleSeasonalSelection,
                     as: 'SeasonalSelections',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
                 }
             ]
         });
@@ -979,7 +997,7 @@ export const saveScheduleSeasonal = async (req, res) => {
                 await t.rollback();
                 return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
             }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.selling_price_per_gm);
+            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
         }
 
         const inputSeasonalItems = items || [];
@@ -998,7 +1016,7 @@ export const saveScheduleSeasonal = async (req, res) => {
                 await t.rollback();
                 return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
             }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.selling_price_per_gm);
+            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
         }
 
         let overage = total_cost - per_service_amount;
@@ -1032,7 +1050,7 @@ export const saveScheduleSeasonal = async (req, res) => {
 
         // Insert new selections (both seasonal and fixed)
         const rows = [];
-        
+
         // Add seasonal selections
         rows.push(...inputSeasonalItems
             .filter(item => parseFloat(item.qty_gm) > 0)

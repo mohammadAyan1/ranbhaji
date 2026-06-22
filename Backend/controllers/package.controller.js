@@ -18,7 +18,7 @@ export const createPackage = async (req, res) => {
                     await t.rollback();
                     return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
                 }
-                fixed_cost_per_service += parseFloat(item.default_qty_gm) * parseFloat(product.selling_price_per_gm);
+                fixed_cost_per_service += parseFloat(item.default_qty_gm) * parseFloat(product.purchase_price_per_gm);
             }
         }
 
@@ -149,7 +149,7 @@ export const updatePackage = async (req, res) => {
             for (const item of fixed_items) {
                 const product = await Product.findByPk(item.product_id);
                 if (!product) { await t.rollback(); return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` }); }
-                fixed_cost_per_service += parseFloat(item.default_qty_gm) * parseFloat(product.selling_price_per_gm);
+                fixed_cost_per_service += parseFloat(item.default_qty_gm) * parseFloat(product.purchase_price_per_gm);
             }
             if (fixed_cost_per_service >= per_service_amount) {
                 await t.rollback();

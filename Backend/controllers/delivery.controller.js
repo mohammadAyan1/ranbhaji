@@ -276,7 +276,7 @@ export const markDelivered = async (req, res) => {
             let actual_cost = 0;
             for (const item of deliveryItems) {
                 if (item.Product) {
-                    actual_cost += parseFloat(item.qty_gm) * parseFloat(item.Product.selling_price_per_gm);
+                    actual_cost += parseFloat(item.qty_gm) * parseFloat(item.Product.purchase_price_per_gm);
                 }
             }
 
@@ -439,7 +439,7 @@ export const reviewReturn = async (req, res) => {
 
         if (status === 'approved') {
             const product = await Product.findByPk(item.product_id);
-            const refund = parseFloat(item.return_qty || item.qty_gm) * parseFloat(product.selling_price_per_gm);
+            const refund = parseFloat(item.return_qty || item.qty_gm) * parseFloat(product.purchase_price_per_gm);
 
             await user.update({ wallet_balance: parseFloat(user.wallet_balance) + refund }, { transaction: t });
             await WalletTransaction.create({
@@ -757,14 +757,14 @@ export const getAdminSeasonalSelections = async (req, res) => {
                         {
                             model: SubscriptionItem,
                             as: 'Items',
-                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }]
+                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
                         }
                     ]
                 },
                 {
                     model: ScheduleSeasonalSelection,
                     as: 'SeasonalSelections',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
                 }
             ]
         });
@@ -777,7 +777,7 @@ export const getAdminSeasonalSelections = async (req, res) => {
         for (const s of seasonalSchedules) {
             const sub = s.Subscription;
             const user = sub.User;
-            
+
             // Check if there are selections for this schedule
             const selections = s.SeasonalSelections || [];
             let seasonalItems = [];
@@ -788,7 +788,7 @@ export const getAdminSeasonalSelections = async (req, res) => {
                 status = 'selected';
                 isAuto = selections[0].is_auto; // assuming all entries for the same schedule have the same is_auto value
                 seasonalItems = selections.map(sel => {
-                    const price = parseFloat(sel.Product?.selling_price_per_gm || 0);
+                    const price = parseFloat(sel.Product?.purchase_price_per_gm || 0);
                     const qty = parseFloat(sel.qty_gm || 0);
                     return {
                         product_id: sel.product_id,
@@ -805,13 +805,13 @@ export const getAdminSeasonalSelections = async (req, res) => {
                 cutoffTime.setDate(cutoffTime.getDate() - 1);
                 cutoffTime.setHours(20, 0, 0, 0); // 8:00 PM the day before
                 const now = new Date();
-                
+
                 if (now >= cutoffTime || s.is_locked) {
                     status = 'fallback'; // deadline passed, default preferences will be used
                     // Get defaults from subscription
                     const defaultSeasonal = sub.Items.filter(i => i.is_seasonal);
                     seasonalItems = defaultSeasonal.map(i => {
-                        const price = parseFloat(i.Product?.selling_price_per_gm || 0);
+                        const price = parseFloat(i.Product?.purchase_price_per_gm || 0);
                         const qty = parseFloat(i.qty_gm || 0);
                         return {
                             product_id: i.product_id,
@@ -828,7 +828,7 @@ export const getAdminSeasonalSelections = async (req, res) => {
             }
 
             const fixedItems = sub.Items.filter(i => i.is_fixed).map(i => {
-                const price = parseFloat(i.Product?.selling_price_per_gm || 0);
+                const price = parseFloat(i.Product?.purchase_price_per_gm || 0);
                 const qty = parseFloat(i.qty_gm || 0);
                 return {
                     product_id: i.product_id,

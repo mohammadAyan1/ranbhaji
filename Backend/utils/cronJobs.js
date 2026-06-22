@@ -103,7 +103,7 @@ const runNightlyJob = async () => {
 
                         // Calculate budget
                         const per_service_amount = parseFloat(sub.Package.price) / sub.Package.services_per_month;
-                        
+
                         // Subscription fixed items
                         const fixedItems = sub.Items.filter(i => i.is_fixed);
                         let fixedCost = 0;
@@ -196,7 +196,7 @@ const runNightlyJob = async () => {
                             where: { schedule_id: schedule.id },
                             transaction: t
                         });
-                        
+
                         if (selections.length > 0) {
                             deliveryItems.push(...selections.map(sel => ({
                                 schedule_id: schedule.id,

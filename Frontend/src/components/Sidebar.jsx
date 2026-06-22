@@ -36,7 +36,7 @@ export default function Sidebar() {
 
   const links = user?.role === "admin" ? adminLinks
     : user?.role === "delivery" ? deliveryLinks
-    : userLinks;
+      : userLinks;
 
   const handleLogout = () => { logout(); navigate("/login"); };
 

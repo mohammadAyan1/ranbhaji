@@ -37,7 +37,7 @@ export const calcSeasonalBudget = (packagePrice, servicesPerMonth, fixedItems) =
     const per_service_amount = parseFloat(packagePrice) / parseInt(servicesPerMonth);
     let fixed_cost = 0;
     for (const item of fixedItems) {
-        fixed_cost += parseFloat(item.qty_gm) * parseFloat(item.selling_price_per_gm);
+        fixed_cost += parseFloat(item.qty_gm) * parseFloat(item.purchase_price_per_gm || item.selling_price_per_gm);
     }
     return {
         per_service_amount,

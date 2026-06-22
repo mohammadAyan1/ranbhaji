@@ -20,6 +20,8 @@ export default function AdminPackages() {
   const [fixedItems, setFixedItems] = useState([]); // [{ product_id, default_qty_gm }]
   const [seasonalPool, setSeasonalPool] = useState([]); // [product_id]
   const [maxSelectCount, setMaxSelectCount] = useState(3);
+  const [drafts, setDrafts] = useState([]);
+  const [selectedDraftId, setSelectedDraftId] = useState("");
 
   // Validation preview
   const [validationResult, setValidationResult] = useState(null);
@@ -31,13 +33,47 @@ export default function AdminPackages() {
       api.get("/packages"),
       api.get("/products"),
       api.get("/admin/users"),
-    ]).then(([p, pr, u]) => {
+      api.get("/calculator/drafts"),
+    ]).then(([p, pr, u, d]) => {
       setPackages(p.data.packages || []);
       setProducts(pr.data.products?.filter(p => p.status === "active") || []);
       setUsers(u.data.users?.filter(u => u.role === "user") || []);
+      setDrafts(d.data.drafts || []);
     }).finally(() => setLoading(false));
   };
   useEffect(fetchAll, []);
+
+  const handleApplyDraft = () => {
+    if (!selectedDraftId) return;
+    const draft = drafts.find(d => d.id === parseInt(selectedDraftId));
+    if (!draft) return;
+
+    setForm({
+      name: draft.name,
+      num_persons: draft.num_persons || 2,
+      services_per_month: draft.services_per_month,
+      price: draft.calculated_price,
+      type: "standard",
+      target_user_id: "",
+      margin_percent: draft.margin_percent,
+    });
+
+    const fixed = draft.Items
+      .filter(item => item.is_fixed)
+      .map(item => ({
+        product_id: item.product_id.toString(),
+        default_qty_gm: item.qty_gm.toString()
+      }));
+    setFixedItems(fixed);
+
+    const seasonal = draft.Items
+      .filter(item => item.is_seasonal)
+      .map(item => item.product_id);
+    setSeasonalPool(seasonal);
+
+    setMaxSelectCount(draft.max_seasonal_count || 3);
+    setMsg(`✅ Auto-filled package from draft calculation: "${draft.name}"`);
+  };
 
   // Live validation: sum of fixed item costs vs per-service amount
   useEffect(() => {
@@ -49,7 +85,7 @@ export default function AdminPackages() {
     fixedItems.forEach(fi => {
       const product = products.find(p => p.id === parseInt(fi.product_id));
       if (product && fi.default_qty_gm) {
-        fixed_cost += parseFloat(fi.default_qty_gm) * parseFloat(product.selling_price_per_gm);
+        fixed_cost += parseFloat(fi.default_qty_gm) * parseFloat(product.purchase_price_per_gm);
       }
     });
     const seasonal_budget = per_service - fixed_cost;
@@ -169,6 +205,37 @@ export default function AdminPackages() {
             <h3 className="font-bold text-white text-lg">{editing ? "Edit Package" : "Create New Package"}</h3>
             <button type="button" onClick={resetForm} className="text-gray-400 hover:text-white">✕ Cancel</button>
           </div>
+
+          {/* Draft Import Dropdown */}
+          {!editing && drafts.length > 0 && (
+            <div className="bg-gray-800/40 p-4 rounded-xl border border-gray-700/80 space-y-3">
+              <label className="label text-xs uppercase tracking-wider text-fresh-400 font-semibold">💡 Import from Price Calculator Draft</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[200px]">
+                  <select
+                    className="input py-2 text-sm w-full bg-gray-900"
+                    value={selectedDraftId}
+                    onChange={(e) => setSelectedDraftId(e.target.value)}
+                  >
+                    <option value="">Select a saved draft...</option>
+                    {drafts.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} (₹{parseFloat(d.calculated_price).toFixed(2)} for {d.services_per_month} services, {d.margin_percent}% Margin)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyDraft}
+                  disabled={!selectedDraftId}
+                  className="btn-primary text-xs py-2 px-6"
+                >
+                  Apply Draft
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -293,7 +360,7 @@ export default function AdminPackages() {
                       />
                       <span className="text-gray-500 text-xs">
                         {fi.product_id && fi.default_qty_gm && products.find(p => p.id === parseInt(fi.product_id))
-                          ? `₹${(parseFloat(fi.default_qty_gm) * parseFloat(products.find(p => p.id === parseInt(fi.product_id))?.selling_price_per_gm || 0)).toFixed(2)}`
+                          ? `₹${(parseFloat(fi.default_qty_gm) * parseFloat(products.find(p => p.id === parseInt(fi.product_id))?.purchase_price_per_gm || 0)).toFixed(2)}`
                           : ""}
                       </span>
                       <button type="button" onClick={() => removeFixedItem(idx)} className="text-red-400 hover:text-red-300 text-xl leading-none">×</button>

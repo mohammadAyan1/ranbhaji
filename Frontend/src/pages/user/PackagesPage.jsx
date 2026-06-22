@@ -13,6 +13,7 @@ export default function PackagesPage() {
   const [subscribing, setSubscribing] = useState(null);
   const [selectedType, setSelectedType] = useState("monthly");
   const [msg, setMsg] = useState("");
+  const [mySubscriptions, setMySubscriptions] = useState([]); // track active/paused subs
   const navigate = useNavigate();
 
   // Flow state
@@ -54,9 +55,26 @@ export default function PackagesPage() {
         if (defaultAddr) setSelectedAddressId(defaultAddr.id);
         else if (addrs.length > 0) setSelectedAddressId(addrs[0].id);
       });
+
+    // Fetch user's current subscriptions to detect duplicates
+    api.get("/my-subscriptions")
+      .then(r => {
+        const subs = r.data.subscriptions || [];
+        // Only keep active/paused ones
+        setMySubscriptions(subs.filter(s => s.status === 'active' || s.status === 'paused'));
+      })
+      .catch(() => {}); // silently ignore if fails
   }, []);
 
+  // Helper: check if user already has this package active/paused
+  const isPackageAlreadyActive = (pkgId) =>
+    mySubscriptions.some(s => s.package_id === pkgId);
+
   const handleOpenPayment = (pkg) => {
+    if (isPackageAlreadyActive(pkg.id)) {
+      setMsg(`❌ Aap pehle se "${pkg.name}" package ke subscriber hain. Subscription end hone ke baad renew karein.`);
+      return;
+    }
     if (!selectedAddressId) {
       setMsg("❌ Please add or select a delivery address first");
       return;
@@ -124,7 +142,15 @@ export default function PackagesPage() {
       setStep("confirm_date");
       setMsg(`✅ Payment successful and subscribed to ${razorpayPkg.name}! Please select your delivery start date.`);
     } catch (err) {
-      setMsg(`❌ ${err.response?.data?.message || "Subscription failed"}`);
+      const errMsg = err.response?.data?.message || "Subscription failed";
+      setMsg(`❌ ${errMsg}`);
+      // If 409 (duplicate), refresh subscriptions list
+      if (err.response?.status === 409) {
+        api.get("/my-subscriptions").then(r => {
+          const subs = r.data.subscriptions || [];
+          setMySubscriptions(subs.filter(s => s.status === 'active' || s.status === 'paused'));
+        }).catch(() => {});
+      }
     } finally {
       setSubscribing(null);
     }
@@ -190,13 +216,13 @@ export default function PackagesPage() {
 
   const fixedCost = fixedItems.reduce((sum, item) => {
     const qty = parseFloat(item.qty_gm || 0);
-    return sum + (qty * parseFloat(item.Product?.selling_price_per_gm || 0));
+    return sum + (qty * parseFloat(item.Product?.purchase_price_per_gm || 0));
   }, 0);
 
   const seasonalCost = Object.entries(selectedItems).reduce((sum, [pid, qty]) => {
     const sp = seasonalPool.find(item => item.product_id === parseInt(pid));
     if (sp && sp.Product) {
-      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.selling_price_per_gm || 0));
+      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.purchase_price_per_gm || 0));
     }
     return sum;
   }, 0);
@@ -249,11 +275,10 @@ export default function PackagesPage() {
                 <button
                   key={date}
                   onClick={() => setSelectedDate(date)}
-                  className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                    selectedDate === date
+                  className={`p-3 rounded-xl border text-left transition-all duration-200 ${selectedDate === date
                       ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
                       : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
-                  }`}
+                    }`}
                 >
                   <p className="font-semibold text-sm">{dayName}</p>
                   <p className="text-xs mt-0.5 text-gray-400">{formatted}</p>
@@ -352,7 +377,7 @@ export default function PackagesPage() {
                         <span className="text-gray-500 text-xs">{fi.Product?.unit || "gm"}</span>
                       </div>
                       {(() => {
-                        const maxAddable = remainingBudget > 0 && fi.Product?.selling_price_per_gm ? Math.floor(remainingBudget / (parseFloat(fi.Product.selling_price_per_gm) * 50)) * 50 : 0;
+                        const maxAddable = remainingBudget > 0 && fi.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(fi.Product.purchase_price_per_gm) * 50)) * 50 : 0;
                         return maxAddable >= 50 ? (
                           <button
                             type="button"
@@ -388,16 +413,15 @@ export default function PackagesPage() {
               const pid = sp.product_id;
               const isSelected = (selectedItems[pid] || 0) > 0;
               const qty = selectedItems[pid] || "";
-              const itemCost = isSelected ? parseFloat(qty || 0) * parseFloat(sp.Product?.selling_price_per_gm || 0) : 0;
+              const itemCost = isSelected ? parseFloat(qty || 0) * parseFloat(sp.Product?.purchase_price_per_gm || 0) : 0;
 
               return (
                 <div
                   key={sp.id}
-                  className={`rounded-xl p-4 border transition-all duration-200 ${
-                    isSelected
+                  className={`rounded-xl p-4 border transition-all duration-200 ${isSelected
                       ? "border-fresh-600/50 bg-fresh-900/20"
                       : "border-gray-700 bg-gray-800/30"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-4">
                     <input
@@ -443,7 +467,7 @@ export default function PackagesPage() {
                           <span className="text-gray-500 text-xs">{sp.Product?.unit}</span>
                         </div>
                         {(() => {
-                          const maxAddable = remainingBudget > 0 && sp.Product?.selling_price_per_gm ? Math.floor(remainingBudget / (parseFloat(sp.Product.selling_price_per_gm) * 50)) * 50 : 0;
+                          const maxAddable = remainingBudget > 0 && sp.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(sp.Product.purchase_price_per_gm) * 50)) * 50 : 0;
                           return maxAddable >= 50 ? (
                             <button
                               type="button"
@@ -503,9 +527,9 @@ export default function PackagesPage() {
           </div>
         ) : (
           <div className="flex items-center gap-4">
-            <select 
-              className="input py-2 text-sm flex-1" 
-              value={selectedAddressId} 
+            <select
+              className="input py-2 text-sm flex-1"
+              value={selectedAddressId}
               onChange={e => setSelectedAddressId(e.target.value)}
             >
               {addresses.map(a => (
@@ -533,14 +557,27 @@ export default function PackagesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {packages.map(pkg => (
-          <div key={pkg.id} className="card hover:border-fresh-700/50 transition-all duration-300 hover:scale-[1.01] flex flex-col">
+        {packages.map(pkg => {
+          const alreadyActive = isPackageAlreadyActive(pkg.id);
+          return (
+          <div key={pkg.id} className={`card transition-all duration-300 flex flex-col ${
+            alreadyActive
+              ? "border-fresh-600/60 bg-fresh-950/20 hover:scale-[1.005]"
+              : "hover:border-fresh-700/50 hover:scale-[1.01]"
+          }`}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold text-white">{pkg.name}</h2>
                 <p className="text-gray-400 text-sm">{pkg.num_persons} persons · {pkg.services_per_month} deliveries/month</p>
               </div>
-              <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
+              <div className="flex flex-col items-end gap-1.5">
+                <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
+                {alreadyActive && (
+                  <span className="inline-flex items-center gap-1 bg-fresh-900/60 text-fresh-400 border border-fresh-600/50 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    ✅ Active
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Price */}
@@ -588,17 +625,29 @@ export default function PackagesPage() {
             )}
 
             <div className="mt-auto">
-              <button
-                id={`subscribe-${pkg.id}`}
-                onClick={() => handleOpenPayment(pkg)}
-                disabled={subscribing === pkg.id}
-                className="btn-primary w-full"
-              >
-                {subscribing === pkg.id ? "Processing..." : `Subscribe ${selectedType === "yearly" ? "Yearly 🏆" : "Monthly"}`}
-              </button>
+              {alreadyActive ? (
+                <div className="space-y-2">
+                  <div className="w-full py-2.5 bg-fresh-900/30 border border-fresh-700/40 text-fresh-400 font-semibold rounded-xl text-sm text-center">
+                    ✅ Already Subscribed
+                  </div>
+                  <p className="text-[11px] text-gray-500 text-center">
+                    Subscription end hone ke baad renew kar sakte hain
+                  </p>
+                </div>
+              ) : (
+                <button
+                  id={`subscribe-${pkg.id}`}
+                  onClick={() => handleOpenPayment(pkg)}
+                  disabled={subscribing === pkg.id}
+                  className="btn-primary w-full"
+                >
+                  {subscribing === pkg.id ? "Processing..." : `Subscribe ${selectedType === "yearly" ? "Yearly 🏆" : "Monthly"}`}
+                </button>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {packages.length === 0 && (
@@ -618,8 +667,8 @@ export default function PackagesPage() {
                 <span className="text-blue-400 font-extrabold text-xl tracking-tight">Razorpay</span>
                 <span className="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-500/20">SECURE CHECKOUT</span>
               </div>
-              <button 
-                onClick={() => setShowRazorpay(false)} 
+              <button
+                onClick={() => setShowRazorpay(false)}
                 className="text-gray-400 hover:text-white text-2xl leading-none transition-colors"
                 disabled={paymentStatus === "processing"}
               >
@@ -667,14 +716,14 @@ export default function PackagesPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 pt-2">
-                  <button 
-                    onClick={handleSimulatedPayment} 
+                  <button
+                    onClick={handleSimulatedPayment}
                     className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
                   >
                     🔒 Pay ₹{selectedType === "yearly" ? calcYearly(razorpayPkg.price) : razorpayPkg.price} Securely
                   </button>
-                  <button 
-                    onClick={() => setShowRazorpay(false)} 
+                  <button
+                    onClick={() => setShowRazorpay(false)}
                     className="w-full py-2.5 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium rounded-xl transition-all text-sm"
                   >
                     Cancel Payment

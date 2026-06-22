@@ -243,7 +243,7 @@ export default function MySubscriptions() {
       });
       setScheduleSelectionMsg("✅ Selections saved for this date!");
       setActiveScheduleId(null);
-      
+
       // Refresh selections
       const updatedRes = await api.get(`/subscriptions/${scheduleSub.id}/upcoming-selections`);
       setUpcomingSchedules(updatedRes.data.schedules || []);
@@ -257,7 +257,7 @@ export default function MySubscriptions() {
   const activeFixedCost = Object.entries(editingScheduleFixedItems).reduce((sum, [pid, qty]) => {
     const fi = schedulesFixedItems.find(item => item.product_id === parseInt(pid));
     if (fi && fi.Product) {
-      return sum + (parseFloat(qty || 0) * parseFloat(fi.Product.selling_price_per_gm || 0));
+      return sum + (parseFloat(qty || 0) * parseFloat(fi.Product.purchase_price_per_gm || 0));
     }
     return sum;
   }, 0);
@@ -265,7 +265,7 @@ export default function MySubscriptions() {
   const activeSeasonalCost = Object.entries(selectedScheduleItems).reduce((sum, [pid, qty]) => {
     const sp = schedulesPool.find(item => item.product_id === parseInt(pid));
     if (sp && sp.Product) {
-      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.selling_price_per_gm || 0));
+      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.purchase_price_per_gm || 0));
     }
     return sum;
   }, 0);
@@ -279,13 +279,13 @@ export default function MySubscriptions() {
 
   const fixedCost = fixedItems.reduce((sum, item) => {
     const qty = parseFloat(item.qty_gm || 0);
-    return sum + (qty * parseFloat(item.Product?.selling_price_per_gm || 0));
+    return sum + (qty * parseFloat(item.Product?.purchase_price_per_gm || 0));
   }, 0);
 
   const seasonalCost = Object.entries(selectedItems).reduce((sum, [pid, qty]) => {
     const sp = seasonalPool.find(item => item.product_id === parseInt(pid));
     if (sp && sp.Product) {
-      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.selling_price_per_gm || 0));
+      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.purchase_price_per_gm || 0));
     }
     return sum;
   }, 0);
@@ -366,7 +366,7 @@ export default function MySubscriptions() {
               <div className="space-y-2">
                 {fixedItems.map(fi => {
                   const qty = fi.qty_gm;
-                  const itemCost = parseFloat(qty || 0) * parseFloat(fi.Product?.selling_price_per_gm || 0);
+                  const itemCost = parseFloat(qty || 0) * parseFloat(fi.Product?.purchase_price_per_gm || 0);
 
                   return (
                     <div key={fi.product_id} className="rounded-xl p-3 border border-gray-800 bg-gray-850/20">
@@ -391,7 +391,7 @@ export default function MySubscriptions() {
                             <span className="text-gray-500 text-xs">{fi.Product?.unit || "gm"}</span>
                           </div>
                           {(() => {
-                            const maxAddable = remainingBudget > 0 && fi.Product?.selling_price_per_gm ? Math.floor(remainingBudget / (parseFloat(fi.Product.selling_price_per_gm) * 50)) * 50 : 0;
+                            const maxAddable = remainingBudget > 0 && fi.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(fi.Product.purchase_price_per_gm) * 50)) * 50 : 0;
                             return maxAddable >= 50 ? (
                               <button
                                 type="button"
@@ -421,7 +421,7 @@ export default function MySubscriptions() {
                   const pid = sp.product_id;
                   const isSelected = parseFloat(selectedItems[pid] || 0) > 0;
                   const qty = selectedItems[pid] || "";
-                  const itemCost = isSelected ? parseFloat(qty || 0) * parseFloat(sp.Product?.selling_price_per_gm || 0) : 0;
+                  const itemCost = isSelected ? parseFloat(qty || 0) * parseFloat(sp.Product?.purchase_price_per_gm || 0) : 0;
 
                   return (
                     <div key={sp.id} className={`rounded-xl p-3 border transition-all ${isSelected ? "border-fresh-600/50 bg-fresh-900/20" : "border-gray-700 bg-gray-800/30"}`}>
@@ -460,7 +460,7 @@ export default function MySubscriptions() {
                               <span className="text-gray-500 text-xs">{sp.Product?.unit}</span>
                             </div>
                             {(() => {
-                              const maxAddable = remainingBudget > 0 && sp.Product?.selling_price_per_gm ? Math.floor(remainingBudget / (parseFloat(sp.Product.selling_price_per_gm) * 50)) * 50 : 0;
+                              const maxAddable = remainingBudget > 0 && sp.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(sp.Product.purchase_price_per_gm) * 50)) * 50 : 0;
                               return maxAddable >= 50 ? (
                                 <button
                                   type="button"
@@ -606,8 +606,8 @@ export default function MySubscriptions() {
                       type="button"
                       onClick={() => setSelectedResumeDate(date)}
                       className={`p-3 rounded-xl border text-left transition-all duration-200 ${selectedResumeDate === date
-                          ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
-                          : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
+                        ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
+                        : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
                         }`}
                     >
                       <p className="font-semibold text-sm">{dayName}</p>
@@ -697,7 +697,7 @@ export default function MySubscriptions() {
                                 )}
                               </div>
                             </div>
-                            
+
                             {schedule.is_window_open && !isEditing && (
                               <button
                                 onClick={() => startEditSchedule(schedule)}
@@ -747,7 +747,7 @@ export default function MySubscriptions() {
                                 <div className="space-y-2">
                                   {schedulesFixedItems.map(fi => {
                                     const qty = editingScheduleFixedItems[fi.product_id] || fi.qty_gm;
-                                    const itemCost = parseFloat(qty || 0) * parseFloat(fi.Product?.selling_price_per_gm || 0);
+                                    const itemCost = parseFloat(qty || 0) * parseFloat(fi.Product?.purchase_price_per_gm || 0);
 
                                     return (
                                       <div key={fi.product_id} className="rounded-xl p-3 border border-gray-800 bg-gray-850/20">
@@ -772,7 +772,7 @@ export default function MySubscriptions() {
                                               <span className="text-gray-500 text-xs">{fi.Product?.unit || "gm"}</span>
                                             </div>
                                             {(() => {
-                                              const maxAddable = activeRemainingBudget > 0 && fi.Product?.selling_price_per_gm ? Math.floor(activeRemainingBudget / (parseFloat(fi.Product.selling_price_per_gm) * 50)) * 50 : 0;
+                                              const maxAddable = activeRemainingBudget > 0 && fi.Product?.purchase_price_per_gm ? Math.floor(activeRemainingBudget / (parseFloat(fi.Product.purchase_price_per_gm) * 50)) * 50 : 0;
                                               return maxAddable >= 50 ? (
                                                 <button
                                                   type="button"
@@ -829,7 +829,7 @@ export default function MySubscriptions() {
                                               <p className="text-xs font-medium text-white">{sp.Product?.name}</p>
                                             </div>
                                           </div>
-                                          
+
                                           {isChecked && (
                                             <div className="flex flex-col items-end gap-1">
                                               <div className="flex items-center gap-1">
@@ -850,7 +850,7 @@ export default function MySubscriptions() {
                                                 <span className="text-[10px] text-gray-400">{sp.Product?.unit}</span>
                                               </div>
                                               {(() => {
-                                                const maxAddable = activeRemainingBudget > 0 && sp.Product?.selling_price_per_gm ? Math.floor(activeRemainingBudget / (parseFloat(sp.Product.selling_price_per_gm) * 50)) * 50 : 0;
+                                                const maxAddable = activeRemainingBudget > 0 && sp.Product?.purchase_price_per_gm ? Math.floor(activeRemainingBudget / (parseFloat(sp.Product.purchase_price_per_gm) * 50)) * 50 : 0;
                                                 return maxAddable >= 50 ? (
                                                   <button
                                                     type="button"
@@ -963,10 +963,10 @@ export default function MySubscriptions() {
                             sub.Schedules.map(sched => {
                               const dateObj = new Date(sched.scheduled_date);
                               const formattedDate = dateObj.toLocaleDateString("en-IN", { weekday: 'short', day: 'numeric', month: 'short' });
-                              
+
                               const fixedProductIds = sub.Items?.filter(i => i.is_fixed).map(i => i.product_id) || [];
                               const selections = sched.SeasonalSelections || [];
-                              
+
                               const customFixed = selections.filter(sel => fixedProductIds.includes(sel.product_id));
                               const customSeasonal = selections.filter(sel => !fixedProductIds.includes(sel.product_id));
 
@@ -976,7 +976,7 @@ export default function MySubscriptions() {
                                 <div key={sched.id} className="bg-gray-900/40 border border-gray-800 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
                                   <div>
                                     <p className="font-semibold text-white">{formattedDate} ({sched.status})</p>
-                                    
+
                                     {/* Seasonal Selections */}
                                     <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
                                       <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider mr-1">Seasonal:</span>

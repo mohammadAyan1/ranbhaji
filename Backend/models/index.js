@@ -270,6 +270,31 @@ PaymentTransaction.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(PaymentTransaction, { foreignKey: 'user_id' });
 
 
+// 18. CALCULATOR_DRAFTS
+const CalculatorDraft = sequelize.define('CalculatorDraft', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(100), allowNull: false },
+  margin_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
+  services_per_month: { type: DataTypes.INTEGER, defaultValue: 1 },
+  num_persons: { type: DataTypes.INTEGER, defaultValue: 2 },
+  calculated_price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  max_fixed_count: { type: DataTypes.INTEGER, defaultValue: 0 },
+  max_seasonal_count: { type: DataTypes.INTEGER, defaultValue: 0 }
+}, { tableName: 'calculator_drafts', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+// 19. CALCULATOR_DRAFT_ITEMS
+const CalculatorDraftItem = sequelize.define('CalculatorDraftItem', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  qty_gm: { type: DataTypes.DECIMAL(10, 2) },
+  is_fixed: { type: DataTypes.BOOLEAN, defaultValue: true },
+  is_seasonal: { type: DataTypes.BOOLEAN, defaultValue: false }
+}, { tableName: 'calculator_draft_items', timestamps: false });
+
+CalculatorDraftItem.belongsTo(CalculatorDraft, { foreignKey: 'draft_id', onDelete: 'CASCADE' });
+CalculatorDraftItem.belongsTo(Product, { foreignKey: 'product_id' });
+CalculatorDraft.hasMany(CalculatorDraftItem, { foreignKey: 'draft_id', as: 'Items', onDelete: 'CASCADE' });
+
+
 export {
   sequelize,
   User,
@@ -289,5 +314,8 @@ export {
   Notification,
   CreditLog,
   Address,
-  PaymentTransaction
+  PaymentTransaction,
+  CalculatorDraft,
+  CalculatorDraftItem
 };
+

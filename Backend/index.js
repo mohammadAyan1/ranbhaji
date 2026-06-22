@@ -21,6 +21,7 @@ import walletRoutes from "./routes/wallet.route.js";
 import waterRoutes from "./routes/water.route.js";
 import notificationRoutes from "./routes/notification.route.js";
 import addressRoutes from "./routes/address.route.js";
+import calculatorRoutes from "./routes/calculator.route.js";
 
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
@@ -71,6 +72,7 @@ app.use("/api", deliveryRoutes);           // /api/today-deliveries, /api/mark-d
 app.use("/api", walletRoutes);             // /api/wallet, /api/admin/...
 app.use("/api/water", waterRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/calculator", calculatorRoutes);
 
 // 404 fallback
 app.use((req, res) => {
