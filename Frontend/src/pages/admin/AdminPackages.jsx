@@ -15,8 +15,9 @@ export default function AdminPackages() {
 
   // Form state
   const [form, setForm] = useState({
-    name: "", num_persons: 2, services_per_month: 12, price: 1200, type: "standard", target_user_id: "", margin_percent: 0,
+    name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", margin_percent: 0,
   });
+  const [personRangeMode, setPersonRangeMode] = useState(false); // toggle: single vs range
   const [fixedItems, setFixedItems] = useState([]); // [{ product_id, default_qty_gm }]
   const [seasonalPool, setSeasonalPool] = useState([]); // [product_id]
   const [maxSelectCount, setMaxSelectCount] = useState(3);
@@ -51,6 +52,7 @@ export default function AdminPackages() {
     setForm({
       name: draft.name,
       num_persons: draft.num_persons || 2,
+      num_persons_max: "",
       services_per_month: draft.services_per_month,
       price: draft.calculated_price,
       type: "standard",
@@ -93,7 +95,8 @@ export default function AdminPackages() {
   }, [fixedItems, form.price, form.services_per_month, products]);
 
   const resetForm = () => {
-    setForm({ name: "", num_persons: 2, services_per_month: 12, price: 1200, type: "standard", target_user_id: "", margin_percent: 0 });
+    setForm({ name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", margin_percent: 0 });
+    setPersonRangeMode(false);
     setFixedItems([]);
     setSeasonalPool([]);
     setMaxSelectCount(3);
@@ -104,7 +107,8 @@ export default function AdminPackages() {
 
   const startEdit = (pkg) => {
     setEditing(pkg.id);
-    setForm({ name: pkg.name, num_persons: pkg.num_persons, services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0 });
+    setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0 });
+    setPersonRangeMode(!!pkg.num_persons_max); // enable range mode if max was set
     setFixedItems(pkg.FixedItems?.map(fi => ({ product_id: fi.product_id, default_qty_gm: fi.default_qty_gm })) || []);
     setSeasonalPool(pkg.SeasonalPool?.map(sp => sp.product_id) || []);
     setMaxSelectCount(pkg.SeasonalConfig?.max_select_count || 3);
@@ -123,6 +127,7 @@ export default function AdminPackages() {
     const payload = {
       ...form,
       num_persons: parseInt(form.num_persons),
+      num_persons_max: personRangeMode && form.num_persons_max ? parseInt(form.num_persons_max) : null,
       services_per_month: parseInt(form.services_per_month),
       price: parseFloat(form.price),
       margin_percent: parseFloat(form.margin_percent || 0),
@@ -243,10 +248,60 @@ export default function AdminPackages() {
               <label className="label">Package Name *</label>
               <input className="input" placeholder="Nano / Gold / Silver" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
             </div>
+
+            {/* Persons Field — single or range */}
             <div>
-              <label className="label">For Persons *</label>
-              <input type="number" min="1" max="20" className="input" value={form.num_persons} onChange={e => setForm({ ...form, num_persons: e.target.value })} required />
+              <div className="flex items-center justify-between mb-1">
+                <label className="label mb-0">For Persons *</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPersonRangeMode(!personRangeMode);
+                    if (personRangeMode) setForm({ ...form, num_persons_max: "" });
+                  }}
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all ${
+                    personRangeMode
+                      ? "bg-fresh-900/50 border-fresh-600/50 text-fresh-400"
+                      : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {personRangeMode ? "📏 Range Mode" : "🔢 Single → Range?"}
+                </button>
+              </div>
+              {personRangeMode ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min="1" max="20"
+                    className="input text-center"
+                    placeholder="Min"
+                    value={form.num_persons}
+                    onChange={e => setForm({ ...form, num_persons: e.target.value })}
+                    required
+                  />
+                  <span className="text-gray-500 font-bold text-sm">to</span>
+                  <input
+                    type="number" min="1" max="20"
+                    className="input text-center"
+                    placeholder="Max"
+                    value={form.num_persons_max}
+                    onChange={e => setForm({ ...form, num_persons_max: e.target.value })}
+                    required
+                  />
+                </div>
+              ) : (
+                <input
+                  type="number" min="1" max="20"
+                  className="input"
+                  value={form.num_persons}
+                  onChange={e => setForm({ ...form, num_persons: e.target.value })}
+                  required
+                />
+              )}
+              {personRangeMode && form.num_persons && form.num_persons_max && (
+                <p className="text-xs text-fresh-400 mt-1">📦 Package for {form.num_persons}–{form.num_persons_max} persons</p>
+              )}
             </div>
+
             <div>
               <label className="label">Deliveries per Month *</label>
               <input type="number" min="1" max="31" className="input" value={form.services_per_month} onChange={e => setForm({ ...form, services_per_month: e.target.value })} required />
@@ -458,7 +513,12 @@ export default function AdminPackages() {
                     <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
                     <span className={pkg.status === "active" ? "badge-green badge" : "badge-red badge"}>{pkg.status}</span>
                   </div>
-                  <p className="text-gray-400 text-sm">{pkg.num_persons} persons · {pkg.services_per_month} deliveries/month · <span className="text-white font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%</p>
+                  <p className="text-gray-400 text-sm">
+                    {pkg.num_persons_max
+                      ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
+                      : `${pkg.num_persons} persons`
+                    } · {pkg.services_per_month} deliveries/month · <span className="text-white font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%
+                  </p>
                   <p className="text-gray-500 text-xs mt-1">
                     Raw Per-service: ₹{(parseFloat(pkg.price) / pkg.services_per_month).toFixed(2)} ·
                     Visible Budget: ₹{((parseFloat(pkg.price) / pkg.services_per_month) * (1 - (pkg.margin_percent || 0) / 200)).toFixed(2)}

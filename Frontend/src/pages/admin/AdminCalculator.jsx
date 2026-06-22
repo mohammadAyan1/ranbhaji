@@ -13,6 +13,8 @@ export default function AdminCalculator() {
   const [fixedCount, setFixedCount] = useState(2);
   const [seasonalCount, setSeasonalCount] = useState(3);
   const [numPersons, setNumPersons] = useState(2);
+  const [numPersonsMax, setNumPersonsMax] = useState("");
+  const [personRangeModeCalc, setPersonRangeModeCalc] = useState(false);
 
   // Lists of products
   const [fixedItems, setFixedItems] = useState([
@@ -102,6 +104,8 @@ export default function AdminCalculator() {
     setFixedItems([{ id: 1, filterCategory: "", product_id: "", qty: "" }]);
     setSeasonalItems([{ id: 1, filterCategory: "", product_id: "", qty: "" }]);
     setDraftName("");
+    setNumPersonsMax("");
+    setPersonRangeModeCalc(false);
     setMsg("");
   };
 
@@ -185,6 +189,7 @@ export default function AdminCalculator() {
       margin_percent: parseFloat(marginPercent || 0),
       services_per_month: parseInt(servicesCount || 1),
       num_persons: parseInt(numPersons || 2),
+      num_persons_max: personRangeModeCalc && numPersonsMax ? parseInt(numPersonsMax) : null,
       calculated_price: parseFloat(finalPackagePrice),
       max_fixed_count: parseInt(fixedCount || 0),
       max_seasonal_count: parseInt(seasonalCount || 0),
@@ -253,15 +258,54 @@ export default function AdminCalculator() {
           />
         </div>
         <div>
-          <label className="label text-xs uppercase tracking-wider">For Persons</label>
-          <input
-            type="number"
-            min="1"
-            max="20"
-            className="input text-sm"
-            value={numPersons}
-            onChange={(e) => setNumPersons(e.target.value)}
-          />
+          <div className="flex items-center justify-between mb-1">
+            <label className="label text-xs uppercase tracking-wider mb-0">For Persons</label>
+            <button
+              type="button"
+              onClick={() => {
+                setPersonRangeModeCalc(!personRangeModeCalc);
+                if (personRangeModeCalc) setNumPersonsMax("");
+              }}
+              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border transition-all ${
+                personRangeModeCalc
+                  ? "bg-fresh-900/50 border-fresh-600/50 text-fresh-400"
+                  : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+              }`}
+            >
+              {personRangeModeCalc ? "📏 Range" : "→ Range?"}
+            </button>
+          </div>
+          {personRangeModeCalc ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number" min="1" max="20"
+                className="input text-sm text-center"
+                placeholder="Min"
+                value={numPersons}
+                onChange={(e) => setNumPersons(e.target.value)}
+              />
+              <span className="text-gray-600 text-xs font-bold">–</span>
+              <input
+                type="number" min="1" max="20"
+                className="input text-sm text-center"
+                placeholder="Max"
+                value={numPersonsMax}
+                onChange={(e) => setNumPersonsMax(e.target.value)}
+              />
+            </div>
+          ) : (
+            <input
+              type="number"
+              min="1"
+              max="20"
+              className="input text-sm"
+              value={numPersons}
+              onChange={(e) => setNumPersons(e.target.value)}
+            />
+          )}
+          {personRangeModeCalc && numPersons && numPersonsMax && (
+            <p className="text-[10px] text-fresh-400 mt-1">{numPersons}–{numPersonsMax} persons</p>
+          )}
         </div>
         <div>
           <label className="label text-xs uppercase tracking-wider">Max Fixed Products</label>

@@ -568,7 +568,12 @@ export default function PackagesPage() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold text-white">{pkg.name}</h2>
-                <p className="text-gray-400 text-sm">{pkg.num_persons} persons · {pkg.services_per_month} deliveries/month</p>
+                <p className="text-gray-400 text-sm">
+                  {pkg.num_persons_max
+                    ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
+                    : `${pkg.num_persons} persons`
+                  } · {pkg.services_per_month} deliveries/month
+                </p>
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>

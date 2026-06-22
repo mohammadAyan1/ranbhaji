@@ -5,7 +5,7 @@ import { sequelize } from "../confiq/db.js";
 export const createPackage = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { name, num_persons, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent } = req.body;
+        const { name, num_persons, num_persons_max, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent } = req.body;
 
         // Validation: sum of fixed_item cost per service must be < per_service_amount
         const per_service_amount = (parseFloat(price) / parseInt(services_per_month)) * (1 - parseFloat(margin_percent || 0) / 200);
@@ -30,7 +30,8 @@ export const createPackage = async (req, res) => {
             });
         }
 
-        const pkg = await Package.create({ name, num_persons, services_per_month, price, type, target_user_id: target_user_id || null, margin_percent: margin_percent || 0 }, { transaction: t });
+        const pkg = await Package.create({ name, num_persons, num_persons_max: num_persons_max || null, services_per_month, price, type, target_user_id: target_user_id || null, margin_percent: margin_percent || 0 }, { transaction: t });
+
 
         if (fixed_items && fixed_items.length > 0) {
             const fixedRows = fixed_items.map(item => ({ package_id: pkg.id, product_id: item.product_id, default_qty_gm: item.default_qty_gm }));
@@ -136,7 +137,8 @@ export const updatePackage = async (req, res) => {
         const pkg = await Package.findByPk(req.params.id);
         if (!pkg) { await t.rollback(); return res.status(404).json({ success: false, message: "Package not found" }); }
 
-        const { name, num_persons, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent, status } = req.body;
+        const { name, num_persons, num_persons_max, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent, status } = req.body;
+
 
         // Re-validate if price-related fields changed
         const newPrice = price || pkg.price;
@@ -168,7 +170,8 @@ export const updatePackage = async (req, res) => {
             await PackageSeasonalConfig.upsert({ package_id: pkg.id, max_select_count }, { transaction: t });
         }
 
-        await pkg.update({ name, num_persons, services_per_month, price, type, target_user_id, margin_percent: newMarginPercent, status }, { transaction: t });
+        await pkg.update({ name, num_persons, num_persons_max: num_persons_max !== undefined ? (num_persons_max || null) : pkg.num_persons_max, services_per_month, price, type, target_user_id, margin_percent: newMarginPercent, status }, { transaction: t });
+
         await t.commit();
         res.status(200).json({ success: true, message: "Package updated" });
     } catch (error) {

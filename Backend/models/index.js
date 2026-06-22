@@ -31,6 +31,7 @@ const Package = sequelize.define('Package', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(100) },
   num_persons: { type: DataTypes.INTEGER },
+  num_persons_max: { type: DataTypes.INTEGER, allowNull: true },
   services_per_month: { type: DataTypes.INTEGER },
   price: { type: DataTypes.DECIMAL(10, 2) },
   type: { type: DataTypes.ENUM('standard', 'custom', 'yearly') },
@@ -38,6 +39,7 @@ const Package = sequelize.define('Package', {
   margin_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
 }, { tableName: 'packages', timestamps: true, createdAt: 'created_at', updatedAt: false });
+
 
 // 4. PACKAGE_FIXED_ITEMS
 const PackageFixedItem = sequelize.define('PackageFixedItem', {
