@@ -9,6 +9,7 @@ export default function DeliveryHome() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState("");
+  const [taggingLocation, setTaggingLocation] = useState(false);
 
   const fetchDeliveries = () => {
     api.get("/today-deliveries").then(r => setDeliveries(r.data.deliveries || [])).finally(() => setLoading(false));
@@ -29,6 +30,42 @@ export default function DeliveryHome() {
       fetchDeliveries();
     } catch (err) { setMsg(`❌ ${err.response?.data?.message}`); }
     finally { setSubmitting(false); }
+  };
+
+  const handleTagLocation = (address_id) => {
+    if (!address_id) {
+        setMsg("❌ Cannot tag location: No valid address ID found for this user.");
+        return;
+    }
+
+    if (!navigator.geolocation) {
+        setMsg("❌ Geolocation is not supported by your browser");
+        return;
+    }
+
+    setTaggingLocation(true);
+    setMsg("📍 Fetching live location...");
+
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            try {
+                await api.patch(`/addresses/${address_id}/location`, {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                });
+                setMsg("✅ Location tagged successfully!");
+            } catch (err) {
+                setMsg(`❌ Failed to save location: ${err.response?.data?.message || err.message}`);
+            } finally {
+                setTaggingLocation(false);
+            }
+        },
+        (error) => {
+            setMsg(`❌ Location error: ${error.message}`);
+            setTaggingLocation(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading deliveries...</div>;
@@ -61,6 +98,15 @@ export default function DeliveryHome() {
                   <h3 className="font-bold text-white text-lg">{delivery.user.name}</h3>
                   <p className="text-gray-400 text-sm">📞 {delivery.user.phone}</p>
                   <p className="text-gray-400 text-sm mt-1">📍 {delivery.user.address}</p>
+                  {delivery.user.address_id && (
+                    <button 
+                      onClick={() => handleTagLocation(delivery.user.address_id)}
+                      disabled={taggingLocation}
+                      className="mt-2 text-[11px] font-semibold bg-gray-800 text-fresh-400 border border-fresh-900/50 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                    >
+                      {taggingLocation ? "Fetching..." : "📍 Tag Live Location"}
+                    </button>
+                  )}
                 </div>
                 <span className="badge-blue badge">{delivery.schedules.length} pkg(s)</span>
               </div>

@@ -1,5 +1,5 @@
 import { sequelize } from "../confiq/db.js";
-import { User, WalletTransaction, CreditLog, Subscription, DeliverySchedule, Package, WaterSubscription } from "../models/index.js";
+import { User, WalletTransaction, CreditLog, Subscription, DeliverySchedule, Package, WaterSubscription, Address } from "../models/index.js";
 import { Op } from "sequelize";
 
 // GET /api/wallet
@@ -113,8 +113,8 @@ export const getUserSubscriptions = async (req, res) => {
         const user = await User.findByPk(req.params.id, {
             attributes: { exclude: ['password_hash'] },
             include: [
-                { model: Subscription, include: [{ model: Package }] },
-                { model: WaterSubscription }
+                { model: Subscription, include: [{ model: Package }, { model: Address }] },
+                { model: WaterSubscription, include: [{ model: Address }] }
             ]
         });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });

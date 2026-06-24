@@ -45,6 +45,17 @@ export default function WaterPage() {
   const [pausingMsg, setPausingMsg] = useState("");
   const [pausingLoader, setPausingLoader] = useState(false);
 
+  const getMinStartDate = () => {
+    const now = new Date();
+    const minDate = new Date();
+    if (now.getHours() < 20) {
+      minDate.setDate(minDate.getDate() + 1); // tomorrow
+    } else {
+      minDate.setDate(minDate.getDate() + 2); // day after tomorrow
+    }
+    return minDate.toISOString().split('T')[0];
+  };
+
   const fetchWater = () => {
     setLoading(true);
     api.get("/water/subscriptions")
@@ -310,7 +321,7 @@ export default function WaterPage() {
               <input
                 type="date"
                 className="input"
-                min={new Date(Date.now() + 86400000).toISOString().split("T")[0]}
+                min={getMinStartDate()}
                 value={selectedDate}
                 onChange={e => setSelectedDate(e.target.value)}
               />
@@ -479,7 +490,7 @@ export default function WaterPage() {
                 <input
                   type="date"
                   className="input"
-                  min={new Date(Date.now() + 86400000).toISOString().split("T")[0]}
+                  min={getMinStartDate()}
                   value={selectedResumeDate}
                   onChange={e => setSelectedResumeDate(e.target.value)}
                   required

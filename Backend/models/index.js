@@ -23,7 +23,10 @@ const Product = sequelize.define('Product', {
   purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
   selling_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
   unit: { type: DataTypes.ENUM('gm', 'ml', 'piece') },
-  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  current_stock: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 }
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 3. PACKAGES
@@ -175,6 +178,8 @@ const Address = sequelize.define('Address', {
   city: { type: DataTypes.STRING(50) },
   pincode: { type: DataTypes.STRING(10) },
   landmark: { type: DataTypes.STRING(100) },
+  latitude: { type: DataTypes.DECIMAL(10, 8), allowNull: true },
+  longitude: { type: DataTypes.DECIMAL(11, 8), allowNull: true },
   is_default: { type: DataTypes.BOOLEAN, defaultValue: true }
 }, { tableName: 'addresses', timestamps: false });
 
@@ -296,6 +301,48 @@ CalculatorDraftItem.belongsTo(CalculatorDraft, { foreignKey: 'draft_id', onDelet
 CalculatorDraftItem.belongsTo(Product, { foreignKey: 'product_id' });
 CalculatorDraft.hasMany(CalculatorDraftItem, { foreignKey: 'draft_id', as: 'Items', onDelete: 'CASCADE' });
 
+// 20. PURCHASE_LOGS
+const PurchaseLog = sequelize.define('PurchaseLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  quantity: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+  purchase_price_per_kg: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  selling_price_per_kg: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  total_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  purchase_date: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
+}, { tableName: 'purchase_logs', timestamps: false });
+
+PurchaseLog.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(PurchaseLog, { foreignKey: 'product_id', as: 'PurchaseLogs' });
+
+// 21. RETAIL_ORDERS
+const RetailOrder = sequelize.define('RetailOrder', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  total_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  delivery_charge: { type: DataTypes.DECIMAL(10, 2), defaultValue: 30.00 },
+  payment_method: { type: DataTypes.ENUM('cod', 'phonepe'), allowNull: false },
+  payment_status: { type: DataTypes.ENUM('pending', 'success', 'failed'), defaultValue: 'pending' },
+  delivery_date: { type: DataTypes.DATEONLY, allowNull: false },
+  delivery_status: { type: DataTypes.ENUM('pending', 'delivered', 'cancelled'), defaultValue: 'pending' },
+  phonepe_txn_id: { type: DataTypes.STRING(100), allowNull: true }
+}, { tableName: 'retail_orders', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+RetailOrder.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(RetailOrder, { foreignKey: 'user_id' });
+RetailOrder.belongsTo(Address, { foreignKey: 'address_id' });
+Address.hasMany(RetailOrder, { foreignKey: 'address_id' });
+
+// 22. RETAIL_ORDER_ITEMS
+const RetailOrderItem = sequelize.define('RetailOrderItem', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  quantity: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+  price_per_unit: { type: DataTypes.DECIMAL(10, 4), allowNull: false },
+  total_price: { type: DataTypes.DECIMAL(10, 2), allowNull: false }
+}, { tableName: 'retail_order_items', timestamps: false });
+
+RetailOrderItem.belongsTo(RetailOrder, { foreignKey: 'order_id', onDelete: 'CASCADE' });
+RetailOrder.hasMany(RetailOrderItem, { foreignKey: 'order_id', as: 'Items', onDelete: 'CASCADE' });
+RetailOrderItem.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(RetailOrderItem, { foreignKey: 'product_id' });
 
 export {
   sequelize,
@@ -318,6 +365,9 @@ export {
   Address,
   PaymentTransaction,
   CalculatorDraft,
-  CalculatorDraftItem
+  CalculatorDraftItem,
+  PurchaseLog,
+  RetailOrder,
+  RetailOrderItem
 };
 

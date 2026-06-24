@@ -26,6 +26,7 @@ export default function MySubscriptions() {
   const [seasonalBudget, setSeasonalBudget] = useState(0);
   const [fixedItems, setFixedItems] = useState([]); // [{ product_id, qty_gm, Product }]
   const [perServiceAmount, setPerServiceAmount] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   // Resume state
   const [resumingSub, setResumingSub] = useState(null);
@@ -33,6 +34,11 @@ export default function MySubscriptions() {
   const [selectedResumeDate, setSelectedResumeDate] = useState("");
   const [confirmingResume, setConfirmingResume] = useState(false);
   const [resumeMsg, setResumeMsg] = useState("");
+
+  // Start Date Confirm state
+  const [confirmingStartSub, setConfirmingStartSub] = useState(null);
+  const [startDateVal, setStartDateVal] = useState("");
+  const [confirmStartMsg, setConfirmStartMsg] = useState("");
 
   // Per-schedule seasonal selection states
   const [scheduleSub, setScheduleSub] = useState(null);
@@ -57,6 +63,35 @@ export default function MySubscriptions() {
       .finally(() => setLoading(false));
   };
   useEffect(fetchSubs, []);
+
+  const getMinStartDate = () => {
+    const now = new Date();
+    const minDate = new Date();
+    if (now.getHours() < 20) {
+      minDate.setDate(minDate.getDate() + 1); // tomorrow
+    } else {
+      minDate.setDate(minDate.getDate() + 2); // day after tomorrow
+    }
+    return minDate.toISOString().split('T')[0];
+  };
+
+  const handleConfirmStartDate = async () => {
+    if (!startDateVal) {
+      setConfirmStartMsg("❌ Please select a date");
+      return;
+    }
+    try {
+      await api.post("/confirm-start-date", {
+        subscription_id: confirmingStartSub.id,
+        start_date: startDateVal
+      });
+      setMsg("✅ Start date confirmed successfully!");
+      setConfirmingStartSub(null);
+      fetchSubs();
+    } catch (err) {
+      setConfirmStartMsg(`❌ ${err.response?.data?.message || "Failed to confirm start date"}`);
+    }
+  };
 
   const handleConfirmPause = async () => {
     setPausingLoader(true);
@@ -128,6 +163,7 @@ export default function MySubscriptions() {
       setMaxSelectCount(res.data.max_select_count || 0);
       setSeasonalBudget(res.data.seasonal_budget || 0);
       setPerServiceAmount(res.data.per_service_amount || 0);
+      setWalletBalance(res.data.wallet_balance || 0);
       setFixedItems(res.data.fixed_items || []);
 
       // Pre-fill existing seasonal items
@@ -184,6 +220,7 @@ export default function MySubscriptions() {
       setSchedulesMaxCount(res.data.max_select_count || 0);
       setSchedulesBudget(res.data.seasonal_budget || 0);
       setSchedulesPerServiceAmount(res.data.per_service_amount || 0);
+      setWalletBalance(res.data.wallet_balance || 0);
       setSchedulesFixedCost(res.data.fixed_cost_per_service || 0);
     } catch (err) {
       setMsg(`❌ Failed to load upcoming schedules: ${err.response?.data?.message || err.message}`);
@@ -271,8 +308,9 @@ export default function MySubscriptions() {
   }, 0);
 
   const activeTotalCost = activeFixedCost + activeSeasonalCost;
-  const activeRemainingBudget = schedulesPerServiceAmount - activeTotalCost;
-  const isActiveOverBudget = activeTotalCost > schedulesPerServiceAmount;
+  const activeActualLimit = Math.min(schedulesPerServiceAmount, walletBalance);
+  const activeRemainingBudget = activeActualLimit - activeTotalCost;
+  const isActiveOverBudget = activeTotalCost > activeActualLimit;
   const activeSelectedCount = Object.values(selectedScheduleItems).filter(v => parseFloat(v) > 0).length;
 
   const selectedCount = Object.values(selectedItems).filter(v => parseFloat(v) > 0).length;
@@ -291,8 +329,9 @@ export default function MySubscriptions() {
   }, 0);
 
   const totalCost = fixedCost + seasonalCost;
-  const remainingBudget = perServiceAmount - totalCost;
-  const isOverBudget = totalCost > perServiceAmount;
+  const actualLimit = Math.min(perServiceAmount, walletBalance);
+  const remainingBudget = actualLimit - totalCost;
+  const isOverBudget = totalCost > actualLimit;
 
   const updateFixedQty = (productId, value) => {
     setFixedItems(fixedItems.map(fi => {
@@ -349,7 +388,7 @@ export default function MySubscriptions() {
             {isOverBudget && (
               <div className="p-4 border rounded-xl text-sm border-red-500/50 bg-red-950/20 text-red-200">
                 <p className="text-xs text-red-400 font-medium mt-1">
-                  ⚠️ Limit exceeded. Please reduce product quantities.
+                  ⚠️ Limit exceeded. Allowed budget is ₹{Math.min(perServiceAmount, walletBalance).toFixed(2)}. Please reduce product quantities.
                 </p>
               </div>
             )}
@@ -622,7 +661,7 @@ export default function MySubscriptions() {
                 <input
                   type="date"
                   className="input"
-                  min={new Date(Date.now() + 86400000).toISOString().split("T")[0]}
+                  min={getMinStartDate()}
                   value={selectedResumeDate}
                   onChange={e => setSelectedResumeDate(e.target.value)}
                   required
@@ -642,6 +681,42 @@ export default function MySubscriptions() {
               <button type="button" onClick={() => setResumingSub(null)} className="btn-secondary">
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Start Date Confirmation Modal */}
+      {confirmingStartSub && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
+            <div className="flex items-center justify-between mb-2">
+               <h3 className="font-bold text-white text-lg font-gradient">Select Start Date 📅</h3>
+               <button onClick={() => setConfirmingStartSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <p className="text-gray-400 text-xs">
+              Please choose a start date for your package. 
+              {new Date().getHours() >= 20 ? " Since it's past 8 PM, the earliest available date is the day after tomorrow." : " Order before 8 PM to start tomorrow."}
+            </p>
+            {confirmStartMsg && (
+              <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+                {confirmStartMsg}
+              </div>
+            )}
+            <div>
+              <label className="label">Start Date</label>
+              <input 
+                type="date" 
+                className="input" 
+                min={getMinStartDate()} 
+                value={startDateVal} 
+                onChange={e => setStartDateVal(e.target.value)} 
+                required 
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={handleConfirmStartDate} disabled={!startDateVal} className="btn-primary flex-1">Confirm Start Date</button>
+              <button onClick={() => setConfirmingStartSub(null)} className="btn-secondary">Cancel</button>
             </div>
           </div>
         </div>
@@ -930,7 +1005,15 @@ export default function MySubscriptions() {
                     {sub.start_date ? (
                       <p className="text-gray-500 text-xs mt-1">📅 {sub.start_date} → {sub.end_date} · {sub.services_completed}/{sub.total_services} deliveries done</p>
                     ) : (
-                      <p className="text-yellow-400 text-xs mt-1">⚠️ Start date not confirmed yet</p>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <p className="text-yellow-400 text-xs font-semibold">⚠️ Start date not confirmed</p>
+                        <button 
+                          onClick={() => { setConfirmingStartSub(sub); setStartDateVal(""); setConfirmStartMsg(""); }}
+                          className="btn-primary text-[10px] py-1 px-3"
+                        >
+                          📅 Set Start Date
+                        </button>
+                      </div>
                     )}
                   </div>
                   <button onClick={() => setExpandedId(isExpanded ? null : sub.id)} className="text-gray-400 hover:text-white text-sm px-3 py-1 rounded-lg hover:bg-gray-800 transition-all">
@@ -1025,8 +1108,10 @@ export default function MySubscriptions() {
                         <>
                           {sub.Package?.SeasonalConfig && (
                             <button
-                              onClick={() => openScheduleSelection(sub)}
-                              className="btn-primary text-sm py-1.5 px-4 bg-fresh-600 hover:bg-fresh-500"
+                              onClick={() => sub.start_date ? openScheduleSelection(sub) : null}
+                              className={`text-sm py-1.5 px-4 ${sub.start_date ? 'btn-primary bg-fresh-600 hover:bg-fresh-500' : 'btn-secondary opacity-50 cursor-not-allowed'}`}
+                              disabled={!sub.start_date}
+                              title={!sub.start_date ? "Please set your start date first to select sabji." : ""}
                             >
                               🥦 Select Sabji (Per-Service)
                             </button>

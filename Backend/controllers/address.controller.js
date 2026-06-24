@@ -138,3 +138,22 @@ export const setDefaultAddress = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// PATCH /api/addresses/:id/location
+export const updateLocation = async (req, res) => {
+    try {
+        const { latitude, longitude } = req.body;
+        if (!latitude || !longitude) {
+            return res.status(400).json({ success: false, message: "latitude and longitude are required" });
+        }
+        const address = await Address.findByPk(req.params.id);
+        if (!address) {
+            return res.status(404).json({ success: false, message: "Address not found" });
+        }
+
+        await address.update({ latitude, longitude });
+        res.status(200).json({ success: true, message: "Location captured successfully", address });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

@@ -39,12 +39,14 @@ export const getTodayDeliveries = async (req, res) => {
             let user, package_name;
             let addressStr = "No address provided";
             let defaultAddr;
+            let address_id = null;
 
             if (sched.Subscription) {
                 user = sched.Subscription.User;
                 package_name = sched.Subscription.Package.name;
                 if (sched.Subscription.Address) {
                     const addr = sched.Subscription.Address;
+                    address_id = addr.id;
                     addressStr = `${addr.address_line}${addr.landmark ? ', ' + addr.landmark : ''}, ${addr.city} - ${addr.pincode}`;
                 } else {
                     defaultAddr = await Address.findOne({ where: { user_id: user.id, is_default: true } });
@@ -54,6 +56,7 @@ export const getTodayDeliveries = async (req, res) => {
                 package_name = `${sched.WaterSubscription.water_type} Water (${sched.WaterSubscription.container})`;
                 if (sched.WaterSubscription.Address) {
                     const addr = sched.WaterSubscription.Address;
+                    address_id = addr.id;
                     addressStr = `${addr.address_line}${addr.landmark ? ', ' + addr.landmark : ''}, ${addr.city} - ${addr.pincode}`;
                 } else {
                     defaultAddr = await Address.findOne({ where: { user_id: user.id, is_default: true } });
@@ -63,6 +66,7 @@ export const getTodayDeliveries = async (req, res) => {
             if (!user) continue;
 
             if (defaultAddr) {
+                address_id = defaultAddr.id;
                 addressStr = `${defaultAddr.address_line}${defaultAddr.landmark ? ', ' + defaultAddr.landmark : ''}, ${defaultAddr.city} - ${defaultAddr.pincode}`;
             }
 
@@ -72,7 +76,8 @@ export const getTodayDeliveries = async (req, res) => {
                         id: user.id,
                         name: user.name,
                         phone: user.phone,
-                        address: addressStr
+                        address: addressStr,
+                        address_id: address_id
                     },
                     schedules: []
                 };
@@ -322,6 +327,55 @@ export const markDelivered = async (req, res) => {
         }, { transaction: t });
 
         await sub.update({ services_completed: sub.services_completed + 1 }, { transaction: t });
+
+        // Stock deduction logic
+        let itemsForStockDeduction = [];
+        if (schedule.Subscription) {
+            itemsForStockDeduction = deliveryItems;
+        } else if (schedule.WaterSubscription) {
+            itemsForStockDeduction = await DeliveryItem.findAll({
+                where: { schedule_id: schedule.id },
+                include: [{ model: Product }],
+                transaction: t
+            });
+            if (itemsForStockDeduction.length === 0) {
+                const wsub = schedule.WaterSubscription;
+                const products = await Product.findAll({ where: { category: 'water', status: 'active' }, transaction: t });
+                const matchedProduct = products.find(p => {
+                    const nameLower = p.name.toLowerCase();
+                    return nameLower.includes(wsub.water_type.toLowerCase()) && nameLower.includes(wsub.container.toLowerCase());
+                });
+                if (matchedProduct) {
+                    const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
+                    const createdItem = await DeliveryItem.create({
+                        schedule_id: schedule.id,
+                        product_id: matchedProduct.id,
+                        qty_gm: qty
+                    }, { transaction: t });
+                    const reloadedItem = await DeliveryItem.findByPk(createdItem.id, {
+                        include: [{ model: Product }],
+                        transaction: t
+                    });
+                    itemsForStockDeduction = [reloadedItem];
+                }
+            }
+        }
+
+        for (const item of itemsForStockDeduction) {
+            if (item.Product) {
+                const product = await Product.findByPk(item.product_id, { transaction: t });
+                if (product) {
+                    const currentStock = parseFloat(product.current_stock || 0);
+                    const soldQty = parseFloat(product.total_sold_qty || 0);
+                    const qtyDeduct = parseFloat(item.qty_gm || 0);
+
+                    await product.update({
+                        current_stock: currentStock - qtyDeduct,
+                        total_sold_qty: soldQty + qtyDeduct
+                    }, { transaction: t });
+                }
+            }
+        }
 
         await t.commit();
         res.status(200).json({ success: true, message: "Delivery marked complete", new_wallet_balance: newBalance });

@@ -13,6 +13,7 @@ const adminLinks = [
   { to: "/admin/returns", label: "Returns", icon: "↩️" },
   { to: "/admin/summary", label: "Daily Summary", icon: "📋" },
   { to: "/admin/calculator", label: "Price Calculator", icon: "🧮" },
+  { to: "/admin/retail-orders", label: "Retail Orders", icon: "🛒" },
 ];
 
 const userLinks = [
@@ -24,6 +25,8 @@ const userLinks = [
   { to: "/water", label: "Water Subscription", icon: "💧" },
   { to: "/addresses", label: "My Addresses", icon: "📍" },
   { to: "/notifications", label: "Notifications", icon: "🔔" },
+  { to: "/retail-store", label: "Retail Store", icon: "🛒" },
+  { to: "/my-retail-orders", label: "My Retail Orders", icon: "📋" },
 ];
 
 const deliveryLinks = [

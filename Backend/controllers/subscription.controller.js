@@ -901,6 +901,8 @@ export const getUpcomingSelections = async (req, res) => {
             Product: i.Product
         }));
 
+        const user = await User.findByPk(req.user.id);
+
         res.status(200).json({
             success: true,
             seasonal_pool: pool,
@@ -910,6 +912,7 @@ export const getUpcomingSelections = async (req, res) => {
             fixed_cost_per_service: fixed_cost,
             fixed_items,
             default_seasonal,
+            wallet_balance: parseFloat(user.wallet_balance || 0),
             schedules: formattedSchedules
         });
     } catch (error) {

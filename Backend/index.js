@@ -22,6 +22,8 @@ import waterRoutes from "./routes/water.route.js";
 import notificationRoutes from "./routes/notification.route.js";
 import addressRoutes from "./routes/address.route.js";
 import calculatorRoutes from "./routes/calculator.route.js";
+import paymentRoutes from "./routes/payment.route.js";
+import retailRoutes from "./routes/retail.route.js";
 
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
@@ -73,6 +75,8 @@ app.use("/api", walletRoutes);             // /api/wallet, /api/admin/...
 app.use("/api/water", waterRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/calculator", calculatorRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/retail", retailRoutes);
 
 // 404 fallback
 app.use((req, res) => {
@@ -88,7 +92,7 @@ app.use((err, req, res, next) => {
 // Start server
 const startServer = async () => {
     await connectDB();
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
     console.log("[DB] Models synchronized");
 
     await seedDatabase();

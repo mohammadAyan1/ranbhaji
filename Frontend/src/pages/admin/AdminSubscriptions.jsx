@@ -91,6 +91,7 @@ export default function AdminSubscriptions() {
                 <tr className="table-header">
                   <th className="text-left p-3 rounded-tl-xl">Customer</th>
                   <th className="text-left p-3">Package</th>
+                  <th className="text-left p-3">Address</th>
                   <th className="text-left p-3">Type</th>
                   <th className="text-left p-3">Start Date</th>
                   <th className="text-left p-3">Progress</th>
@@ -106,6 +107,9 @@ export default function AdminSubscriptions() {
                       <p className="text-gray-500 text-xs">{s.User?.phone}</p>
                     </td>
                     <td className="p-3 text-gray-300">{s.Package?.name || `#${s.package_id}`}</td>
+                    <td className="p-3 text-gray-400 text-xs max-w-[150px] truncate" title={s.Address ? `${s.Address.address_line}, ${s.Address.city}` : ''}>
+                      {s.Address ? `${s.Address.address_line}, ${s.Address.city}` : <span className="text-gray-600 italic">Not provided</span>}
+                    </td>
                     <td className="p-3"><span className="badge badge-gray capitalize">{s.type}</span></td>
                     <td className="p-3 text-gray-400">{s.start_date || "Not set"}</td>
                     <td className="p-3 text-gray-400">

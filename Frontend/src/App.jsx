@@ -29,6 +29,10 @@ import AdminCalculator from "./pages/admin/AdminCalculator";
 import AdminDeliveries from "./pages/admin/AdminDeliveries";
 import AdminDemands from "./pages/admin/AdminDemands";
 import AdminSeasonalSelections from "./pages/admin/AdminSeasonalSelections";
+import RetailStore from "./pages/user/RetailStore";
+import MyRetailOrders from "./pages/user/MyRetailOrders";
+import PaymentStatusPage from "./pages/user/PaymentStatusPage";
+import AdminRetailOrders from "./pages/admin/AdminRetailOrders";
 
 
 // Delivery pages
@@ -65,6 +69,9 @@ function App() {
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/deliveries" element={<DeliveryHistory />} />
           <Route path="/addresses" element={<AddressPage />} />
+          <Route path="/retail-store" element={<RetailStore />} />
+          <Route path="/my-retail-orders" element={<MyRetailOrders />} />
+          <Route path="/payment-status" element={<PaymentStatusPage />} />
         </Route>
 
         {/* ─── ADMIN Routes ────────────────────────────────────── */}
@@ -80,6 +87,7 @@ function App() {
           <Route path="/admin/seasonal-selections" element={<AdminSeasonalSelections />} />
           <Route path="/admin/summary" element={<AdminDashboard />} />
           <Route path="/admin/calculator" element={<AdminCalculator />} />
+          <Route path="/admin/retail-orders" element={<AdminRetailOrders />} />
         </Route>
 
         {/* ─── DELIVERY Routes ─────────────────────────────────── */}

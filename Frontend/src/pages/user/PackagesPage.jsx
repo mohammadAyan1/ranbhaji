@@ -42,11 +42,21 @@ export default function PackagesPage() {
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
 
-  useEffect(() => {
-    api.get("/packages")
-      .then(r => setPackages(r.data.packages || []))
-      .finally(() => setLoading(false));
+  // PhonePe Checkout states
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [checkoutPkg, setCheckoutPkg] = useState(null);
+  const [showInlineAddressModal, setShowInlineAddressModal] = useState(false);
+  const [inlineAddressForm, setInlineAddressForm] = useState({
+    address_line: "",
+    city: "",
+    pincode: "",
+    landmark: "",
+    is_default: true
+  });
+  const [savingInlineAddress, setSavingInlineAddress] = useState(false);
+  const [initiatingPayment, setInitiatingPayment] = useState(false);
 
+  const fetchAddresses = () => {
     api.get("/addresses")
       .then(r => {
         const addrs = r.data.addresses || [];
@@ -55,6 +65,14 @@ export default function PackagesPage() {
         if (defaultAddr) setSelectedAddressId(defaultAddr.id);
         else if (addrs.length > 0) setSelectedAddressId(addrs[0].id);
       });
+  };
+
+  useEffect(() => {
+    api.get("/packages")
+      .then(r => setPackages(r.data.packages || []))
+      .finally(() => setLoading(false));
+
+    fetchAddresses();
 
     // Fetch user's current subscriptions to detect duplicates
     api.get("/my-subscriptions")
@@ -75,14 +93,70 @@ export default function PackagesPage() {
       setMsg(`❌ Aap pehle se "${pkg.name}" package ke subscriber hain. Subscription end hone ke baad renew karein.`);
       return;
     }
-    if (!selectedAddressId) {
-      setMsg("❌ Please add or select a delivery address first");
+    setCheckoutPkg(pkg);
+    setMsg("");
+    setShowCheckoutModal(true);
+  };
+
+  const handleSaveInlineAddress = async (e) => {
+    e.preventDefault();
+    if (!inlineAddressForm.address_line || !inlineAddressForm.city || !inlineAddressForm.pincode) {
+      setMsg("❌ Please fill in Address line, City and Pincode");
       return;
     }
-    setRazorpayPkg(pkg);
-    setPaymentStatus("idle");
-    setPaymentProgressMsg("");
-    setShowRazorpay(true);
+    setSavingInlineAddress(true);
+    try {
+      const res = await api.post("/addresses", inlineAddressForm);
+      const newAddress = res.data.address;
+      setInlineAddressForm({
+        address_line: "",
+        city: "",
+        pincode: "",
+        landmark: "",
+        is_default: true
+      });
+      setShowInlineAddressModal(false);
+      
+      // Reload and auto select
+      api.get("/addresses").then(r => {
+        const addrs = r.data.addresses || [];
+        setAddresses(addrs);
+        if (newAddress) {
+          setSelectedAddressId(newAddress.id);
+        } else if (addrs.length > 0) {
+          setSelectedAddressId(addrs[0].id);
+        }
+      });
+      setMsg("✅ Address added successfully!");
+    } catch (err) {
+      setMsg(`❌ Address creation failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingInlineAddress(false);
+    }
+  };
+
+  const handlePhonePeCheckout = async () => {
+    if (!selectedAddressId) {
+      setMsg("❌ Please add or select a delivery address first.");
+      return;
+    }
+    setInitiatingPayment(true);
+    setMsg("");
+    try {
+      const res = await api.post("/payment/phonepe/initiate", {
+        type: "package",
+        package_id: checkoutPkg.id,
+        billing_type: selectedType,
+        address_id: parseInt(selectedAddressId)
+      });
+      if (res.data.redirectUrl) {
+        window.location.href = res.data.redirectUrl;
+      }
+    } catch (err) {
+      setMsg(`❌ Failed to initiate PhonePe payment: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setInitiatingPayment(false);
+    }
   };
 
   const handleOverageSave = async () => {
@@ -661,15 +735,212 @@ export default function PackagesPage() {
         </div>
       )}
 
-      {/* Razorpay Simulated Checkout Drawer/Modal */}
+      {/* PhonePe Package Checkout Modal */}
+      {showCheckoutModal && checkoutPkg && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-5 relative animate-scale-up">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-purple-400 font-extrabold text-lg tracking-tight">PhonePe</span>
+                <span className="bg-purple-500/10 text-purple-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-purple-500/20">SECURE PAY</span>
+              </div>
+              <button
+                onClick={() => setShowCheckoutModal(false)}
+                className="text-gray-400 hover:text-white text-2xl leading-none"
+                disabled={initiatingPayment}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="text-gray-500 text-xs uppercase tracking-wider font-bold">Package Selection</p>
+                <p className="text-white font-bold text-base mt-0.5">{checkoutPkg.name}</p>
+              </div>
+
+              <div className="bg-gray-900/50 rounded-2xl p-4 border border-gray-850 space-y-2.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Duration:</span>
+                  <span className="font-semibold text-white capitalize">{selectedType} Plan</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-400">Total Services:</span>
+                  <span className="font-semibold text-white">{selectedType === "yearly" ? checkoutPkg.services_per_month * 12 : checkoutPkg.services_per_month} deliveries</span>
+                </div>
+                <div className="border-t border-gray-850 my-1"></div>
+                <div className="flex justify-between items-center text-sm font-bold">
+                  <span className="text-gray-200">Amount to Pay:</span>
+                  <span className="text-gradient">
+                    ₹{selectedType === "yearly" ? calcYearly(checkoutPkg.price) : checkoutPkg.price}
+                  </span>
+                </div>
+              </div>
+
+              {/* Address selector inside modal */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-gray-400 text-xs font-bold uppercase tracking-wider">📍 Delivery Address</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineAddressModal(true)}
+                    className="text-[10px] text-fresh-400 hover:underline"
+                  >
+                    + Add New Address
+                  </button>
+                </div>
+
+                {addresses.length === 0 ? (
+                  <div className="bg-yellow-950/15 border border-yellow-800/30 rounded-xl p-3 text-center space-y-2">
+                    <p className="text-yellow-400 text-xs font-medium">⚠️ No addresses saved. Please create one to proceed.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowInlineAddressModal(true)}
+                      className="w-full btn-secondary py-1 text-xs"
+                    >
+                      + Create Address
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    className="input py-2 text-xs"
+                    value={selectedAddressId}
+                    onChange={e => setSelectedAddressId(e.target.value)}
+                  >
+                    {addresses.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.address_line}, {a.city} {a.is_default ? "(Default)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handlePhonePeCheckout}
+                  disabled={initiatingPayment || !selectedAddressId}
+                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-950 flex items-center justify-center gap-2 text-sm"
+                >
+                  {initiatingPayment ? "Initiating Gateway..." : `🔒 Pay ₹${selectedType === "yearly" ? calcYearly(checkoutPkg.price) : checkoutPkg.price} via PhonePe`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCheckoutModal(false)}
+                  className="w-full py-2 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium rounded-xl transition-all text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Address Creation Modal for package checkout */}
+      {showInlineAddressModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-base">Add New Address</h3>
+              <button
+                type="button"
+                onClick={() => setShowInlineAddressModal(false)}
+                className="text-gray-400 hover:text-white text-2xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveInlineAddress} className="space-y-3">
+              <div>
+                <label className="label text-xs">Address Line</label>
+                <input
+                  type="text"
+                  className="input py-1.5 text-xs"
+                  placeholder="House No, Apartment, Street name..."
+                  value={inlineAddressForm.address_line}
+                  onChange={e => setInlineAddressForm({ ...inlineAddressForm, address_line: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label text-xs">Landmark (Optional)</label>
+                <input
+                  type="text"
+                  className="input py-1.5 text-xs"
+                  placeholder="Near temple, hospital..."
+                  value={inlineAddressForm.landmark}
+                  onChange={e => setInlineAddressForm({ ...inlineAddressForm, landmark: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label text-xs">City</label>
+                  <input
+                    type="text"
+                    className="input py-1.5 text-xs"
+                    placeholder="City"
+                    value={inlineAddressForm.city}
+                    onChange={e => setInlineAddressForm({ ...inlineAddressForm, city: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs">Pincode</label>
+                  <input
+                    type="text"
+                    className="input py-1.5 text-xs"
+                    placeholder="Pincode"
+                    value={inlineAddressForm.pincode}
+                    onChange={e => setInlineAddressForm({ ...inlineAddressForm, pincode: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="inline-default-chk"
+                  className="w-4 h-4 accent-green-500"
+                  checked={inlineAddressForm.is_default}
+                  onChange={e => setInlineAddressForm({ ...inlineAddressForm, is_default: e.target.checked })}
+                />
+                <label htmlFor="inline-default-chk" className="text-xs text-gray-300 cursor-pointer">Set as default address</label>
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-gray-850">
+                <button
+                  type="submit"
+                  disabled={savingInlineAddress}
+                  className="btn-primary flex-1 py-1.5 text-xs"
+                >
+                  {savingInlineAddress ? "Saving..." : "Save & Select"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInlineAddressModal(false)}
+                  className="btn-secondary py-1.5 text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Razorpay Simulated Overage Checkout Modal */}
       {showRazorpay && razorpayPkg && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0b1220] border border-gray-700/80 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-6 relative overflow-hidden animate-slide-up">
-            {/* Razorpay Brand Header */}
             <div className="flex items-center justify-between border-b border-gray-800 pb-4">
               <div className="flex items-center gap-2">
-                <span className="text-blue-400 font-extrabold text-xl tracking-tight">Razorpay</span>
-                <span className="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-500/20">SECURE CHECKOUT</span>
+                <span className="text-blue-400 font-extrabold text-xl tracking-tight">Overage Payment</span>
               </div>
               <button
                 onClick={() => setShowRazorpay(false)}
@@ -680,89 +951,37 @@ export default function PackagesPage() {
               </button>
             </div>
 
-            {paymentStatus === "idle" && (
-              <div className="space-y-5">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Merchant</p>
-                  <p className="text-sm font-bold text-white">FreshBox Delivery Subscriptions</p>
+            <div className="space-y-5">
+              <div className="bg-gray-900/50 rounded-2xl p-4 border border-gray-800 space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400">Overage Detail:</span>
+                  <span className="font-semibold text-white">{razorpayPkg.name}</span>
                 </div>
-
-                <div className="bg-gray-900/50 rounded-2xl p-4 border border-gray-800 space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Package Name:</span>
-                    <span className="font-semibold text-white">{razorpayPkg.name}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Duration:</span>
-                    <span className="font-semibold text-white capitalize">{selectedType} Plan</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Deliveries:</span>
-                    <span className="font-semibold text-white">{selectedType === "yearly" ? razorpayPkg.services_per_month * 12 : razorpayPkg.services_per_month} services</span>
-                  </div>
-                  <div className="border-t border-gray-800/80 my-1"></div>
-                  <div className="flex justify-between items-center text-base font-bold">
-                    <span className="text-gray-200">Amount Due:</span>
-                    <span className="text-gradient">
-                      ₹{selectedType === "yearly" ? calcYearly(razorpayPkg.price) : razorpayPkg.price}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Delivery Address</p>
-                  <div className="bg-gray-900/30 rounded-xl p-3 border border-gray-800 text-xs text-gray-300">
-                    {(() => {
-                      const addr = addresses.find(a => a.id === parseInt(selectedAddressId));
-                      return addr ? `${addr.address_line}, ${addr.city} - ${addr.pincode}` : "No address selected";
-                    })()}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 pt-2">
-                  <button
-                    onClick={handleSimulatedPayment}
-                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
-                  >
-                    🔒 Pay ₹{selectedType === "yearly" ? calcYearly(razorpayPkg.price) : razorpayPkg.price} Securely
-                  </button>
-                  <button
-                    onClick={() => setShowRazorpay(false)}
-                    className="w-full py-2.5 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium rounded-xl transition-all text-sm"
-                  >
-                    Cancel Payment
-                  </button>
+                <div className="border-t border-gray-800/80 my-1"></div>
+                <div className="flex justify-between items-center text-base font-bold">
+                  <span className="text-gray-200">Amount Due:</span>
+                  <span className="text-gradient">₹{parseFloat(razorpayPkg.price || 0).toFixed(2)}</span>
                 </div>
               </div>
-            )}
 
-            {paymentStatus === "processing" && (
-              <div className="flex flex-col items-center justify-center py-10 space-y-6">
-                <div className="relative w-16 h-16">
-                  <div className="absolute inset-0 rounded-full border-4 border-blue-500/20"></div>
-                  <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
-                </div>
-                <div className="text-center space-y-2">
-                  <p className="text-white font-semibold text-base">Processing Payment...</p>
-                  <p className="text-xs text-gray-400 animate-pulse">{paymentProgressMsg}</p>
-                </div>
+              <div className="flex flex-col gap-3 pt-2">
+                <button
+                  onClick={handleSimulatedPayment}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
+                >
+                  🔒 Pay Overage Securely
+                </button>
+                <button
+                  onClick={() => setShowRazorpay(false)}
+                  className="w-full py-2.5 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium rounded-xl transition-all text-sm"
+                >
+                  Cancel
+                </button>
               </div>
-            )}
-
-            {paymentStatus === "success" && (
-              <div className="flex flex-col items-center justify-center py-10 space-y-4 animate-scale-up">
-                <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center text-green-400 text-3xl">
-                  ✓
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-white font-bold text-lg">Payment Successful</p>
-                  <p className="text-xs text-gray-400">Reference: pay_sim_{Math.random().toString(36).substr(2, 9)}</p>
-                </div>
-              </div>
-            )}
+            </div>
 
             <div className="text-[10px] text-gray-600 text-center pt-2">
-              Protected by Razorpay Secure. Do not close or refresh this drawer.
+              Protected secure transaction. Do not close or refresh this modal.
             </div>
           </div>
         </div>
