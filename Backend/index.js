@@ -94,7 +94,7 @@ app.use((err, req, res, next) => {
 // Start server
 const startServer = async () => {
     await connectDB();
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
     console.log("[DB] Models synchronized");
 
     await seedDatabase();
