@@ -38,11 +38,12 @@ export default function DeliveryHome() {
     return () => { active = false; };
   }, [activeTab]);
 
-  const handleMarkDelivered = async (schedule_id) => {
+  const handleMarkDelivered = async (schedule_id, type) => {
     if (!photo && !remark) { setMsg("❌ Please add a photo or remark"); return; }
     setSubmitting(true); setMsg("");
     const formData = new FormData();
     formData.append("schedule_id", schedule_id);
+    if (type) formData.append("type", type);
     if (photo) formData.append("photo", photo);
     if (remark) formData.append("remark", remark);
     try {
@@ -175,7 +176,7 @@ export default function DeliveryHome() {
                           <input type="text" className="input text-sm" placeholder="Delivery remark..." value={remark} onChange={e => setRemark(e.target.value)} />
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => handleMarkDelivered(sched.schedule_id)} disabled={submitting} className="btn-primary text-sm py-2 px-4 flex-1">
+                          <button onClick={() => handleMarkDelivered(sched.schedule_id, sched.type)} disabled={submitting} className="btn-primary text-sm py-2 px-4 flex-1">
                             {submitting ? "Submitting..." : "✅ Confirm Delivery"}
                           </button>
                           <button onClick={() => setSelected(null)} className="btn-secondary text-sm py-2 px-4">Cancel</button>

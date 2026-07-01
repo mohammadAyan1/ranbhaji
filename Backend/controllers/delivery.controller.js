@@ -12,9 +12,14 @@ import path from "path";
 export const getTodayDeliveries = async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
+        const deliveryBoyId = req.user.id;
 
         const schedules = await DeliverySchedule.findAll({
-            where: { scheduled_date: today, status: 'pending' },
+            where: { 
+                scheduled_date: today, 
+                status: ['pending', 'ready_for_delivery'],
+                delivery_boy_id: deliveryBoyId 
+            },
             include: [
                 {
                     model: Subscription,
@@ -31,6 +36,19 @@ export const getTodayDeliveries = async (req, res) => {
                         { model: Address }
                     ]
                 }
+            ]
+        });
+
+        const retailOrders = await RetailOrder.findAll({
+            where: {
+                delivery_date: today,
+                delivery_status: ['pending', 'ready_for_delivery'],
+                delivery_boy_id: deliveryBoyId
+            },
+            include: [
+                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: Address },
+                { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
             ]
         });
 
@@ -134,8 +152,41 @@ export const getTodayDeliveries = async (req, res) => {
 
             userMap[user.id].schedules.push({
                 schedule_id: sched.id,
+                type: 'package',
                 package: package_name,
                 items: items.map(i => ({ product: i.Product?.name, qty_gm: i.qty_gm, unit: i.Product?.unit }))
+            });
+        }
+
+        for (const ro of retailOrders) {
+            const user = ro.User;
+            if (!user) continue;
+
+            let addressStr = "No address provided";
+            let address_id = null;
+            if (ro.Address) {
+                address_id = ro.Address.id;
+                addressStr = `${ro.Address.address_line}${ro.Address.landmark ? ', ' + ro.Address.landmark : ''}, ${ro.Address.city} - ${ro.Address.pincode}`;
+            }
+
+            if (!userMap[user.id]) {
+                userMap[user.id] = {
+                    user: {
+                        id: user.id,
+                        name: user.name,
+                        phone: user.phone,
+                        address: addressStr,
+                        address_id: address_id
+                    },
+                    schedules: []
+                };
+            }
+
+            userMap[user.id].schedules.push({
+                schedule_id: ro.id,
+                type: 'retail',
+                package: "Retail Order",
+                items: ro.Items.map(i => ({ product: i.Product?.name, qty_gm: i.qty_gm, unit: i.Product?.unit }))
             });
         }
 
@@ -149,7 +200,7 @@ export const getTodayDeliveries = async (req, res) => {
 export const markDelivered = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { schedule_id, remark } = req.body;
+        const { schedule_id, type, remark } = req.body;
         const photo_url = req.file ? `/uploads/${req.file.filename}` : null;
 
         if (!photo_url && !remark) {
@@ -157,13 +208,50 @@ export const markDelivered = async (req, res) => {
             return res.status(400).json({ success: false, message: "At least a photo or remark is required" });
         }
 
+        if (type === 'retail') {
+            const ro = await RetailOrder.findByPk(schedule_id, { include: [{ model: User }], transaction: t });
+            if (!ro || !['pending', 'ready_for_delivery'].includes(ro.delivery_status)) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: "Retail Delivery not found or already processed" });
+            }
+
+            const per_service_amount = parseFloat(ro.total_price);
+            const user = ro.User;
+
+            let newBalance = parseFloat(user.wallet_balance) - per_service_amount;
+            let newDue = parseFloat(user.due_amount);
+
+            if (newBalance < 0) {
+                newDue += Math.abs(newBalance);
+                newBalance = 0;
+            }
+
+            await user.update({ wallet_balance: newBalance, due_amount: newDue }, { transaction: t });
+            await WalletTransaction.create({
+                user_id: user.id, amount: per_service_amount, type: 'debit',
+                reason: `Retail Delivery on ${ro.delivery_date}`,
+                reference_id: ro.id
+            }, { transaction: t });
+
+            await ro.update({
+                delivery_status: 'delivered',
+                actual_delivery_date: new Date().toISOString().split('T')[0],
+                delivery_photo_url: photo_url,
+                delivery_remark: remark
+            }, { transaction: t });
+
+            await t.commit();
+            return res.status(200).json({ success: true, message: "Retail order marked as delivered" });
+        }
+
         const schedule = await DeliverySchedule.findByPk(schedule_id, {
             include: [
                 { model: Subscription, include: [{ model: Package }, { model: User }] },
                 { model: WaterSubscription, include: [{ model: User }] }
-            ]
+            ],
+            transaction: t
         });
-        if (!schedule || schedule.status !== 'pending') {
+        if (!schedule || !['pending', 'ready_for_delivery'].includes(schedule.status)) {
             await t.rollback();
             return res.status(400).json({ success: false, message: "Delivery not found or already processed" });
         }

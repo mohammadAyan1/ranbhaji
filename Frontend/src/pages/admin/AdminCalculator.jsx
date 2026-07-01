@@ -16,12 +16,19 @@ export default function AdminCalculator() {
   const [numPersonsMax, setNumPersonsMax] = useState("");
   const [personRangeModeCalc, setPersonRangeModeCalc] = useState(false);
 
+  // Global category filters
+  const [fixedCategoryFilter, setFixedCategoryFilter] = useState("");
+  const [seasonalCategoryFilter, setSeasonalCategoryFilter] = useState("");
+
   // Lists of products
   const [fixedItems, setFixedItems] = useState([
-    { id: 1, filterCategory: "", product_id: "", qty: "" }
+    { id: 1, product_id: "", qty: "", search: "" },
+    { id: 2, product_id: "", qty: "", search: "" }
   ]);
   const [seasonalItems, setSeasonalItems] = useState([
-    { id: 1, filterCategory: "", product_id: "", qty: "" }
+    { id: 1, product_id: "", qty: "", search: "" },
+    { id: 2, product_id: "", qty: "", search: "" },
+    { id: 3, product_id: "", qty: "", search: "" }
   ]);
 
   // Saving state
@@ -44,65 +51,17 @@ export default function AdminCalculator() {
     setMsgType(type);
   };
 
-  const addFixedRow = () => {
-    if (fixedItems.length >= fixedCount) {
-      showMsg(`⚠️ Cannot add more than ${fixedCount} fixed products as configured.`, "error");
-      return;
-    }
-    const nextId = fixedItems.length > 0 ? Math.max(...fixedItems.map((i) => i.id)) + 1 : 1;
-    setFixedItems([...fixedItems, { id: nextId, filterCategory: "", product_id: "", qty: "" }]);
-    setMsg("");
-  };
-
-  const addSeasonalRow = () => {
-    if (seasonalItems.length >= seasonalCount) {
-      showMsg(`⚠️ Cannot add more than ${seasonalCount} seasonal products as configured.`, "error");
-      return;
-    }
-    const nextId = seasonalItems.length > 0 ? Math.max(...seasonalItems.map((i) => i.id)) + 1 : 1;
-    setSeasonalItems([...seasonalItems, { id: nextId, filterCategory: "", product_id: "", qty: "" }]);
-    setMsg("");
-  };
-
   const updateFixedRow = (id, field, value) => {
-    setFixedItems(
-      fixedItems.map((item) => {
-        if (item.id === id) {
-          if (field === "filterCategory") {
-            return { ...item, [field]: value, product_id: "", qty: "" };
-          }
-          return { ...item, [field]: value };
-        }
-        return item;
-      })
-    );
+    setFixedItems(fixedItems.map((item) => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const updateSeasonalRow = (id, field, value) => {
-    setSeasonalItems(
-      seasonalItems.map((item) => {
-        if (item.id === id) {
-          if (field === "filterCategory") {
-            return { ...item, [field]: value, product_id: "", qty: "" };
-          }
-          return { ...item, [field]: value };
-        }
-        return item;
-      })
-    );
-  };
-
-  const deleteFixedRow = (id) => {
-    setFixedItems(fixedItems.filter((item) => item.id !== id));
-  };
-
-  const deleteSeasonalRow = (id) => {
-    setSeasonalItems(seasonalItems.filter((item) => item.id !== id));
+    setSeasonalItems(seasonalItems.map((item) => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const clearCalculator = () => {
-    setFixedItems([{ id: 1, filterCategory: "", product_id: "", qty: "" }]);
-    setSeasonalItems([{ id: 1, filterCategory: "", product_id: "", qty: "" }]);
+    setFixedItems(Array.from({length: fixedCount}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
+    setSeasonalItems(Array.from({length: seasonalCount}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
     setDraftName("");
     setNumPersonsMax("");
     setPersonRangeModeCalc(false);
@@ -314,7 +273,20 @@ export default function AdminCalculator() {
             min="0"
             className="input text-sm"
             value={fixedCount}
-            onChange={(e) => setFixedCount(e.target.value)}
+            onChange={(e) => {
+              const count = parseInt(e.target.value) || 0;
+              setFixedCount(count);
+              const newItems = [...fixedItems];
+              if (count > newItems.length) {
+                for (let i = newItems.length; i < count; i++) {
+                   const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
+                   newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
+                }
+              } else if (count < newItems.length) {
+                newItems.splice(count);
+              }
+              setFixedItems(newItems);
+            }}
           />
         </div>
         <div>
@@ -324,7 +296,20 @@ export default function AdminCalculator() {
             min="0"
             className="input text-sm"
             value={seasonalCount}
-            onChange={(e) => setSeasonalCount(e.target.value)}
+            onChange={(e) => {
+              const count = parseInt(e.target.value) || 0;
+              setSeasonalCount(count);
+              const newItems = [...seasonalItems];
+              if (count > newItems.length) {
+                for (let i = newItems.length; i < count; i++) {
+                   const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
+                   newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
+                }
+              } else if (count < newItems.length) {
+                newItems.splice(count);
+              }
+              setSeasonalItems(newItems);
+            }}
           />
         </div>
       </div>
@@ -362,24 +347,30 @@ export default function AdminCalculator() {
 
       {/* ─── FIXED PRODUCTS BUILDER ───────────────────────────────── */}
       <div className="card border-gray-800 bg-gray-900/30 p-6 space-y-4">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
             <h3 className="font-semibold text-white text-lg">1. Fixed Products Simulation</h3>
-            <p className="text-xs text-gray-500">Add up to {fixedCount} products to be included in every delivery.</p>
+            <p className="text-xs text-gray-500">Configure {fixedCount} products to be included in every delivery.</p>
           </div>
-          <button 
-            onClick={addFixedRow} 
-            disabled={fixedItems.length >= fixedCount}
-            className="btn-primary text-xs py-1.5 px-4"
-          >
-            ➕ Add Fixed Product Row ({fixedItems.length}/{fixedCount})
-          </button>
+          <div>
+            <select
+              className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-gray-900"
+              value={fixedCategoryFilter}
+              onChange={(e) => setFixedCategoryFilter(e.target.value)}
+            >
+              <option value="">Filter by Category (All)</option>
+              <option value="vegetable">Vegetables</option>
+              <option value="fruit">Fruits</option>
+              <option value="exotic">Exotic Veg</option>
+              <option value="salad">Salad</option>
+            </select>
+          </div>
         </div>
 
         <div className="space-y-3">
-          {fixedItems.map((item) => {
+          {fixedItems.map((item, index) => {
             const rowProducts = products.filter(
-              (p) => !item.filterCategory || p.category === item.filterCategory
+              (p) => !fixedCategoryFilter || p.category === fixedCategoryFilter
             );
 
             return (
@@ -387,38 +378,33 @@ export default function AdminCalculator() {
                 key={item.id}
                 className="flex flex-wrap items-center gap-4 bg-gray-800/40 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-all duration-200"
               >
-                {/* Category Filter */}
-                <div className="w-full sm:w-auto">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Category</label>
-                  <select
-                    className="input py-1.5 px-3 text-xs w-full sm:w-36 bg-gray-900"
-                    value={item.filterCategory}
-                    onChange={(e) => updateFixedRow(item.id, "filterCategory", e.target.value)}
-                  >
-                    <option value="">All Categories</option>
-                    <option value="vegetable">Vegetables</option>
-                    <option value="fruit">Fruits</option>
-                    <option value="exotic">Exotic Veg</option>
-                    <option value="salad">Salad</option>
-                  </select>
+                <div className="w-8 flex items-center justify-center font-bold text-gray-600">
+                  {index + 1}.
                 </div>
 
-                {/* Product Select */}
+                {/* Product Search */}
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Select Product</label>
-                  <select
+                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Search & Select Product</label>
+                  <input
+                    type="text"
+                    list={`fixed-products-list-${item.id}`}
                     className="input py-1.5 px-3 text-sm w-full bg-gray-900"
-                    value={item.product_id}
-                    onChange={(e) => updateFixedRow(item.id, "product_id", e.target.value)}
+                    placeholder="Type to search..."
+                    value={item.search || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      updateFixedRow(item.id, "search", val);
+                      const p = rowProducts.find(prod => `${prod.name} (${prod.category})` === val);
+                      if (p) updateFixedRow(item.id, "product_id", p.id);
+                      else updateFixedRow(item.id, "product_id", "");
+                    }}
                     required
-                  >
-                    <option value="">Choose item...</option>
+                  />
+                  <datalist id={`fixed-products-list-${item.id}`}>
                     {rowProducts.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} (Cat: {p.category})
-                      </option>
+                      <option key={p.id} value={`${p.name} (${p.category})`} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 {/* Quantity Input */}
@@ -455,18 +441,6 @@ export default function AdminCalculator() {
                     </div>
                   </div>
                 )}
-
-                {/* Actions */}
-                <div className="flex items-center ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => deleteFixedRow(item.id)}
-                    className="text-red-400 hover:text-red-300 p-2 text-lg transition-all"
-                    title="Remove Row"
-                  >
-                    🗑️
-                  </button>
-                </div>
               </div>
             );
           })}
@@ -475,24 +449,30 @@ export default function AdminCalculator() {
 
       {/* ─── SEASONAL PRODUCTS BUILDER ────────────────────────────── */}
       <div className="card border-gray-800 bg-gray-900/30 p-6 space-y-4">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
             <h3 className="font-semibold text-white text-lg">2. Seasonal Pool Simulation</h3>
-            <p className="text-xs text-gray-500">Add up to {seasonalCount} seasonal products for customer options.</p>
+            <p className="text-xs text-gray-500">Configure {seasonalCount} seasonal products for customer options.</p>
           </div>
-          <button 
-            onClick={addSeasonalRow} 
-            disabled={seasonalItems.length >= seasonalCount}
-            className="btn-primary text-xs py-1.5 px-4"
-          >
-            ➕ Add Seasonal Product Row ({seasonalItems.length}/{seasonalCount})
-          </button>
+          <div>
+            <select
+              className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-gray-900"
+              value={seasonalCategoryFilter}
+              onChange={(e) => setSeasonalCategoryFilter(e.target.value)}
+            >
+              <option value="">Filter by Category (All)</option>
+              <option value="vegetable">Vegetables</option>
+              <option value="fruit">Fruits</option>
+              <option value="exotic">Exotic Veg</option>
+              <option value="salad">Salad</option>
+            </select>
+          </div>
         </div>
 
         <div className="space-y-3">
-          {seasonalItems.map((item) => {
+          {seasonalItems.map((item, index) => {
             const rowProducts = products.filter(
-              (p) => !item.filterCategory || p.category === item.filterCategory
+              (p) => !seasonalCategoryFilter || p.category === seasonalCategoryFilter
             );
 
             return (
@@ -500,38 +480,33 @@ export default function AdminCalculator() {
                 key={item.id}
                 className="flex flex-wrap items-center gap-4 bg-gray-800/40 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-all duration-200"
               >
-                {/* Category Filter */}
-                <div className="w-full sm:w-auto">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Category</label>
-                  <select
-                    className="input py-1.5 px-3 text-xs w-full sm:w-36 bg-gray-900"
-                    value={item.filterCategory}
-                    onChange={(e) => updateSeasonalRow(item.id, "filterCategory", e.target.value)}
-                  >
-                    <option value="">All Categories</option>
-                    <option value="vegetable">Vegetables</option>
-                    <option value="fruit">Fruits</option>
-                    <option value="exotic">Exotic Veg</option>
-                    <option value="salad">Salad</option>
-                  </select>
+                <div className="w-8 flex items-center justify-center font-bold text-gray-600">
+                  {index + 1}.
                 </div>
 
-                {/* Product Select */}
+                {/* Product Search */}
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Select Product</label>
-                  <select
+                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Search & Select Product</label>
+                  <input
+                    type="text"
+                    list={`seasonal-products-list-${item.id}`}
                     className="input py-1.5 px-3 text-sm w-full bg-gray-900"
-                    value={item.product_id}
-                    onChange={(e) => updateSeasonalRow(item.id, "product_id", e.target.value)}
+                    placeholder="Type to search..."
+                    value={item.search || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      updateSeasonalRow(item.id, "search", val);
+                      const p = rowProducts.find(prod => `${prod.name} (${prod.category})` === val);
+                      if (p) updateSeasonalRow(item.id, "product_id", p.id);
+                      else updateSeasonalRow(item.id, "product_id", "");
+                    }}
                     required
-                  >
-                    <option value="">Choose item...</option>
+                  />
+                  <datalist id={`seasonal-products-list-${item.id}`}>
                     {rowProducts.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} (Cat: {p.category})
-                      </option>
+                      <option key={p.id} value={`${p.name} (${p.category})`} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 {/* Quantity Input */}
@@ -568,18 +543,6 @@ export default function AdminCalculator() {
                     </div>
                   </div>
                 )}
-
-                {/* Actions */}
-                <div className="flex items-center ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => deleteSeasonalRow(item.id)}
-                    className="text-red-400 hover:text-red-300 p-2 text-lg transition-all"
-                    title="Remove Row"
-                  >
-                    🗑️
-                  </button>
-                </div>
               </div>
             );
           })}
