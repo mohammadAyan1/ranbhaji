@@ -2,7 +2,8 @@ import express from "express";
 import {
     getTodayDeliveries, markDelivered, requestReturn, reviewReturn,
     getDeliveryHistory, getCompletedDeliveries, getReturns, getProductDemands,
-    getAdminSeasonalSelections
+    getAdminSeasonalSelections, getAllOrdersForDate, assignBatch,
+    packOrders, getAvailableOrders, acceptOrder
 } from "../controllers/delivery.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
@@ -18,5 +19,11 @@ router.get("/admin/deliveries", requireAuth, requireRole(["admin"]), getComplete
 router.get("/admin/returns", requireAuth, requireRole(["admin"]), getReturns);
 router.get("/admin/demands", requireAuth, requireRole(["admin"]), getProductDemands);
 router.get("/admin/seasonal-selections", requireAuth, requireRole(["admin"]), getAdminSeasonalSelections);
+router.get("/admin/orders", requireAuth, requireRole(["admin"]), getAllOrdersForDate);
+router.put("/admin/orders/assign-batch", requireAuth, requireRole(["admin"]), assignBatch);
+router.put("/admin/orders/pack", requireAuth, requireRole(["admin"]), packOrders);
+
+router.get("/available-orders", requireAuth, requireRole(["delivery"]), getAvailableOrders);
+router.put("/accept-order", requireAuth, requireRole(["delivery"]), acceptOrder);
 
 export default router;

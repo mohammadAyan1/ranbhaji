@@ -14,6 +14,8 @@ const adminLinks = [
   { to: "/admin/summary", label: "Daily Summary", icon: "📋" },
   { to: "/admin/calculator", label: "Price Calculator", icon: "🧮" },
   { to: "/admin/retail-orders", label: "Retail Orders", icon: "🛒" },
+  { to: "/admin/batches", label: "Batches", icon: "📑" },
+  { to: "/admin/all-orders", label: "All Orders", icon: "📋" },
 ];
 
 const userLinks = [

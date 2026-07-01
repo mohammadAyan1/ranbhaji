@@ -87,12 +87,13 @@ const SubscriptionItem = sequelize.define('SubscriptionItem', {
 const DeliverySchedule = sequelize.define('DeliverySchedule', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   scheduled_date: { type: DataTypes.DATEONLY },
-  status: { type: DataTypes.ENUM('pending', 'delivered', 'skipped') },
+  status: { type: DataTypes.ENUM('pending', 'ready_for_delivery', 'delivered', 'skipped') },
   actual_delivery_date: { type: DataTypes.DATEONLY, allowNull: true },
   is_locked: { type: DataTypes.BOOLEAN, defaultValue: false },
   delivery_boy_id: { type: DataTypes.INTEGER, allowNull: true },
   delivery_photo_url: { type: DataTypes.STRING(255), allowNull: true },
-  delivery_remark: { type: DataTypes.STRING(255), allowNull: true }
+  delivery_remark: { type: DataTypes.STRING(255), allowNull: true },
+  batch_id: { type: DataTypes.INTEGER, allowNull: true }
 }, { tableName: 'delivery_schedule', timestamps: false });
 
 // 10. DELIVERY_ITEMS
@@ -103,7 +104,8 @@ const DeliveryItem = sequelize.define('DeliveryItem', {
   return_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   return_reason: { type: DataTypes.STRING(255), allowNull: true },
   return_photo_url: { type: DataTypes.STRING(255), allowNull: true },
-  return_status: { type: DataTypes.ENUM('none', 'requested', 'approved', 'rejected'), defaultValue: 'none' }
+  return_status: { type: DataTypes.ENUM('none', 'requested', 'approved', 'rejected'), defaultValue: 'none' },
+  packed_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true }
 }, { tableName: 'delivery_items', timestamps: false });
 
 // 10b. SCHEDULE_SEASONAL_SELECTIONS
@@ -322,19 +324,24 @@ const RetailOrder = sequelize.define('RetailOrder', {
   payment_method: { type: DataTypes.ENUM('cod', 'phonepe'), allowNull: false },
   payment_status: { type: DataTypes.ENUM('pending', 'success', 'failed'), defaultValue: 'pending' },
   delivery_date: { type: DataTypes.DATEONLY, allowNull: false },
-  delivery_status: { type: DataTypes.ENUM('pending', 'delivered', 'cancelled'), defaultValue: 'pending' },
-  phonepe_txn_id: { type: DataTypes.STRING(100), allowNull: true }
+  delivery_status: { type: DataTypes.ENUM('pending', 'ready_for_delivery', 'delivered', 'cancelled'), defaultValue: 'pending' },
+  phonepe_txn_id: { type: DataTypes.STRING(100), allowNull: true },
+  batch_id: { type: DataTypes.INTEGER, allowNull: true },
+  delivery_boy_id: { type: DataTypes.INTEGER, allowNull: true }
 }, { tableName: 'retail_orders', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 RetailOrder.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(RetailOrder, { foreignKey: 'user_id' });
 RetailOrder.belongsTo(Address, { foreignKey: 'address_id' });
 Address.hasMany(RetailOrder, { foreignKey: 'address_id' });
+RetailOrder.belongsTo(User, { as: 'DeliveryBoy', foreignKey: 'delivery_boy_id' });
+User.hasMany(RetailOrder, { foreignKey: 'delivery_boy_id' });
 
 // 22. RETAIL_ORDER_ITEMS
 const RetailOrderItem = sequelize.define('RetailOrderItem', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   quantity: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+  packed_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   price_per_unit: { type: DataTypes.DECIMAL(10, 4), allowNull: false },
   total_price: { type: DataTypes.DECIMAL(10, 2), allowNull: false }
 }, { tableName: 'retail_order_items', timestamps: false });
@@ -343,6 +350,20 @@ RetailOrderItem.belongsTo(RetailOrder, { foreignKey: 'order_id', onDelete: 'CASC
 RetailOrder.hasMany(RetailOrderItem, { foreignKey: 'order_id', as: 'Items', onDelete: 'CASCADE' });
 RetailOrderItem.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(RetailOrderItem, { foreignKey: 'product_id' });
+
+// 23. BATCHES
+const Batch = sequelize.define('Batch', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(100), allowNull: false },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  is_deleted: { type: DataTypes.BOOLEAN, defaultValue: false }
+}, { tableName: 'batches', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+DeliverySchedule.belongsTo(Batch, { foreignKey: 'batch_id' });
+Batch.hasMany(DeliverySchedule, { foreignKey: 'batch_id' });
+
+RetailOrder.belongsTo(Batch, { foreignKey: 'batch_id' });
+Batch.hasMany(RetailOrder, { foreignKey: 'batch_id' });
 
 export {
   sequelize,
@@ -368,6 +389,7 @@ export {
   CalculatorDraftItem,
   PurchaseLog,
   RetailOrder,
-  RetailOrderItem
+  RetailOrderItem,
+  Batch
 };
 

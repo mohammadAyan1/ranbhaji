@@ -878,9 +878,12 @@ export const getUpcomingSelections = async (req, res) => {
         const now = new Date();
         const formattedSchedules = schedules.map(s => {
             const scheduledDateStr = s.scheduled_date; // YYYY-MM-DD
+            // Cutoff is 8:00 PM IST on the scheduled_date
+            // const cutoffTime = new Date(`${scheduledDateStr}T20:00:00+05:30`);
             const cutoffTime = new Date(`${scheduledDateStr}T00:00:00`);
             cutoffTime.setDate(cutoffTime.getDate() - 1);
             cutoffTime.setHours(20, 0, 0, 0); // 8:00 PM the day before
+
 
             const isWindowOpen = now < cutoffTime;
 
@@ -963,9 +966,11 @@ export const saveScheduleSeasonal = async (req, res) => {
 
         // Check 8 PM cutoff
         const scheduledDateStr = schedule.scheduled_date; // YYYY-MM-DD
+        // const cutoffTime = new Date(`${scheduledDateStr}T20:00:00+05:30`);
         const cutoffTime = new Date(`${scheduledDateStr}T00:00:00`);
         cutoffTime.setDate(cutoffTime.getDate() - 1);
         cutoffTime.setHours(20, 0, 0, 0); // 8:00 PM the day before
+
 
         const now = new Date();
         if (now >= cutoffTime) {

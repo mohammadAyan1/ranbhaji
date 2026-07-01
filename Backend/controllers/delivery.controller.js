@@ -3,7 +3,8 @@ import { sequelize } from "../confiq/db.js";
 import {
     DeliverySchedule, DeliveryItem, Subscription, SubscriptionItem, User, Product,
     WalletTransaction, Notification, WaterSubscription, Package, Address,
-    ScheduleSeasonalSelection, PackageSeasonalConfig
+    ScheduleSeasonalSelection, PackageSeasonalConfig,
+    RetailOrder, RetailOrderItem, Batch
 } from "../models/index.js";
 import path from "path";
 
@@ -630,131 +631,116 @@ export const getProductDemands = async (req, res) => {
                     model: Subscription,
                     required: false,
                     include: [
+                        { model: User, attributes: ['id', 'name', 'phone'] },
                         { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
                         { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] }
                     ]
                 },
-                {
-                    model: WaterSubscription,
-                    required: false
-                },
-                {
-                    model: DeliveryItem,
-                    as: 'DeliveryItems',
+                { 
+                    model: WaterSubscription, 
                     required: false,
-                    include: [{ model: Product }]
+                    include: [
+                        { model: User, attributes: ['id', 'name', 'phone'] }
+                    ]
                 },
-                {
-                    model: ScheduleSeasonalSelection,
-                    as: 'SeasonalSelections',
-                    required: false,
-                    include: [{ model: Product }]
-                }
+                { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
+                { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] },
+                { model: Batch, required: false }
             ]
         });
 
-        // Fetch active water products
-        const waterProducts = await Product.findAll({ where: { category: 'water', status: 'fresh' } }); // Let's check what water status is used or fallback to active
+        const retailOrders = await RetailOrder.findAll({
+            where: { delivery_date: dateStr, delivery_status: 'pending' },
+            include: [
+                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] },
+                { model: Batch, required: false }
+            ]
+        });
+
+        const waterProducts = await Product.findAll({ where: { category: 'water', status: 'fresh' } });
         const actualWaterProducts = waterProducts.length > 0 ? waterProducts : await Product.findAll({ where: { category: 'water' } });
 
         const demandMap = {};
 
+        const addDemand = (p, qty, source, batchName, user) => {
+            if (!demandMap[p.id]) {
+                demandMap[p.id] = {
+                    id: p.id,
+                    name: p.name,
+                    category: p.category,
+                    unit: p.unit,
+                    total_package_qty: 0,
+                    total_retail_qty: 0,
+                    package_details: {},
+                    retail_details: {}
+                };
+            }
+            if (source === 'package') {
+                demandMap[p.id].total_package_qty += qty;
+                const key = `${qty}_${batchName || 'Unassigned'}`;
+                if (!demandMap[p.id].package_details[key]) {
+                    demandMap[p.id].package_details[key] = { qty, batch: batchName || 'Unassigned', count: 0, orders: [] };
+                }
+                demandMap[p.id].package_details[key].count += 1;
+                if (user) {
+                    demandMap[p.id].package_details[key].orders.push({ userName: user.name, phone: user.phone });
+                }
+            } else {
+                demandMap[p.id].total_retail_qty += qty;
+                const key = `${qty}_${batchName || 'Unassigned'}`;
+                if (!demandMap[p.id].retail_details[key]) {
+                    demandMap[p.id].retail_details[key] = { qty, batch: batchName || 'Unassigned', count: 0, orders: [] };
+                }
+                demandMap[p.id].retail_details[key].count += 1;
+                if (user) {
+                    demandMap[p.id].retail_details[key].orders.push({ userName: user.name, phone: user.phone });
+                }
+            }
+        };
+
         for (const schedule of schedules) {
+            const batchName = schedule.Batch ? schedule.Batch.name : null;
+            let user = null;
+            if (schedule.Subscription && schedule.Subscription.User) {
+                user = schedule.Subscription.User;
+            } else if (schedule.WaterSubscription && schedule.WaterSubscription.User) {
+                user = schedule.WaterSubscription.User;
+            }
+
             const dbItems = schedule.DeliveryItems || [];
             if (dbItems.length > 0) {
                 for (const item of dbItems) {
                     if (!item.Product) continue;
-                    const p = item.Product;
-                    const qty = parseFloat(item.qty_gm || 0);
-                    if (!demandMap[p.id]) {
-                        demandMap[p.id] = {
-                            id: p.id,
-                            name: p.name,
-                            category: p.category,
-                            unit: p.unit,
-                            total_qty: 0
-                        };
-                    }
-                    demandMap[p.id].total_qty += qty;
+                    addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
                 }
             } else {
                 if (schedule.Subscription) {
                     const sub = schedule.Subscription;
                     const items = sub.Items || [];
-
-                    // Fixed items default
                     const fixedItems = items.filter(item => item.is_fixed && item.is_active);
                     const selections = schedule.SeasonalSelections || [];
 
                     if (selections.length > 0) {
-                        // 1. Add all selections (custom fixed and seasonal)
                         for (const sel of selections) {
                             if (!sel.Product) continue;
-                            const p = sel.Product;
-                            const qty = parseFloat(sel.qty_gm || 0);
-                            if (!demandMap[p.id]) {
-                                demandMap[p.id] = {
-                                    id: p.id,
-                                    name: p.name,
-                                    category: p.category,
-                                    unit: p.unit,
-                                    total_qty: 0
-                                };
-                            }
-                            demandMap[p.id].total_qty += qty;
+                            addDemand(sel.Product, parseFloat(sel.qty_gm || 0), 'package', batchName, user);
                         }
-
-                        // 2. Add default fixed items that are not in selections
                         const selectionProductIds = selections.map(sel => sel.product_id);
                         const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
                         for (const item of missingFixed) {
                             if (!item.Product) continue;
-                            const p = item.Product;
-                            const qty = parseFloat(item.qty_gm || 0);
-                            if (!demandMap[p.id]) {
-                                demandMap[p.id] = {
-                                    id: p.id,
-                                    name: p.name,
-                                    category: p.category,
-                                    unit: p.unit,
-                                    total_qty: 0
-                                };
-                            }
-                            demandMap[p.id].total_qty += qty;
+                            addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
                         }
                     } else {
-                        // Use default fixed and seasonal
                         for (const item of fixedItems) {
                             if (!item.Product) continue;
-                            const p = item.Product;
-                            const qty = parseFloat(item.qty_gm || 0);
-                            if (!demandMap[p.id]) {
-                                demandMap[p.id] = {
-                                    id: p.id,
-                                    name: p.name,
-                                    category: p.category,
-                                    unit: p.unit,
-                                    total_qty: 0
-                                };
-                            }
-                            demandMap[p.id].total_qty += qty;
+                            addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
                         }
-
                         const defaultSeasonal = items.filter(item => item.is_seasonal && item.is_active);
                         for (const item of defaultSeasonal) {
                             if (!item.Product) continue;
-                            const p = item.Product;
-                            const qty = parseFloat(item.qty_gm || 0);
-                            if (!demandMap[p.id]) {
-                                demandMap[p.id] = {
-                                    id: p.id,
-                                    name: p.name,
-                                    category: p.category,
-                                    unit: p.unit,
-                                    total_qty: 0
-                                };
-                            }
-                            demandMap[p.id].total_qty += qty;
+                            addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
                         }
                     }
                 } else if (schedule.WaterSubscription) {
@@ -765,22 +751,28 @@ export const getProductDemands = async (req, res) => {
                     });
                     if (matchedProduct) {
                         const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
-                        if (!demandMap[matchedProduct.id]) {
-                            demandMap[matchedProduct.id] = {
-                                id: matchedProduct.id,
-                                name: matchedProduct.name,
-                                category: matchedProduct.category,
-                                unit: matchedProduct.unit,
-                                total_qty: 0
-                            };
-                        }
-                        demandMap[matchedProduct.id].total_qty += qty;
+                        addDemand(matchedProduct, qty, 'package', batchName, user);
                     }
                 }
             }
         }
 
-        const demandsList = Object.values(demandMap);
+        for (const order of retailOrders) {
+            const batchName = order.Batch ? order.Batch.name : null;
+            const user = order.User;
+            const items = order.Items || [];
+            for (const item of items) {
+                if (!item.Product) continue;
+                addDemand(item.Product, parseFloat(item.quantity || 0), 'retail', batchName, user);
+            }
+        }
+
+        const demandsList = Object.values(demandMap).map(d => ({
+            ...d,
+            package_details: Object.values(d.package_details),
+            retail_details: Object.values(d.retail_details)
+        }));
+
         res.status(200).json({ success: true, date: dateStr, demands: demandsList });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -917,3 +909,370 @@ export const getAdminSeasonalSelections = async (req, res) => {
     }
 };
 
+
+// GET /api/admin/orders
+export const getAllOrdersForDate = async (req, res) => {
+    try {
+        const { date } = req.query;
+        let dateStr = date;
+        if (!dateStr) {
+            const today = new Date();
+            dateStr = today.toISOString().split('T')[0];
+        }
+
+        const schedules = await DeliverySchedule.findAll({
+            where: { scheduled_date: dateStr },
+            include: [
+                { model: Batch },
+                { 
+                    model: Subscription, 
+                    include: [
+                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: Address },
+                        { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
+                        { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] }
+                    ] 
+                },
+                { 
+                    model: WaterSubscription, 
+                    include: [
+                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: Address }
+                    ] 
+                },
+                { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
+                { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] }
+            ]
+        });
+
+        const retailOrders = await RetailOrder.findAll({
+            where: { delivery_date: dateStr },
+            include: [
+                { model: Batch },
+                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: Address },
+                { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
+            ]
+        });
+
+        const waterProducts = await Product.findAll({ where: { category: 'water', status: 'fresh' } });
+        const actualWaterProducts = waterProducts.length > 0 ? waterProducts : await Product.findAll({ where: { category: 'water' } });
+
+        // Fetch all default addresses in one go to avoid N+1
+        const allUsersIds = new Set();
+        schedules.forEach(s => {
+            if (s.Subscription) allUsersIds.add(s.Subscription.User.id);
+            else if (s.WaterSubscription) allUsersIds.add(s.WaterSubscription.User.id);
+        });
+        retailOrders.forEach(r => {
+            if (r.User) allUsersIds.add(r.User.id);
+        });
+        const defaultAddresses = await Address.findAll({
+            where: { user_id: Array.from(allUsersIds), is_default: true }
+        });
+        const defaultAddressMap = {};
+        defaultAddresses.forEach(a => {
+            defaultAddressMap[a.user_id] = a;
+        });
+
+        const formatAddress = (addr) => {
+            if (!addr) return "No Address Provided";
+            return `${addr.address_line}${addr.landmark ? ', ' + addr.landmark : ''}, ${addr.city} - ${addr.pincode}`;
+        };
+
+        const usersMap = {};
+
+        const getOrInitUser = (user, status) => {
+            if (!user) return null;
+            if (!usersMap[user.id]) {
+                usersMap[user.id] = {
+                    user: user,
+                    hasPackage: false,
+                    status: status,
+                    addressesMap: {}, // To group by address string
+                    // Also keep total map for the overall summary view
+                    totalItemsMap: {},
+                    allScheduleIds: [],
+                    allRetailOrderIds: [],
+                    commonBatchId: null // Optional common batch if all match
+                };
+            }
+            return usersMap[user.id];
+        };
+
+        const getOrInitAddressGroup = (uMap, addrStr, batchId) => {
+            if (!uMap.addressesMap[addrStr]) {
+                uMap.addressesMap[addrStr] = {
+                    addressText: addrStr,
+                    batch_id: batchId,
+                    scheduleIds: [],
+                    retailOrderIds: [],
+                    itemsMap: {}
+                };
+            }
+            if (batchId && !uMap.addressesMap[addrStr].batch_id) {
+                uMap.addressesMap[addrStr].batch_id = batchId;
+            }
+            return uMap.addressesMap[addrStr];
+        };
+
+        const addItem = (uMap, addrGrp, product, qty, source) => {
+            if (!product) return;
+            // Add to Address Group
+            if (!addrGrp.itemsMap[product.id]) {
+                addrGrp.itemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit };
+            }
+            if (source === 'package') addrGrp.itemsMap[product.id].packageQty += qty;
+            else addrGrp.itemsMap[product.id].retailQty += qty;
+
+            // Add to User Totals
+            if (!uMap.totalItemsMap[product.id]) {
+                uMap.totalItemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit };
+            }
+            if (source === 'package') uMap.totalItemsMap[product.id].packageQty += qty;
+            else uMap.totalItemsMap[product.id].retailQty += qty;
+        };
+
+        // Process Schedules
+        for (const s of schedules) {
+            let user = null;
+            let address = null;
+
+            if (s.Subscription) {
+                user = s.Subscription.User;
+                address = s.Subscription.Address || defaultAddressMap[user.id];
+            } else if (s.WaterSubscription) {
+                user = s.WaterSubscription.User;
+                address = s.WaterSubscription.Address || defaultAddressMap[user.id];
+            }
+
+            const uMap = getOrInitUser(user, s.status);
+            if (!uMap) continue;
+
+            uMap.hasPackage = true;
+            uMap.allScheduleIds.push(s.id);
+            if (!uMap.commonBatchId && s.batch_id) uMap.commonBatchId = s.batch_id;
+
+            const addrStr = formatAddress(address);
+            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id);
+            addrGrp.scheduleIds.push(s.id);
+
+            const dbItems = s.DeliveryItems || [];
+            if (dbItems.length > 0) {
+                for (const item of dbItems) {
+                    if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                }
+            } else {
+                if (s.Subscription) {
+                    const sub = s.Subscription;
+                    const items = sub.Items || [];
+                    const fixedItems = items.filter(item => item.is_fixed && item.is_active);
+                    const selections = s.SeasonalSelections || [];
+
+                    if (selections.length > 0) {
+                        for (const sel of selections) {
+                            if (sel.Product) addItem(uMap, addrGrp, sel.Product, parseFloat(sel.qty_gm || 0), 'package');
+                        }
+                        const selectionProductIds = selections.map(sel => sel.product_id);
+                        const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
+                        for (const item of missingFixed) {
+                            if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                        }
+                    } else {
+                        for (const item of fixedItems) {
+                            if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                        }
+                        const defaultSeasonal = items.filter(item => item.is_seasonal && item.is_active);
+                        for (const item of defaultSeasonal) {
+                            if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                        }
+                    }
+                } else if (s.WaterSubscription) {
+                    const sub = s.WaterSubscription;
+                    const matchedProduct = actualWaterProducts.find(p => {
+                        const nameLower = p.name.toLowerCase();
+                        return nameLower.includes(sub.water_type.toLowerCase()) && nameLower.includes(sub.container.toLowerCase());
+                    });
+                    if (matchedProduct) {
+                        const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
+                        addItem(uMap, addrGrp, matchedProduct, qty, 'package');
+                    }
+                }
+            }
+        }
+
+        // Process Retail Orders
+        for (const r of retailOrders) {
+            const user = r.User;
+            const address = r.Address || defaultAddressMap[user?.id];
+            const uMap = getOrInitUser(user, r.delivery_status);
+            if (!uMap) continue;
+
+            uMap.allRetailOrderIds.push(r.id);
+            if (!uMap.commonBatchId && r.batch_id) uMap.commonBatchId = r.batch_id;
+
+            const addrStr = formatAddress(address);
+            const addrGrp = getOrInitAddressGroup(uMap, addrStr, r.batch_id);
+            addrGrp.retailOrderIds.push(r.id);
+
+            const items = r.Items || [];
+            for (const item of items) {
+                if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.quantity || 0), 'retail');
+            }
+        }
+
+        const usersList = Object.values(usersMap).map(u => {
+            const totalItems = Object.values(u.totalItemsMap).map(i => ({
+                id: i.product.id,
+                name: i.product.name,
+                unit: i.unit,
+                packageQty: i.packageQty,
+                retailQty: i.retailQty,
+                totalQty: i.packageQty + i.retailQty
+            }));
+
+            const addresses = Object.values(u.addressesMap).map(a => ({
+                address: a.addressText,
+                batch_id: a.batch_id,
+                scheduleIds: a.scheduleIds,
+                retailOrderIds: a.retailOrderIds,
+                items: Object.values(a.itemsMap).map(i => ({
+                    id: i.product.id,
+                    name: i.product.name,
+                    unit: i.unit,
+                    packageQty: i.packageQty,
+                    retailQty: i.retailQty,
+                    totalQty: i.packageQty + i.retailQty
+                }))
+            }));
+            
+            return {
+                user: u.user,
+                hasPackage: u.hasPackage,
+                status: u.status,
+                batch_id: u.commonBatchId, // Overall batch if we want to default it
+                allScheduleIds: u.allScheduleIds,
+                allRetailOrderIds: u.allRetailOrderIds,
+                totalItems: totalItems,
+                addresses: addresses
+            };
+        });
+
+        res.status(200).json({ success: true, users: usersList, date: dateStr });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/admin/orders/assign-batch
+export const assignBatch = async (req, res) => {
+    try {
+        const { scheduleIds, retailOrderIds, batch_id } = req.body;
+        
+        if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
+            await DeliverySchedule.update({ batch_id: batch_id || null }, { where: { id: scheduleIds } });
+        }
+        
+        if (Array.isArray(retailOrderIds) && retailOrderIds.length > 0) {
+            await RetailOrder.update({ batch_id: batch_id || null }, { where: { id: retailOrderIds } });
+        }
+
+        res.status(200).json({ success: true, message: "Batch assigned successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/admin/orders/pack
+export const packOrders = async (req, res) => {
+    try {
+        const { scheduleIds, retailOrderIds, items } = req.body;
+
+        // items: [{ type: 'package', id: DeliveryItem.id, packedQty: value }, { type: 'retail', id: RetailOrderItem.id, packedQty: value }]
+        if (items && items.length > 0) {
+            for (const item of items) {
+                if (item.type === 'package') {
+                    await DeliveryItem.update({ packed_qty: item.packedQty }, { where: { id: item.id } });
+                } else if (item.type === 'retail') {
+                    await RetailOrderItem.update({ packed_qty: item.packedQty }, { where: { id: item.id } });
+                }
+            }
+        }
+
+        if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
+            await DeliverySchedule.update({ status: 'ready_for_delivery' }, { where: { id: scheduleIds } });
+        }
+        
+        if (Array.isArray(retailOrderIds) && retailOrderIds.length > 0) {
+            await RetailOrder.update({ delivery_status: 'ready_for_delivery' }, { where: { id: retailOrderIds } });
+        }
+
+        res.status(200).json({ success: true, message: "Orders packed and marked ready for delivery" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/delivery/available-orders
+export const getAvailableOrders = async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        // Fetch schedules ready for delivery without a delivery boy
+        const schedules = await DeliverySchedule.findAll({
+            where: {
+                scheduled_date: today,
+                status: 'ready_for_delivery',
+                delivery_boy_id: null
+            },
+            include: [
+                {
+                    model: Subscription,
+                    include: [{ model: User, attributes: ['name', 'phone', 'id'] }, { model: Address }]
+                },
+                { model: DeliveryItem, as: 'DeliveryItems', include: [Product] },
+                { model: Batch }
+            ]
+        });
+
+        // Fetch retail orders ready for delivery without a delivery boy
+        const retailOrders = await RetailOrder.findAll({
+            where: {
+                delivery_date: today,
+                delivery_status: 'ready_for_delivery',
+                delivery_boy_id: null
+            },
+            include: [
+                { model: User, attributes: ['name', 'phone', 'id'] },
+                { model: Address },
+                { model: RetailOrderItem, as: 'Items', include: [Product] },
+                { model: Batch }
+            ]
+        });
+
+        res.status(200).json({ success: true, schedules, retailOrders });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/delivery/accept-order
+export const acceptOrder = async (req, res) => {
+    try {
+        const { type, id } = req.body;
+        const deliveryBoyId = req.user.id;
+
+        if (type === 'package') {
+            await DeliverySchedule.update({ delivery_boy_id: deliveryBoyId }, { where: { id } });
+        } else if (type === 'retail') {
+            await RetailOrder.update({ delivery_boy_id: deliveryBoyId }, { where: { id } });
+        } else {
+            return res.status(400).json({ success: false, message: "Invalid type" });
+        }
+
+        res.status(200).json({ success: true, message: "Order accepted successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

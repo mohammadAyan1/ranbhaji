@@ -28,6 +28,8 @@ export default function RetailStore() {
   // Checkout State
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [checkingOut, setCheckingOut] = useState(false);
+  const [showAddressChoiceModal, setShowAddressChoiceModal] = useState(false);
+  const [addressChoiceMode, setAddressChoiceMode] = useState("existing");
 
   // 8 PM Cutoff calculation
   const now = new Date();
@@ -125,6 +127,9 @@ export default function RetailStore() {
       fetchAddresses();
       if (newAddress) setSelectedAddressId(newAddress.id);
       setMsg("✅ Address added successfully!");
+      if (cartItems.length > 0) {
+        processCheckout();
+      }
     } catch (err) {
       setMsg(`❌ Failed to add address: ${err.response?.data?.message || err.message}`);
     } finally {
@@ -133,7 +138,18 @@ export default function RetailStore() {
   };
 
   // Place Retail Order / Initiate payment
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
+    const cartItems = Object.values(cart);
+    if (cartItems.length === 0) {
+      setMsg("❌ Your cart is empty.");
+      return;
+    }
+
+    setShowAddressChoiceModal(true);
+    setAddressChoiceMode("existing");
+  };
+
+  const processCheckout = async () => {
     if (!selectedAddressId) {
       setMsg("❌ Please select a delivery address first.");
       return;
@@ -216,15 +232,14 @@ export default function RetailStore() {
       </div>
 
       {/* 8 PM Cutoff Banner */}
-      <div className={`rounded-2xl p-4 border flex items-center justify-between gap-4 ${
-        deliveryTomorrow 
-          ? "bg-fresh-950/20 border-fresh-800/40 text-fresh-400"
-          : "bg-orange-950/20 border-orange-850/40 text-orange-400"
-      }`}>
+      <div className={`rounded-2xl p-4 border flex items-center justify-between gap-4 ${deliveryTomorrow
+        ? "bg-fresh-950/20 border-fresh-800/40 text-fresh-400"
+        : "bg-orange-950/20 border-orange-850/40 text-orange-400"
+        }`}>
         <div>
           <p className="font-bold text-sm">
-            {deliveryTomorrow 
-              ? "⚡ Ordered before 8:00 PM: Delivery Tomorrow!" 
+            {deliveryTomorrow
+              ? "⚡ Ordered before 8:00 PM: Delivery Tomorrow!"
               : "⏳ Ordered after 8:00 PM: Delivery day after tomorrow!"}
           </p>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -250,9 +265,8 @@ export default function RetailStore() {
               <button
                 key={c}
                 onClick={() => setFilterCategory(c)}
-                className={`px-4 py-2 text-xs font-semibold capitalize rounded-lg transition-all ${
-                  filterCategory === c ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"
-                }`}
+                className={`px-4 py-2 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"
+                  }`}
               >
                 {c === "all" ? "All Shop" : c}
               </button>
@@ -281,31 +295,31 @@ export default function RetailStore() {
                     </span>
 
                     {cartItem ? (
-                        <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg p-0.5">
-                          <button
-                            onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity - (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
-                            className="w-7 h-7 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-all"
-                          >
-                            -
-                          </button>
-                          <span className="text-white text-xs font-semibold px-1 min-w-[36px] text-center">
-                            {cartItem.quantity} {p.unit === 'piece' ? 'pcs' : 'kg'}
-                          </span>
-                          <button
-                            onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity + (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
-                            className="w-7 h-7 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-all"
-                          >
-                            +
-                          </button>
-                        </div>
-                      ) : (
+                      <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg p-0.5">
                         <button
-                          onClick={() => addToCart(p)}
-                          className="btn-primary text-xs py-1.5 px-4"
+                          onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity - (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
+                          className="w-7 h-7 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-all"
                         >
-                          🛒 Add to Cart
+                          -
                         </button>
-                      )}
+                        <span className="text-white text-xs font-semibold px-1 min-w-[36px] text-center">
+                          {cartItem.quantity} {p.unit === 'piece' ? 'pcs' : 'kg'}
+                        </span>
+                        <button
+                          onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity + (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
+                          className="w-7 h-7 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-all"
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addToCart(p)}
+                        className="btn-primary text-xs py-1.5 px-4"
+                      >
+                        🛒 Add to Cart
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -371,12 +385,6 @@ export default function RetailStore() {
             <div className="border-t border-gray-800 pt-4 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-gray-400 text-xs uppercase tracking-wider font-bold">📍 Delivery Location</label>
-                <button
-                  onClick={() => setShowAddressModal(true)}
-                  className="text-[10px] text-fresh-400 hover:underline"
-                >
-                  + Add New Address
-                </button>
               </div>
 
               {addresses.length === 0 ? (
@@ -390,17 +398,12 @@ export default function RetailStore() {
                   </button>
                 </div>
               ) : (
-                <select
-                  className="input py-2 text-xs"
-                  value={selectedAddressId}
-                  onChange={e => setSelectedAddressId(e.target.value)}
-                >
-                  {addresses.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.address_line}, {a.city} {a.is_default ? "(Default)" : ""}
-                    </option>
-                  ))}
-                </select>
+                <div className="bg-gray-900/30 rounded-xl p-3 border border-gray-800 text-xs text-gray-300">
+                  {(() => {
+                    const addr = addresses.find(a => a.id === parseInt(selectedAddressId));
+                    return addr ? `${addr.address_line}, ${addr.city} - ${addr.pincode}` : "No address selected";
+                  })()}
+                </div>
               )}
             </div>
 
@@ -432,35 +435,32 @@ export default function RetailStore() {
                   <div className="grid grid-cols-1 gap-2">
                     <button
                       onClick={() => setPaymentMethod("wallet")}
-                      className={`py-2 rounded-xl border text-xs font-semibold transition-all ${
-                        paymentMethod === "wallet"
-                          ? "border-purple-600 bg-purple-950/20 text-purple-400"
-                          : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
-                      }`}
+                      className={`py-2 rounded-xl border text-xs font-semibold transition-all ${paymentMethod === "wallet"
+                        ? "border-purple-600 bg-purple-950/20 text-purple-400"
+                        : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
+                        }`}
                     >
                       💳 Pay via Package Wallet
                     </button>
                     <div className="grid grid-cols-2 gap-2 mt-1">
-                        <button
+                      <button
                         onClick={() => setPaymentMethod("cod")}
-                        className={`py-2 rounded-xl border text-xs font-semibold transition-all ${
-                            paymentMethod === "cod"
-                            ? "border-fresh-600 bg-fresh-950/20 text-fresh-400"
-                            : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
-                        }`}
-                        >
+                        className={`py-2 rounded-xl border text-xs font-semibold transition-all ${paymentMethod === "cod"
+                          ? "border-fresh-600 bg-fresh-950/20 text-fresh-400"
+                          : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
+                          }`}
+                      >
                         💵 Cash on Delivery
-                        </button>
-                        <button
+                      </button>
+                      <button
                         onClick={() => setPaymentMethod("phonepe")}
-                        className={`py-2 rounded-xl border text-xs font-semibold transition-all ${
-                            paymentMethod === "phonepe"
-                            ? "border-blue-600 bg-blue-950/20 text-blue-400"
-                            : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
-                        }`}
-                        >
+                        className={`py-2 rounded-xl border text-xs font-semibold transition-all ${paymentMethod === "phonepe"
+                          ? "border-blue-600 bg-blue-950/20 text-blue-400"
+                          : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
+                          }`}
+                      >
                         🌐 Pay Online
-                        </button>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -477,6 +477,89 @@ export default function RetailStore() {
           </div>
         </div>
       </div>
+
+      {/* Address Choice Modal */}
+      {showAddressChoiceModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
+            <button
+              onClick={() => setShowAddressChoiceModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none"
+            >
+              &times;
+            </button>
+            <h2 className="text-xl font-bold text-white mb-4">📍 Where to deliver?</h2>
+            <p className="text-gray-400 text-sm mb-6">Aap apne retail order ki delivery kahan receive karna chahte hain?</p>
+
+            <div className="space-y-4">
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="addressChoice"
+                    checked={addressChoiceMode === 'existing'}
+                    onChange={() => setAddressChoiceMode('existing')}
+                    className="w-4 h-4 accent-fresh-500"
+                  />
+                  <span className="text-white font-medium">Use my existing address</span>
+                </div>
+                {addressChoiceMode === 'existing' && (
+                  <div className="mt-3 ml-7">
+                    {addresses.length === 0 ? (
+                      <p className="text-yellow-400 text-xs">Aapka koi saved address nahi hai.</p>
+                    ) : (
+                      <select
+                        className="input py-2 text-sm w-full"
+                        value={selectedAddressId}
+                        onChange={e => setSelectedAddressId(e.target.value)}
+                      >
+                        {addresses.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.address_line}, {a.city} {a.is_default ? "(Default)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </label>
+
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="addressChoice"
+                    checked={addressChoiceMode === 'new'}
+                    onChange={() => setAddressChoiceMode('new')}
+                    className="w-4 h-4 accent-fresh-500"
+                  />
+                  <span className="text-white font-medium">Deliver to a new address</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-8 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowAddressChoiceModal(false);
+                  if (addressChoiceMode === 'new') {
+                    setShowAddressModal(true);
+                  } else {
+                    if (addresses.length === 0) {
+                      setMsg("❌ Please add an address first.");
+                      return;
+                    }
+                    processCheckout();
+                  }
+                }}
+                className="btn-primary w-full py-3"
+              >
+                Confirm Address & Pay →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inline Address Creation Modal */}
       {showAddressModal && (

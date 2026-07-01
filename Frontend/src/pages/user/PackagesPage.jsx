@@ -46,6 +46,8 @@ export default function PackagesPage() {
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [checkoutPkg, setCheckoutPkg] = useState(null);
   const [showInlineAddressModal, setShowInlineAddressModal] = useState(false);
+  const [showAddressChoiceModal, setShowAddressChoiceModal] = useState(false);
+  const [addressChoiceMode, setAddressChoiceMode] = useState("existing");
   const [inlineAddressForm, setInlineAddressForm] = useState({
     address_line: "",
     city: "",
@@ -95,7 +97,8 @@ export default function PackagesPage() {
     }
     setCheckoutPkg(pkg);
     setMsg("");
-    setShowCheckoutModal(true);
+    setShowAddressChoiceModal(true);
+    setAddressChoiceMode("existing");
   };
 
   const handleSaveInlineAddress = async (e) => {
@@ -128,6 +131,9 @@ export default function PackagesPage() {
         }
       });
       setMsg("✅ Address added successfully!");
+      if (checkoutPkg) {
+        setShowCheckoutModal(true);
+      }
     } catch (err) {
       setMsg(`❌ Address creation failed: ${err.response?.data?.message || err.message}`);
     } finally {
@@ -732,6 +738,89 @@ export default function PackagesPage() {
         <div className="card text-center py-12 text-gray-500">
           <p className="text-4xl mb-3">📦</p>
           <p>No packages available at the moment.</p>
+        </div>
+      )}
+
+      {/* Address Choice Modal */}
+      {showAddressChoiceModal && checkoutPkg && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
+            <button
+              onClick={() => setShowAddressChoiceModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none"
+            >
+              &times;
+            </button>
+            <h2 className="text-xl font-bold text-white mb-4">📍 Where to deliver?</h2>
+            <p className="text-gray-400 text-sm mb-6">Aap "{checkoutPkg.name}" package kahan receive karna chahte hain?</p>
+            
+            <div className="space-y-4">
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="radio" 
+                    name="addressChoice" 
+                    checked={addressChoiceMode === 'existing'} 
+                    onChange={() => setAddressChoiceMode('existing')}
+                    className="w-4 h-4 accent-fresh-500"
+                  />
+                  <span className="text-white font-medium">Use my existing address</span>
+                </div>
+                {addressChoiceMode === 'existing' && (
+                  <div className="mt-3 ml-7">
+                    {addresses.length === 0 ? (
+                      <p className="text-yellow-400 text-xs">Aapka koi saved address nahi hai.</p>
+                    ) : (
+                      <select
+                        className="input py-2 text-sm w-full"
+                        value={selectedAddressId}
+                        onChange={e => setSelectedAddressId(e.target.value)}
+                      >
+                        {addresses.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.address_line}, {a.city} {a.is_default ? "(Default)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </label>
+
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="radio" 
+                    name="addressChoice" 
+                    checked={addressChoiceMode === 'new'} 
+                    onChange={() => setAddressChoiceMode('new')}
+                    className="w-4 h-4 accent-fresh-500"
+                  />
+                  <span className="text-white font-medium">Deliver to a new address</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-8 flex gap-3">
+              <button 
+                onClick={() => {
+                  setShowAddressChoiceModal(false);
+                  if (addressChoiceMode === 'new') {
+                    setShowInlineAddressModal(true);
+                  } else {
+                    if (addresses.length === 0) {
+                       setMsg("❌ Please add an address first.");
+                       return;
+                    }
+                    setShowCheckoutModal(true);
+                  }
+                }}
+                className="btn-primary w-full py-3"
+              >
+                Continue to Payment →
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

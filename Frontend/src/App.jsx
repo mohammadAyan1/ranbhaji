@@ -33,6 +33,8 @@ import RetailStore from "./pages/user/RetailStore";
 import MyRetailOrders from "./pages/user/MyRetailOrders";
 import PaymentStatusPage from "./pages/user/PaymentStatusPage";
 import AdminRetailOrders from "./pages/admin/AdminRetailOrders";
+import AdminBatches from "./pages/admin/AdminBatches";
+import AdminAllOrders from "./pages/admin/AdminAllOrders";
 
 
 // Delivery pages
@@ -88,6 +90,8 @@ function App() {
           <Route path="/admin/summary" element={<AdminDashboard />} />
           <Route path="/admin/calculator" element={<AdminCalculator />} />
           <Route path="/admin/retail-orders" element={<AdminRetailOrders />} />
+          <Route path="/admin/batches" element={<AdminBatches />} />
+          <Route path="/admin/all-orders" element={<AdminAllOrders />} />
         </Route>
 
         {/* ─── DELIVERY Routes ─────────────────────────────────── */}

@@ -1,0 +1,216 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>API Integration Document</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; }
+  h1 { color: #2c3e50; text-align: center; }
+  h2 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; margin-top: 30px; }
+  ul { list-style-type: none; padding: 0; }
+  li { margin-bottom: 15px; background: #f9f9f9; padding: 15px; border-radius: 5px; border-left: 5px solid #3498db; }
+  .method { font-weight: bold; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; display: inline-block; width: 60px; text-align: center; margin-right: 10px; }
+  .GET { background-color: #3498db; }
+  .POST { background-color: #2ecc71; }
+  .PUT { background-color: #f39c12; }
+  .PATCH { background-color: #e67e22; }
+  .DELETE { background-color: #e74c3c; }
+  .endpoint { font-family: Consolas, monospace; font-size: 1.1em; font-weight: bold; color: #2c3e50; }
+  .auth { display: inline-block; background-color: #34495e; color: #fff; padding: 2px 6px; font-size: 0.8em; border-radius: 3px; margin-left: 10px; }
+  .desc { margin-top: 8px; display: block; color: #555; font-size: 1em; }
+</style>
+</head>
+<body>
+
+<h1>FreshBox API Integration Document</h1>
+<p style="text-align: center; color: #7f8c8d;">Yeh document FreshBox backend ke sabhi APIs aur unki details list karta hai.</p>
+
+<h2>1. Authentication APIs (Base: <code>/api/auth</code>)</h2>
+<ul>
+  <li><span class="method POST">POST</span> <span class="endpoint">/register</span><br>
+      <span class="desc">Naya user account banane (register karne) ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/login</span><br>
+      <span class="desc">Existing user ko login karwane ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/me</span> <span class="auth">Auth</span><br>
+      <span class="desc">Current logged-in user ki details fetch karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/logout</span> <span class="auth">Auth</span><br>
+      <span class="desc">User ko system se logout karne ke liye.</span></li>
+</ul>
+
+<h2>2. Products APIs (Base: <code>/api/products</code>)</h2>
+<ul>
+  <li><span class="method GET">GET</span> <span class="endpoint">/</span> <span class="auth">Auth</span><br>
+      <span class="desc">Saare products ki list get karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/</span> <span class="auth">Admin</span><br>
+      <span class="desc">Naya product add karne ke liye (Sirf admin ke liye).</span></li>
+  <li><span class="method PUT">PUT</span> <span class="endpoint">/:id</span> <span class="auth">Admin</span><br>
+      <span class="desc">Kisi specific product ki details update karne ke liye.</span></li>
+  <li><span class="method DELETE">DELETE</span> <span class="endpoint">/:id</span> <span class="auth">Admin</span><br>
+      <span class="desc">Kisi specific product ko delete karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/purchase</span> <span class="auth">Admin</span><br>
+      <span class="desc">Product purchase ka record create karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/purchases</span> <span class="auth">Admin</span><br>
+      <span class="desc">Saari purchases ki history fetch karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/stock-summary</span> <span class="auth">Admin</span><br>
+      <span class="desc">Products ka current stock summary check karne ke liye.</span></li>
+</ul>
+
+<h2>3. Packages APIs (Base: <code>/api/packages</code>)</h2>
+<ul>
+  <li><span class="method GET">GET</span> <span class="endpoint">/</span> <span class="auth">Auth</span><br>
+      <span class="desc">Saare available packages ki list dekhne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/:id</span> <span class="auth">Auth</span><br>
+      <span class="desc">Kisi ek specific package ki details get karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/</span> <span class="auth">Admin</span><br>
+      <span class="desc">Naya package banane ke liye.</span></li>
+  <li><span class="method PUT">PUT</span> <span class="endpoint">/:id</span> <span class="auth">Admin</span><br>
+      <span class="desc">Kisi maujooda (existing) package ko update karne ke liye.</span></li>
+</ul>
+
+<h2>4. Addresses APIs (Base: <code>/api/addresses</code>)</h2>
+<ul>
+  <li><span class="method POST">POST</span> <span class="endpoint">/</span> <span class="auth">User</span><br>
+      <span class="desc">User ke liye naya address add karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/</span> <span class="auth">User</span><br>
+      <span class="desc">User ke saare saved addresses fetch karne ke liye.</span></li>
+  <li><span class="method PUT">PUT</span> <span class="endpoint">/:id</span> <span class="auth">User</span><br>
+      <span class="desc">Kisi address ko edit/update karne ke liye.</span></li>
+  <li><span class="method DELETE">DELETE</span> <span class="endpoint">/:id</span> <span class="auth">User</span><br>
+      <span class="desc">Address ko account se delete karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/:id/default</span> <span class="auth">User</span><br>
+      <span class="desc">Kisi address ko primary/default set karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/:id/location</span> <span class="auth">Delivery / Admin</span><br>
+      <span class="desc">Delivery agent ya admin ke dwara address ki location coordinates update karne ke liye.</span></li>
+</ul>
+
+<h2>5. Subscription APIs (Base: <code>/api</code>)</h2>
+<ul>
+  <li><span class="method POST">POST</span> <span class="endpoint">/subscribe</span> <span class="auth">User</span><br>
+      <span class="desc">Nayi subscription start karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/my-subscriptions</span> <span class="auth">User</span><br>
+      <span class="desc">User apni active aur past subscriptions dekhne ke liye iska use karta hai.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/available-dates</span> <span class="auth">Auth</span><br>
+      <span class="desc">Subscription start karne ke liye available dates ka calendar get karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/confirm-start-date</span> <span class="auth">User</span><br>
+      <span class="desc">Subscription ki start date confirm aur fix karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/subscriptions/:id/pause</span> <span class="auth">User</span><br>
+      <span class="desc">Chalti hui subscription ko temporarily rokne (pause) ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/subscriptions/:id/restart</span> <span class="auth">User</span><br>
+      <span class="desc">Paused subscription ko wapas chalu (restart) karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/subscriptions/:id/cancel</span> <span class="auth">User</span><br>
+      <span class="desc">Subscription ko permanently cancel karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/seasonal-options/:subscription_id</span> <span class="auth">User</span><br>
+      <span class="desc">Subscription ke hisaab se seasonal items ke options dekhne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/select-seasonal</span> <span class="auth">User</span><br>
+      <span class="desc">Seasonal items ko pehli baar select karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/update-seasonal</span> <span class="auth">User</span><br>
+      <span class="desc">Pehle se selected seasonal items ko update/change karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/subscriptions/:id/upcoming-selections</span> <span class="auth">User</span><br>
+      <span class="desc">Aane wale hafton (upcoming weeks) ki selections check karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/subscriptions/:id/schedule-seasonal</span> <span class="auth">User</span><br>
+      <span class="desc">Seasonal items ko kisi specific date par schedule karne ke liye.</span></li>
+</ul>
+
+<h2>6. Delivery APIs (Base: <code>/api</code>)</h2>
+<ul>
+  <li><span class="method GET">GET</span> <span class="endpoint">/today-deliveries</span> <span class="auth">Delivery</span><br>
+      <span class="desc">Delivery boy ke liye aaj ki saari deliveries get karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/mark-delivered</span> <span class="auth">Delivery</span><br>
+      <span class="desc">Order ko successfully delivered mark karne ke liye (Yaha delivery photo bhi upload ki ja sakti hai).</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/return-item</span> <span class="auth">User</span><br>
+      <span class="desc">Agar user ko item return karni ho toh request daalne ke liye (Photo upload allowed).</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/return-item/:id/review</span> <span class="auth">Admin</span><br>
+      <span class="desc">Admin dwara return request ko review/approve karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/delivery-history</span> <span class="auth">User</span><br>
+      <span class="desc">User apni past delivery history check karne ke liye iska use karta hai.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin/deliveries</span> <span class="auth">Admin</span><br>
+      <span class="desc">Admin panel me saari completed deliveries dekhne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin/returns</span> <span class="auth">Admin</span><br>
+      <span class="desc">Saari aayi hui return requests ki list dekhne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin/demands</span> <span class="auth">Admin</span><br>
+      <span class="desc">System me products ki current demand dekhne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin/seasonal-selections</span> <span class="auth">Admin</span><br>
+      <span class="desc">Users ne konsi seasonal items select ki hain, iski list admin ke liye.</span></li>
+</ul>
+
+<h2>7. Wallet & Admin User APIs (Base: <code>/api</code>)</h2>
+<ul>
+  <li><span class="method GET">GET</span> <span class="endpoint">/wallet</span> <span class="auth">Auth</span><br>
+      <span class="desc">User ki wallet ka balance aur details dekhne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/add-funds</span> <span class="auth">Auth</span><br>
+      <span class="desc">Wallet me paise (funds) add karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/wallet/transactions</span> <span class="auth">Auth</span><br>
+      <span class="desc">Wallet ki pichli saari transactions (history) dekhne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin/tomorrow-summary</span> <span class="auth">Admin</span><br>
+      <span class="desc">Kal ki deliveries ki summary admin dashboard ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin/users</span> <span class="auth">Admin</span><br>
+      <span class="desc">Platform par register hue saare users ki list.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin/user/:id/all-subscriptions</span> <span class="auth">Admin</span><br>
+      <span class="desc">Kisi ek user ki saari subscriptions (active, past) dekhne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/admin/credit/:id/override</span> <span class="auth">Admin</span><br>
+      <span class="desc">Admin dwara kisi user ka wallet credit manually update/override karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/admin/users/:id/status</span> <span class="auth">Admin</span><br>
+      <span class="desc">User ka account status (active ya inactive) set karne ke liye.</span></li>
+</ul>
+
+<h2>8. Water Subscriptions APIs (Base: <code>/api/water</code>)</h2>
+<ul>
+  <li><span class="method POST">POST</span> <span class="endpoint">/subscribe</span> <span class="auth">User</span><br>
+      <span class="desc">Pani ki bottles (Water) ki subscription start karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/subscriptions</span> <span class="auth">User</span><br>
+      <span class="desc">User ki apni saari water subscriptions get karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/available-dates</span> <span class="auth">User</span><br>
+      <span class="desc">Water subscription start karne ke liye free dates dekhne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/confirm-start-date</span> <span class="auth">User</span><br>
+      <span class="desc">Water subscription kab se start hogi wo date confirm karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/:id/pause</span> <span class="auth">User</span><br>
+      <span class="desc">Water subscription ko temporarily pause karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/:id/restart</span> <span class="auth">User</span><br>
+      <span class="desc">Paused water subscription ko fir se chalu karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/:id/cancel</span> <span class="auth">User</span><br>
+      <span class="desc">Water subscription ko humesha ke liye band karne ke liye.</span></li>
+</ul>
+
+<h2>9. Notifications APIs (Base: <code>/api/notifications</code>)</h2>
+<ul>
+  <li><span class="method GET">GET</span> <span class="endpoint">/</span> <span class="auth">Auth</span><br>
+      <span class="desc">User ki aayi hui saari notifications list karne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/:id/mark-read</span> <span class="auth">Auth</span><br>
+      <span class="desc">Kisi notification ko 'read' (padh liya gaya) mark karne ke liye.</span></li>
+</ul>
+
+<h2>10. Calculator APIs (Base: <code>/api/calculator</code>)</h2>
+<ul>
+  <li><span class="method POST">POST</span> <span class="endpoint">/drafts</span> <span class="auth">Admin</span><br>
+      <span class="desc">Naya calculator draft save/create karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/drafts</span> <span class="auth">Admin</span><br>
+      <span class="desc">Saare calculator drafts get karne ke liye.</span></li>
+  <li><span class="method DELETE">DELETE</span> <span class="endpoint">/drafts/:id</span> <span class="auth">Admin</span><br>
+      <span class="desc">Kisi existing draft ko delete karne ke liye.</span></li>
+</ul>
+
+<h2>11. Payment APIs (Base: <code>/api/payment</code>)</h2>
+<ul>
+  <li><span class="method POST">POST</span> <span class="endpoint">/phonepe/initiate</span> <span class="auth">Auth</span><br>
+      <span class="desc">PhonePe ke through payment process start (initiate) karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/phonepe/status/:txnId</span> <span class="auth">Auth</span><br>
+      <span class="desc">Kisi payment transaction ka status (success/failed) check karne ke liye.</span></li>
+  <li><span class="method POST">POST</span> <span class="endpoint">/phonepe/callback</span> <span class="auth">Public</span><br>
+      <span class="desc">PhonePe ki taraf se aane wale payment response webhook ko handle karne ke liye.</span></li>
+</ul>
+
+<h2>12. Retail APIs (Base: <code>/api/retail</code>)</h2>
+<ul>
+  <li><span class="method POST">POST</span> <span class="endpoint">/</span> <span class="auth">Auth</span><br>
+      <span class="desc">Naya retail order create (place) karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/</span> <span class="auth">Auth</span><br>
+      <span class="desc">User ke apne kiye hue saare retail orders fetch karne ke liye.</span></li>
+  <li><span class="method GET">GET</span> <span class="endpoint">/admin</span> <span class="auth">Admin</span><br>
+      <span class="desc">Admin panel me saare users ke retail orders dekhne ke liye.</span></li>
+  <li><span class="method PATCH">PATCH</span> <span class="endpoint">/admin/:id/status</span> <span class="auth">Admin</span><br>
+      <span class="desc">Admin ke dwara kisi retail order ka status (jaise: processing, completed) update karne ke liye.</span></li>
+</ul>
+
+</body>
+</html>

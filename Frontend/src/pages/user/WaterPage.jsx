@@ -18,6 +18,17 @@ export default function WaterPage() {
   // Address states
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [showAddressChoiceModal, setShowAddressChoiceModal] = useState(false);
+  const [addressChoiceMode, setAddressChoiceMode] = useState("existing");
+  const [showInlineAddressModal, setShowInlineAddressModal] = useState(false);
+  const [inlineAddressForm, setInlineAddressForm] = useState({
+    address_line: "",
+    city: "",
+    pincode: "",
+    landmark: "",
+    is_default: true
+  });
+  const [savingInlineAddress, setSavingInlineAddress] = useState(false);
 
   // Form states
   const [selectedType, setSelectedType] = useState("monthly"); // monthly or yearly
@@ -129,19 +140,53 @@ export default function WaterPage() {
   const rawTotal = pricePerBottle * totalServices;
   const totalPrice = selectedType === "yearly" ? rawTotal * 0.75 : rawTotal;
 
+  const handleSaveInlineAddress = async (e) => {
+    e.preventDefault();
+    if (!inlineAddressForm.address_line || !inlineAddressForm.city || !inlineAddressForm.pincode) {
+      setMsg("❌ Please fill in Address line, City and Pincode");
+      return;
+    }
+    setSavingInlineAddress(true);
+    try {
+      const res = await api.post("/addresses", inlineAddressForm);
+      const newAddress = res.data.address;
+      setInlineAddressForm({
+        address_line: "",
+        city: "",
+        pincode: "",
+        landmark: "",
+        is_default: true
+      });
+      setShowInlineAddressModal(false);
+      
+      api.get("/addresses").then(r => {
+        const addrs = r.data.addresses || [];
+        setAddresses(addrs);
+        if (newAddress) {
+          setSelectedAddressId(newAddress.id);
+        } else if (addrs.length > 0) {
+          setSelectedAddressId(addrs[0].id);
+        }
+      });
+      setMsg("✅ Address added successfully!");
+      setShowRazorpay(true);
+    } catch (err) {
+      setMsg(`❌ Address creation failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingInlineAddress(false);
+    }
+  };
+
   const handleOpenPayment = (e) => {
     e.preventDefault();
     if (!matchedProduct) {
       setMsg("❌ Selected water container and type combo is not available.");
       return;
     }
-    if (!selectedAddressId) {
-      setMsg("❌ Please add or select a delivery address first.");
-      return;
-    }
     setPaymentStatus("idle");
     setPaymentProgressMsg("");
-    setShowRazorpay(true);
+    setShowAddressChoiceModal(true);
+    setAddressChoiceMode("existing");
   };
 
   const handleSimulatedPayment = async () => {
@@ -693,6 +738,185 @@ export default function WaterPage() {
           )}
         </div>
       </div>
+
+      {/* Address Choice Modal */}
+      {showAddressChoiceModal && matchedProduct && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
+            <button
+              onClick={() => setShowAddressChoiceModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none"
+            >
+              &times;
+            </button>
+            <h2 className="text-xl font-bold text-white mb-4">📍 Where to deliver?</h2>
+            <p className="text-gray-400 text-sm mb-6">Aap {form.water_type} water deliveries kahan receive karna chahte hain?</p>
+            
+            <div className="space-y-4">
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="radio" 
+                    name="addressChoice" 
+                    checked={addressChoiceMode === 'existing'} 
+                    onChange={() => setAddressChoiceMode('existing')}
+                    className="w-4 h-4 accent-fresh-500"
+                  />
+                  <span className="text-white font-medium">Use my existing address</span>
+                </div>
+                {addressChoiceMode === 'existing' && (
+                  <div className="mt-3 ml-7">
+                    {addresses.length === 0 ? (
+                      <p className="text-yellow-400 text-xs">Aapka koi saved address nahi hai.</p>
+                    ) : (
+                      <select
+                        className="input py-2 text-sm w-full"
+                        value={selectedAddressId}
+                        onChange={e => setSelectedAddressId(e.target.value)}
+                      >
+                        {addresses.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.address_line}, {a.city} {a.is_default ? "(Default)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </label>
+
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="radio" 
+                    name="addressChoice" 
+                    checked={addressChoiceMode === 'new'} 
+                    onChange={() => setAddressChoiceMode('new')}
+                    className="w-4 h-4 accent-fresh-500"
+                  />
+                  <span className="text-white font-medium">Deliver to a new address</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-8 flex gap-3">
+              <button 
+                onClick={() => {
+                  setShowAddressChoiceModal(false);
+                  if (addressChoiceMode === 'new') {
+                    setShowInlineAddressModal(true);
+                  } else {
+                    if (addresses.length === 0) {
+                       setMsg("❌ Please add an address first.");
+                       return;
+                    }
+                    setShowRazorpay(true);
+                  }
+                }}
+                className="btn-primary w-full py-3"
+              >
+                Continue to Payment →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Address Modal */}
+      {showInlineAddressModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-base">Add New Address</h3>
+              <button
+                type="button"
+                onClick={() => setShowInlineAddressModal(false)}
+                className="text-gray-400 hover:text-white text-2xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveInlineAddress} className="space-y-3">
+              <div>
+                <label className="label text-xs">Address Line</label>
+                <input
+                  type="text"
+                  className="input py-1.5 text-xs"
+                  placeholder="House No, Apartment, Street name..."
+                  value={inlineAddressForm.address_line}
+                  onChange={e => setInlineAddressForm({ ...inlineAddressForm, address_line: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label text-xs">Landmark (Optional)</label>
+                <input
+                  type="text"
+                  className="input py-1.5 text-xs"
+                  placeholder="Near temple, hospital..."
+                  value={inlineAddressForm.landmark}
+                  onChange={e => setInlineAddressForm({ ...inlineAddressForm, landmark: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label text-xs">City</label>
+                  <input
+                    type="text"
+                    className="input py-1.5 text-xs"
+                    placeholder="City"
+                    value={inlineAddressForm.city}
+                    onChange={e => setInlineAddressForm({ ...inlineAddressForm, city: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs">Pincode</label>
+                  <input
+                    type="text"
+                    className="input py-1.5 text-xs"
+                    placeholder="Pincode"
+                    value={inlineAddressForm.pincode}
+                    onChange={e => setInlineAddressForm({ ...inlineAddressForm, pincode: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="inline-default-chk"
+                  className="w-4 h-4 accent-green-500"
+                  checked={inlineAddressForm.is_default}
+                  onChange={e => setInlineAddressForm({ ...inlineAddressForm, is_default: e.target.checked })}
+                />
+                <label htmlFor="inline-default-chk" className="text-xs text-gray-300 cursor-pointer">Set as default address</label>
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-gray-850">
+                <button
+                  type="submit"
+                  disabled={savingInlineAddress}
+                  className="btn-primary flex-1 py-1.5 text-xs"
+                >
+                  {savingInlineAddress ? "Saving..." : "Save & Continue"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInlineAddressModal(false)}
+                  className="btn-secondary py-1.5 text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Razorpay Simulated Checkout Drawer/Modal */}
       {showRazorpay && matchedProduct && (

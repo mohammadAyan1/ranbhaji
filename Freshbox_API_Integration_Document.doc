@@ -1,0 +1,2093 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<style>
+    body { font-family: 'Calibri', sans-serif; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
+    th, td { border: 1px solid black; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    h1, h2, h3 { color: #333; }
+    .endpoint { background-color: #e6f7ff; font-weight: bold; padding: 5px; }
+    .method { font-weight: bold; color: white; padding: 3px 6px; border-radius: 3px; display: inline-block; }
+    .get { background-color: #28a745; }
+    .post { background-color: #007bff; }
+    .put { background-color: #ffc107; color: black; }
+    .delete { background-color: #dc3545; }
+    .patch { background-color: #17a2b8; }
+</style>
+</head>
+<body>
+<h1>FreshBox Backend API Integration Document</h1>
+<p>Namaste! Ye document FreshBox backend ki sabhi APIs ki details contain karta hai. Har ek API ka request, response, method aur payload yahan diya gaya hai.</p>
+
+<h2>Authentication APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/auth/register</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Naya user register karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'name': 'String (Required)',
+  'phone': 'String (Required)',
+  'email': 'String (Optional)',
+  'password': 'String (Required)',
+  'role': 'String (Optional, user/delivery/admin)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'token': 'String',
+  'user': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/auth/login</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ko login karne aur token lene ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'phone': 'String (Required)',
+  'password': 'String (Required)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'token': 'String',
+  'user': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/auth/me</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Current logged-in user ki details nikalne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None (Header me Authorization token chahiye)</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'user': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/auth/logout</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ko logout karne ke liye (cookies clear karta hai).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Address APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/addresses</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ka naya address add karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'address_line': 'String (Required)',
+  'city': 'String (Required)',
+  'pincode': 'String (Required)',
+  'landmark': 'String (Optional)',
+  'is_default': 'Boolean (Optional)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'address': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/addresses</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ke sabhi addresses dekhne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'addresses': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/addresses/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method put">PUT</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Existing address ko update karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'address_line': 'String',
+  'city': 'String',
+  'pincode': 'String',
+  'landmark': 'String',
+  'is_default': 'Boolean'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'address': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/addresses/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method delete">DELETE</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Address ko delete karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/addresses/:id/default</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Kisi particular address ko default set karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'address': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/addresses/:id/location</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Address ka latitude aur longitude update karne ke liye (delivery boy ya admin ke through).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'latitude': 'Number (Required)',
+  'longitude': 'Number (Required)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'address': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Category APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/categories</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Sabhi categories fetch karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'data': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/categories/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Specific category ki details fetch karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'data': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/categories</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Nayi category banane ke liye (Sirf Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'name': 'String (Required)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'data': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/categories/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method put">PUT</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Category ka naam update karne ke liye (Sirf Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'name': 'String (Required)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/categories/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method delete">DELETE</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Category ko delete karne ke liye (Sirf Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Calculator APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/calculator/drafts</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Calculator ka draft save karne ke liye (Sirf Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'name': 'String (Required)',
+  'margin_percent': 'Number',
+  'services_per_month': 'Number',
+  'num_persons': 'Number',
+  'calculated_price': 'Number',
+  'max_fixed_count': 'Number',
+  'max_seasonal_count': 'Number',
+  'items': 'Array of Objects (product_id, qty_gm, is_fixed, is_seasonal)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'draft': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/calculator/drafts</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Sabhi calculator drafts nikalne ke liye (Sirf Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'drafts': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/calculator/drafts/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method delete">DELETE</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Draft delete karne ke liye (Sirf Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Delivery APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/today-deliveries</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Aaj ki deliveries fetch karne ke liye (Sirf Delivery Boy).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'deliveries': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/mark-delivered</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Delivery ko mark delivered karne ke liye. Photo ya remark dono me se ek hona chahiye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>FormData:
+  schedule_id: 'Number (Required)'
+  photo: 'File (Optional)'
+  remark: 'String (Optional)'</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'new_wallet_balance': 'Number'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/return-item</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Item return ki request dalne ke liye (User).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>FormData:
+  schedule_id: 'Number (Required)'
+  product_id: 'Number (Required)'
+  qty_gm: 'Number (Required)'
+  reason: 'String (Required)'
+  photo: 'File'</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'return_id': 'Number'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/return-item/:id/review</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Return ko approve ya reject karne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'status': 'String (approved/rejected)',
+  'refund_amount': 'Number (Optional)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/delivery-history</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ki previous delivery history dekhne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'history': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/admin/deliveries</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Sabhi completed deliveries ki list dekhne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'deliveries': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/admin/returns</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Return requests dekhne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'returns': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/admin/demands</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Kal ki delivery ke liye products ki demand (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'demands': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/delivery/admin/seasonal-selections</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Aaj/Kal ke seasonal selection dekhne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>Query Params: date (YYYY-MM-DD)</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'data': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Notification APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/notifications</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ki notifications list lane ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'notifications': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/notifications/:id/mark-read</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Notification ko read mark karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Package APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/packages</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Saare packages/plans dekhne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'packages': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/packages/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Single package ki details.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'package': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/packages</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Naya package create karne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'name': 'String',
+  'price': 'Number',
+  'services_per_month': 'Number',
+  'status': 'String',
+  'max_fixed_count': 'Number',
+  'max_seasonal_count': 'Number',
+  'items': 'Array of Objects (product_id, qty_gm, is_fixed, is_seasonal)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'package': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/packages/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method put">PUT</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Package ki details update karne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>Sare fields optional hain jo POST me the</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Payment APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/payment/phonepe/initiate</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>PhonePe se payment initiate karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'amount': 'Number (Required)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'redirectUrl': 'String',
+  'transactionId': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/payment/phonepe/status/:txnId</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Payment ka status check karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'status': 'String',
+  'amount': 'Number'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/payment/phonepe/callback</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>PhonePe ka webhook callback receive karne ke liye. (Frontend ise call nahi karta).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>PhonePe Payload</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>200 OK</pre></td>
+        </tr>
+    </table>
+    <h2>Product APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/products</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Sabhi products (sabji/fal/doodh etc.) dekhne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'products': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/products</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Naya product add karne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'name': 'String',
+  'unit': 'String',
+  'category': 'String',
+  'purchase_price_per_gm': 'Number',
+  'selling_price_per_gm': 'Number',
+  'status': 'String'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'product': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/products/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method put">PUT</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Product update karne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>Sare optional fields jo POST me the.</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/products/:id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method delete">DELETE</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Product ko delete (soft delete) karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/products/purchase</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Mandi se stock buy karne ki entry (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'product_id': 'Number',
+  'qty_purchased': 'Number',
+  'total_cost': 'Number',
+  'supplier_name': 'String (Optional)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/products/purchases</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Purchases history dekhne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'purchases': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/products/stock-summary</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Total stock ki summary dekhne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'stock': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Retail APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/retail</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Bina subscription ke directly retail order place karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'items': 'Array of Objects (product_id, qty)',
+  'address_id': 'Number (Required)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'order': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/retail</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ke khud ke retail orders list.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'orders': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/retail/admin</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Admin ke liye sabhi retail orders (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'orders': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/retail/admin/:id/status</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Order ka status change karna (e.g. pending -> delivered).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'status': 'String'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Subscription APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/subscribe</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Package ka subscription lene ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'package_id': 'Number (Required)',
+  'address_id': 'Number (Optional)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'subscription': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/my-subscriptions</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Apni subscriptions dekhne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'subscriptions': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/available-dates</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Subscription start karne ke liye available dates list.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'availableDates': 'Array of Strings (YYYY-MM-DD)'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/confirm-start-date</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Subscription ka start date confirm karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'subscription_id': 'Number',
+  'start_date': 'String (YYYY-MM-DD)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/subscriptions/:id/pause</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Subscription ko temporarily pause karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'pause_days': 'Number',
+  'pause_type': 'String (monthly/yearly)',
+  'pause_scope': 'String (single/all)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/subscriptions/:id/restart</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Paused subscription ko wapas chalu karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'restart_date': 'String (YYYY-MM-DD)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/subscriptions/:id/cancel</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Subscription ko cancel karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/seasonal-options/:subscription_id</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Package ke seasonal options (kya kya mil sakta hai) nikalne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'seasonal_items': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/select-seasonal</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Seasonal items ki custom selection save karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'subscription_id': 'Number',
+  'selections': 'Array of Objects (product_id, qty_gm)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/update-seasonal</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Seasonal items ko update karne ke liye (Same as POST).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'subscription_id': 'Number',
+  'selections': 'Array of Objects (product_id, qty_gm)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/subscriptions/:id/upcoming-selections</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Upcoming deliveries ke liye already selected seasonal items list.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'selections': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/subscription/subscriptions/:id/schedule-seasonal</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Kisi specific aane wali date ke liye seasonal selection schedule karne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'target_date': 'String (YYYY-MM-DD)',
+  'selections': 'Array of product_ids (or objects with qty)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Wallet APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/wallet</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Wallet balance lane ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'wallet_balance': 'Number',
+  'due_amount': 'Number'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/add-funds</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Wallet me funds add karne ke liye (manual process ya via admin/payment).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'amount': 'Number (Required)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/wallet/transactions</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Wallet ka transaction history.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'transactions': 'Array of Objects'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/admin/tomorrow-summary</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Kal ki kamai / kharcha summary (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'data': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/admin/users</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Sabhi users ki list with unka balance (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'users': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/admin/user/:id/all-subscriptions</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Kisis user ki saari subscriptions dekhne ke liye (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'subscriptions': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/admin/credit/:id/override</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Kisi user ka balance ya due amount override karna (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'wallet_balance': 'Number',
+  'due_amount': 'Number'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/wallet/admin/users/:id/status</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ko active/inactive karna (Admin).</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'status': 'String (active/inactive)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    <h2>Water Subscription APIs</h2>
+
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/water/subscribe</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Paani ki bottle / camper ka subscription lene ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'water_type': 'String (e.g. RO/Normal)',
+  'container': 'String (e.g. Bottle/Camper)',
+  'frequency': 'String (daily/alternate)',
+  'address_id': 'Number (Optional)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String',
+  'subscription': 'Object'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/water/subscriptions</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>User ki water subscriptions dekhne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'subscriptions': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/water/available-dates</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method get">GET</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Paani ki subscription start karne ke liye dates.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'availableDates': 'Array'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/water/confirm-start-date</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method post">POST</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Paani ki subscription ka start date set karna.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'subscription_id': 'Number',
+  'start_date': 'String (YYYY-MM-DD)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/water/:id/pause</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Paani ki subscription rokne ke liye.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'pause_days': 'Number',
+  'pause_type': 'String (monthly/yearly)',
+  'pause_scope': 'String (single/all)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/water/:id/restart</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Paani ki subscription wapas start karna.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>{
+  'restart_date': 'String (YYYY-MM-DD)'
+}</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    
+    <table>
+        <tr>
+            <th width="20%">Endpoint</th>
+            <td class="endpoint">/api/water/:id/cancel</td>
+        </tr>
+        <tr>
+            <th>Method</th>
+            <td><span class="method patch">PATCH</span></td>
+        </tr>
+        <tr>
+            <th>Description (Details)</th>
+            <td>Paani ki subscription ko hamesha ke liye cancel karna.</td>
+        </tr>
+        <tr>
+            <th>Request Payload / Body</th>
+            <td><pre>None</pre></td>
+        </tr>
+        <tr>
+            <th>Response Structure</th>
+            <td><pre>{
+  'success': 'Boolean',
+  'message': 'String'
+}</pre></td>
+        </tr>
+    </table>
+    </body></html>

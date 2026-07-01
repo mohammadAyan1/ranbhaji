@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect, no-unused-vars */
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
 
@@ -11,10 +12,31 @@ export default function DeliveryHome() {
   const [msg, setMsg] = useState("");
   const [taggingLocation, setTaggingLocation] = useState(false);
 
+  const [activeTab, setActiveTab] = useState("mine"); // "mine" or "available"
+  const [availableOrders, setAvailableOrders] = useState({ schedules: [], retailOrders: [] });
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
+
   const fetchDeliveries = () => {
     api.get("/today-deliveries").then(r => setDeliveries(r.data.deliveries || [])).finally(() => setLoading(false));
   };
-  useEffect(fetchDeliveries, []);
+  
+  const fetchAvailable = () => {
+    setLoadingAvailable(true);
+    api.get("/available-orders")
+      .then(r => setAvailableOrders({ schedules: r.data.schedules || [], retailOrders: r.data.retailOrders || [] }))
+      .catch(err => setMsg(`❌ Error fetching available orders: ${err.message}`))
+      .finally(() => setLoadingAvailable(false));
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (activeTab === "mine") {
+      fetchDeliveries();
+    } else {
+      fetchAvailable();
+    }
+    return () => { active = false; };
+  }, [activeTab]);
 
   const handleMarkDelivered = async (schedule_id) => {
     if (!photo && !remark) { setMsg("❌ Please add a photo or remark"); return; }
@@ -72,9 +94,25 @@ export default function DeliveryHome() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="page-header">Today's Deliveries 🚚</h1>
-        <p className="page-sub">{new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}</p>
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+        <div>
+          <h1 className="page-header">Delivery Dashboard 🚚</h1>
+          <p className="page-sub">{new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}</p>
+        </div>
+        <div className="flex bg-gray-900 rounded-lg p-1 border border-gray-800 self-start">
+          <button 
+            onClick={() => setActiveTab("mine")}
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "mine" ? "bg-gray-800 text-white shadow" : "text-gray-400 hover:text-gray-200"}`}
+          >
+            My Deliveries
+          </button>
+          <button 
+            onClick={() => setActiveTab("available")}
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "available" ? "bg-gray-800 text-white shadow" : "text-gray-400 hover:text-gray-200"}`}
+          >
+            Available Orders
+          </button>
+        </div>
       </div>
 
       {msg && (
@@ -83,75 +121,143 @@ export default function DeliveryHome() {
         </div>
       )}
 
-      {deliveries.length === 0 ? (
-        <div className="card text-center py-16 text-gray-500">
-          <p className="text-5xl mb-4">🎉</p>
-          <p className="text-lg font-medium text-white">All done!</p>
-          <p>No deliveries scheduled for today.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {deliveries.map(delivery => (
-            <div key={delivery.user.id} className="card">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-white text-lg">{delivery.user.name}</h3>
-                  <p className="text-gray-400 text-sm">📞 {delivery.user.phone}</p>
-                  <p className="text-gray-400 text-sm mt-1">📍 {delivery.user.address}</p>
-                  {delivery.user.address_id && (
-                    <button 
-                      onClick={() => handleTagLocation(delivery.user.address_id)}
-                      disabled={taggingLocation}
-                      className="mt-2 text-[11px] font-semibold bg-gray-800 text-fresh-400 border border-fresh-900/50 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
-                    >
-                      {taggingLocation ? "Fetching..." : "📍 Tag Live Location"}
-                    </button>
-                  )}
+      {activeTab === "mine" ? (
+        deliveries.length === 0 ? (
+          <div className="card text-center py-16 text-gray-500">
+            <p className="text-5xl mb-4">🎉</p>
+            <p className="text-lg font-medium text-white">All done!</p>
+            <p>No deliveries scheduled for today.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {deliveries.map(delivery => (
+              <div key={delivery.user.id} className="card">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-white text-lg">{delivery.user.name}</h3>
+                    <p className="text-gray-400 text-sm">📞 {delivery.user.phone}</p>
+                    <p className="text-gray-400 text-sm mt-1">📍 {delivery.user.address}</p>
+                    {delivery.user.address_id && (
+                      <button 
+                        onClick={() => handleTagLocation(delivery.user.address_id)}
+                        disabled={taggingLocation}
+                        className="mt-2 text-[11px] font-semibold bg-gray-800 text-fresh-400 border border-fresh-900/50 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                      >
+                        {taggingLocation ? "Fetching..." : "📍 Tag Live Location"}
+                      </button>
+                    )}
+                  </div>
+                  <span className="badge-blue badge">{delivery.schedules.length} pkg(s)</span>
                 </div>
-                <span className="badge-blue badge">{delivery.schedules.length} pkg(s)</span>
-              </div>
 
-              {delivery.schedules.map(sched => (
-                <div key={sched.schedule_id} className="bg-gray-800/50 rounded-xl p-4 mb-3 border border-gray-700/50">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="font-medium text-white">{sched.package}</p>
-                    <span className="text-gray-500 text-xs">#{sched.schedule_id}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {sched.items.map((item, idx) => (
-                      <span key={idx} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700">
-                        {item.product}: {item.qty_gm}{item.unit}
-                      </span>
-                    ))}
-                  </div>
-
-                  {selected === sched.schedule_id ? (
-                    <div className="space-y-3 pt-3 border-t border-gray-700">
-                      <div>
-                        <label className="label text-xs">Upload Photo</label>
-                        <input type="file" accept="image/*" onChange={e => setPhoto(e.target.files[0])} className="block text-xs text-gray-400 file:btn-secondary file:text-xs file:mr-3 file:border-0" />
-                      </div>
-                      <div>
-                        <label className="label text-xs">Remark</label>
-                        <input type="text" className="input text-sm" placeholder="Delivery remark..." value={remark} onChange={e => setRemark(e.target.value)} />
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleMarkDelivered(sched.schedule_id)} disabled={submitting} className="btn-primary text-sm py-2 px-4 flex-1">
-                          {submitting ? "Submitting..." : "✅ Confirm Delivery"}
-                        </button>
-                        <button onClick={() => setSelected(null)} className="btn-secondary text-sm py-2 px-4">Cancel</button>
-                      </div>
+                {delivery.schedules.map(sched => (
+                  <div key={sched.schedule_id} className="bg-gray-800/50 rounded-xl p-4 mb-3 border border-gray-700/50">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="font-medium text-white">{sched.package}</p>
+                      <span className="text-gray-500 text-xs">#{sched.schedule_id}</span>
                     </div>
-                  ) : (
-                    <button onClick={() => setSelected(sched.schedule_id)} className="btn-primary w-full text-sm py-2">
-                      Mark as Delivered
-                    </button>
-                  )}
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {sched.items.map((item, idx) => (
+                        <span key={idx} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700">
+                          {item.product}: {item.qty_gm}{item.unit}
+                        </span>
+                      ))}
+                    </div>
+
+                    {selected === sched.schedule_id ? (
+                      <div className="space-y-3 pt-3 border-t border-gray-700">
+                        <div>
+                          <label className="label text-xs">Upload Photo</label>
+                          <input type="file" accept="image/*" onChange={e => setPhoto(e.target.files[0])} className="block text-xs text-gray-400 file:btn-secondary file:text-xs file:mr-3 file:border-0" />
+                        </div>
+                        <div>
+                          <label className="label text-xs">Remark</label>
+                          <input type="text" className="input text-sm" placeholder="Delivery remark..." value={remark} onChange={e => setRemark(e.target.value)} />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleMarkDelivered(sched.schedule_id)} disabled={submitting} className="btn-primary text-sm py-2 px-4 flex-1">
+                            {submitting ? "Submitting..." : "✅ Confirm Delivery"}
+                          </button>
+                          <button onClick={() => setSelected(null)} className="btn-secondary text-sm py-2 px-4">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setSelected(sched.schedule_id)} className="btn-primary w-full text-sm py-2">
+                        Mark as Delivered
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        /* AVAILABLE ORDERS TAB */
+        loadingAvailable ? (
+          <div className="flex items-center justify-center h-32 text-gray-400">Loading available orders...</div>
+        ) : (availableOrders.schedules.length === 0 && availableOrders.retailOrders.length === 0) ? (
+          <div className="card text-center py-16 text-gray-500">
+            <p className="text-4xl mb-3">📭</p>
+            <p className="text-lg font-medium text-white">No pending orders to claim.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {availableOrders.schedules.map(sched => (
+              <div key={`sched-${sched.id}`} className="card flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="badge-blue badge">Package</span>
+                    <span className="text-xs text-gray-500">Batch: {sched.Batch?.name || 'Unassigned'}</span>
+                  </div>
+                  <h3 className="font-bold text-white text-lg">{sched.Subscription?.User?.name}</h3>
+                  <p className="text-gray-400 text-sm">📍 {sched.Subscription?.Address?.address_line || 'No address'}</p>
                 </div>
-              ))}
-            </div>
-          ))}
-        </div>
+                <button 
+                  onClick={async () => {
+                    try {
+                      await api.put('/accept-order', { type: 'package', id: sched.id });
+                      setMsg("✅ Order accepted successfully!");
+                      fetchAvailable();
+                    } catch (e) {
+                      setMsg(`❌ Failed to accept order: ${e.response?.data?.message || e.message}`);
+                    }
+                  }}
+                  className="btn-primary mt-4 w-full text-sm py-2"
+                >
+                  Accept Order
+                </button>
+              </div>
+            ))}
+            
+            {availableOrders.retailOrders.map(ro => (
+              <div key={`retail-${ro.id}`} className="card flex flex-col justify-between border border-purple-500/30">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="badge-purple badge">Retail</span>
+                    <span className="text-xs text-gray-500">Batch: {ro.Batch?.name || 'Unassigned'}</span>
+                  </div>
+                  <h3 className="font-bold text-white text-lg">{ro.User?.name}</h3>
+                  <p className="text-gray-400 text-sm">📍 {ro.Address?.address_line || 'No address'}</p>
+                </div>
+                <button 
+                  onClick={async () => {
+                    try {
+                      await api.put('/accept-order', { type: 'retail', id: ro.id });
+                      setMsg("✅ Order accepted successfully!");
+                      fetchAvailable();
+                    } catch (e) {
+                      setMsg(`❌ Failed to accept order: ${e.response?.data?.message || e.message}`);
+                    }
+                  }}
+                  className="btn-primary mt-4 w-full text-sm py-2 bg-purple-600 hover:bg-purple-700 focus:ring-purple-500/50"
+                >
+                  Accept Order
+                </button>
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   );

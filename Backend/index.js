@@ -24,6 +24,7 @@ import addressRoutes from "./routes/address.route.js";
 import calculatorRoutes from "./routes/calculator.route.js";
 import paymentRoutes from "./routes/payment.route.js";
 import retailRoutes from "./routes/retail.route.js";
+import batchRoutes from "./routes/batch.route.js";
 
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
@@ -77,6 +78,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/calculator", calculatorRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/retail", retailRoutes);
+app.use("/api", batchRoutes);
 
 // 404 fallback
 app.use((req, res) => {
@@ -92,7 +94,7 @@ app.use((err, req, res, next) => {
 // Start server
 const startServer = async () => {
     await connectDB();
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log("[DB] Models synchronized");
 
     await seedDatabase();

@@ -25,10 +25,13 @@ export default function AdminProducts() {
   const [activeTab, setActiveTab] = useState("catalog");
 
   // Purchase Entry Form State
+  const [demands, setDemands] = useState([]);
+  const [completedDemands, setCompletedDemands] = useState([]);
+  
   const [purchaseForm, setPurchaseForm] = useState({
     product_id: "",
     quantity: "",
-    purchase_price_per_kg: "",
+    total_price: "",
     selling_price_per_kg: ""
   });
   const [purchaseLogs, setPurchaseLogs] = useState([]);
@@ -47,16 +50,23 @@ export default function AdminProducts() {
     api.get("/products/stock-summary").then(r => setStockSummary(r.data.products || []));
   };
 
+  const fetchDemands = () => {
+    const today = new Date().toISOString().split('T')[0];
+    api.get(`/admin/demands?date=${today}`).then(r => setDemands(r.data.demands || [])).catch(err => console.error(err));
+  };
+
   useEffect(() => {
     fetchProducts();
     fetchPurchaseLogs();
     fetchStockSummary();
+    fetchDemands();
   }, []);
 
   useEffect(() => {
     if (activeTab === "logs") fetchPurchaseLogs();
     if (activeTab === "stock") fetchStockSummary();
     if (activeTab === "catalog") fetchProducts();
+    if (activeTab === "purchase") fetchDemands();
   }, [activeTab]);
 
   // Catalog Form Change
@@ -170,21 +180,31 @@ export default function AdminProducts() {
     setSubmittingPurchase(true);
 
     try {
+      const qty = parseFloat(purchaseForm.quantity);
+      const total = parseFloat(purchaseForm.total_price);
+      // Calculate per base unit price (per kg or per piece)
+      let calculated_purchase_price = 0;
+      if (qty > 0) {
+        calculated_purchase_price = total / qty;
+      }
+      
       await api.post("/products/purchase", {
         product_id: parseInt(purchaseForm.product_id),
-        quantity: parseFloat(purchaseForm.quantity),
-        purchase_price_per_kg: parseFloat(purchaseForm.purchase_price_per_kg),
-        selling_price_per_kg: parseFloat(purchaseForm.selling_price_per_kg)
+        quantity: qty,
+        purchase_price_per_kg: calculated_purchase_price,
+        selling_price_per_kg: parseFloat(purchaseForm.selling_price_per_kg) || 0
       });
       setMsg("✅ Purchase entry logged and stock updated!");
+      setCompletedDemands([...completedDemands, parseInt(purchaseForm.product_id)]);
       setPurchaseForm({
         product_id: "",
         quantity: "",
-        purchase_price_per_kg: "",
+        total_price: "",
         selling_price_per_kg: ""
       });
       fetchStockSummary();
       fetchPurchaseLogs();
+      fetchDemands();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || "Failed to log purchase"}`);
     } finally {
@@ -484,105 +504,147 @@ export default function AdminProducts() {
 
       {/* ─── TAB 2: LOG STOCK PURCHASE ───────────────────────────────── */}
       {activeTab === "purchase" && (
-        <div className="card max-w-2xl mx-auto">
-          <h3 className="font-semibold text-white mb-5">Record New Stock Purchase Entry</h3>
+        <div className="card">
+          <h3 className="font-semibold text-white mb-5">Stock Demand List & Purchase Entry</h3>
           <p className="text-gray-400 text-xs mb-6">
-            Admin jo bhi fruits/vegetables buy karega, uska wajan (kg/pieces) aur per-kg rate yahan enter karein.
-            System automated weighted average purchase aur selling prices compute kar dega.
+            Admin jo bhi fruits/vegetables buy karega, uska wajan (kg/pieces) aur total price yahan enter karein.
+            System automatically per-kg/per-piece rate calculate kar lega.
           </p>
 
-          <form onSubmit={handlePurchaseSubmit} className="space-y-4">
-            {/* Select Product */}
-            <div>
-              <label className="label">Select Product</label>
-              <select
-                className="input"
-                value={purchaseForm.product_id}
-                onChange={e => setPurchaseForm({ ...purchaseForm, product_id: e.target.value })}
-                required
-              >
-                <option value="">-- Choose Catalog Product --</option>
-                {products.filter(p => p.status === 'active').map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.category} - {p.unit})
-                  </option>
-                ))}
-              </select>
+          <div className="overflow-x-auto mb-8">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="table-header">
+                  <th className="text-left p-3 rounded-tl-xl">Product</th>
+                  <th className="text-right p-3">Total Demand</th>
+                  <th className="text-right p-3 rounded-tr-xl">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {demands.filter(d => !completedDemands.includes(d.id)).map(d => {
+                  const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
+                  // Ensure we show unit properly
+                  const isGm = d.unit === 'gm' || d.unit === 'ml';
+                  const displayQty = isGm ? totalQty / 1000 : totalQty;
+                  const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : 'pcs';
+                  
+                  return (
+                    <tr key={d.id} className="table-row">
+                      <td className="p-3 text-white font-medium">{d.name}</td>
+                      <td className="p-3 text-right font-bold text-blue-400">{displayQty} {displayUnit}</td>
+                      <td className="p-3 text-right">
+                        <button 
+                          onClick={() => {
+                            const matchingProduct = products.find(p => p.id === d.id);
+                            const sellingPrice = matchingProduct ? (isGm ? matchingProduct.selling_price_per_gm * 1000 : matchingProduct.selling_price_per_gm) : "";
+                            setPurchaseForm({ 
+                              product_id: d.id, 
+                              quantity: displayQty, 
+                              total_price: "", 
+                              selling_price_per_kg: sellingPrice || ""
+                            });
+                          }} 
+                          className="btn-primary py-1 px-3 text-xs"
+                        >
+                          Submit Purchase
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {demands.filter(d => !completedDemands.includes(d.id)).length === 0 && (
+                  <tr>
+                    <td colSpan="3" className="text-center py-6 text-gray-500">No pending stock demand found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {purchaseForm.product_id && (
+            <div className="bg-gray-850 border border-gray-800 rounded-xl p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-white font-semibold">
+                  Log Purchase: {demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}
+                </h4>
+                <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="text-gray-400 hover:text-white">✕</button>
+              </div>
+              <form onSubmit={handlePurchaseSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Quantity */}
+                  <div>
+                    <label className="label">
+                      Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : 'kg/L') : 'kg'})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="e.g. 10"
+                      className="input"
+                      value={purchaseForm.quantity}
+                      onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  {/* Total Price */}
+                  <div>
+                    <label className="label">
+                      Total Price (₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="e.g. 500"
+                      className="input"
+                      value={purchaseForm.total_price}
+                      onChange={e => setPurchaseForm({ ...purchaseForm, total_price: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  {/* Selling Price per Kg */}
+                  <div>
+                    <label className="label">
+                      Selling Price ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'per pc' : 'per kg/L') : 'per kg'})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="e.g. 15"
+                      className="input"
+                      value={purchaseForm.selling_price_per_kg}
+                      onChange={e => setPurchaseForm({ ...purchaseForm, selling_price_per_kg: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Auto Calculated Per Kg Live Preview */}
+                {parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
+                  <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 flex justify-between items-center text-sm mt-4">
+                    <span className="text-gray-400">Calculated Purchase Price:</span>
+                    <span className="text-lg font-bold text-gradient">
+                      ₹{(parseFloat(purchaseForm.total_price) / parseFloat(purchaseForm.quantity)).toFixed(2)} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
+                    </span>
+                  </div>
+                )}
+
+                <div className="pt-4 border-t border-gray-800">
+                  <button
+                    type="submit"
+                    disabled={submittingPurchase}
+                    className="w-full btn-primary py-3"
+                  >
+                    {submittingPurchase ? "Saving Entry..." : "Submit & Update stock"}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Quantity */}
-              <div>
-                <label className="label">
-                  Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : 'kg/L') : 'kg'})
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="e.g. 10"
-                  className="input"
-                  value={purchaseForm.quantity}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
-                  required
-                />
-              </div>
-
-              {/* Purchase Price per Kg */}
-              <div>
-                <label className="label">
-                  Purchase Price ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'per pc' : 'per kg/L') : 'per kg'})
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="e.g. 12"
-                  className="input"
-                  value={purchaseForm.purchase_price_per_kg}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, purchase_price_per_kg: e.target.value })}
-                  required
-                />
-              </div>
-
-              {/* Selling Price per Kg */}
-              <div>
-                <label className="label">
-                  Selling Price ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'per pc' : 'per kg/L') : 'per kg'})
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="e.g. 15"
-                  className="input"
-                  value={purchaseForm.selling_price_per_kg}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, selling_price_per_kg: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Total Cost Live Preview */}
-            {parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.purchase_price_per_kg) > 0 && (
-              <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 flex justify-between items-center text-sm mt-4">
-                <span className="text-gray-400">Total Purchase Cost:</span>
-                <span className="text-lg font-bold text-gradient">
-                  ₹{(parseFloat(purchaseForm.quantity) * parseFloat(purchaseForm.purchase_price_per_kg)).toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            <div className="pt-4 border-t border-gray-800">
-              <button
-                type="submit"
-                disabled={submittingPurchase}
-                className="w-full btn-primary py-3"
-              >
-                {submittingPurchase ? "Saving Entry..." : "Submit & Update stock"}
-              </button>
-            </div>
-          </form>
+          )}
         </div>
       )}
 
