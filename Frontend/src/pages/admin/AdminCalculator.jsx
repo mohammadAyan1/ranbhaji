@@ -52,11 +52,11 @@ export default function AdminCalculator() {
   };
 
   const updateFixedRow = (id, field, value) => {
-    setFixedItems(fixedItems.map((item) => item.id === id ? { ...item, [field]: value } : item));
+    setFixedItems((prev) => prev.map((item) => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const updateSeasonalRow = (id, field, value) => {
-    setSeasonalItems(seasonalItems.map((item) => item.id === id ? { ...item, [field]: value } : item));
+    setSeasonalItems((prev) => prev.map((item) => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const clearCalculator = () => {

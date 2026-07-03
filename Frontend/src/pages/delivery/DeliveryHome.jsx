@@ -11,6 +11,7 @@ export default function DeliveryHome() {
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState("");
   const [taggingLocation, setTaggingLocation] = useState(false);
+  const [acceptedDetails, setAcceptedDetails] = useState(null);
 
   const [activeTab, setActiveTab] = useState("mine"); // "mine" or "available"
   const [availableOrders, setAvailableOrders] = useState({ schedules: [], retailOrders: [] });
@@ -19,7 +20,7 @@ export default function DeliveryHome() {
   const fetchDeliveries = () => {
     api.get("/today-deliveries").then(r => setDeliveries(r.data.deliveries || [])).finally(() => setLoading(false));
   };
-  
+
   const fetchAvailable = () => {
     setLoadingAvailable(true);
     api.get("/available-orders")
@@ -57,37 +58,37 @@ export default function DeliveryHome() {
 
   const handleTagLocation = (address_id) => {
     if (!address_id) {
-        setMsg("❌ Cannot tag location: No valid address ID found for this user.");
-        return;
+      setMsg("❌ Cannot tag location: No valid address ID found for this user.");
+      return;
     }
 
     if (!navigator.geolocation) {
-        setMsg("❌ Geolocation is not supported by your browser");
-        return;
+      setMsg("❌ Geolocation is not supported by your browser");
+      return;
     }
 
     setTaggingLocation(true);
     setMsg("📍 Fetching live location...");
 
     navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            try {
-                await api.patch(`/addresses/${address_id}/location`, {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
-                });
-                setMsg("✅ Location tagged successfully!");
-            } catch (err) {
-                setMsg(`❌ Failed to save location: ${err.response?.data?.message || err.message}`);
-            } finally {
-                setTaggingLocation(false);
-            }
-        },
-        (error) => {
-            setMsg(`❌ Location error: ${error.message}`);
-            setTaggingLocation(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      async (position) => {
+        try {
+          await api.patch(`/addresses/${address_id}/location`, {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+          setMsg("✅ Location tagged successfully!");
+        } catch (err) {
+          setMsg(`❌ Failed to save location: ${err.response?.data?.message || err.message}`);
+        } finally {
+          setTaggingLocation(false);
+        }
+      },
+      (error) => {
+        setMsg(`❌ Location error: ${error.message}`);
+        setTaggingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
@@ -101,13 +102,13 @@ export default function DeliveryHome() {
           <p className="page-sub">{new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}</p>
         </div>
         <div className="flex bg-gray-900 rounded-lg p-1 border border-gray-800 self-start">
-          <button 
+          <button
             onClick={() => setActiveTab("mine")}
             className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "mine" ? "bg-gray-800 text-white shadow" : "text-gray-400 hover:text-gray-200"}`}
           >
             My Deliveries
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab("available")}
             className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "available" ? "bg-gray-800 text-white shadow" : "text-gray-400 hover:text-gray-200"}`}
           >
@@ -139,7 +140,7 @@ export default function DeliveryHome() {
                     <p className="text-gray-400 text-sm">📞 {delivery.user.phone}</p>
                     <p className="text-gray-400 text-sm mt-1">📍 {delivery.user.address}</p>
                     {delivery.user.address_id && (
-                      <button 
+                      <button
                         onClick={() => handleTagLocation(delivery.user.address_id)}
                         disabled={taggingLocation}
                         className="mt-2 text-[11px] font-semibold bg-gray-800 text-fresh-400 border border-fresh-900/50 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
@@ -214,11 +215,25 @@ export default function DeliveryHome() {
                   <h3 className="font-bold text-white text-lg">{sched.Subscription?.User?.name}</h3>
                   <p className="text-gray-400 text-sm">📍 {sched.Subscription?.Address?.address_line || 'No address'}</p>
                 </div>
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       await api.put('/accept-order', { type: 'package', id: sched.id });
                       setMsg("✅ Order accepted successfully!");
+
+                      // Show items in a modal after accepting
+                      const itemsList = sched.DeliveryItems?.map(i => ({
+                        product: i.Product?.name,
+                        qty: i.qty_gm,
+                        unit: i.Product?.unit
+                      })) || [];
+
+                      setAcceptedDetails({
+                        userName: sched.Subscription?.User?.name,
+                        type: 'Package',
+                        items: itemsList
+                      });
+
                       fetchAvailable();
                     } catch (e) {
                       setMsg(`❌ Failed to accept order: ${e.response?.data?.message || e.message}`);
@@ -230,7 +245,7 @@ export default function DeliveryHome() {
                 </button>
               </div>
             ))}
-            
+
             {availableOrders.retailOrders.map(ro => (
               <div key={`retail-${ro.id}`} className="card flex flex-col justify-between border border-purple-500/30">
                 <div>
@@ -241,11 +256,25 @@ export default function DeliveryHome() {
                   <h3 className="font-bold text-white text-lg">{ro.User?.name}</h3>
                   <p className="text-gray-400 text-sm">📍 {ro.Address?.address_line || 'No address'}</p>
                 </div>
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       await api.put('/accept-order', { type: 'retail', id: ro.id });
                       setMsg("✅ Order accepted successfully!");
+
+                      // Show items in a modal after accepting
+                      const itemsList = ro.Items?.map(i => ({
+                        product: i.Product?.name,
+                        qty: i.qty_gm,
+                        unit: i.Product?.unit
+                      })) || [];
+
+                      setAcceptedDetails({
+                        userName: ro.User?.name,
+                        type: 'Retail Order',
+                        items: itemsList
+                      });
+
                       fetchAvailable();
                     } catch (e) {
                       setMsg(`❌ Failed to accept order: ${e.response?.data?.message || e.message}`);
@@ -259,6 +288,56 @@ export default function DeliveryHome() {
             ))}
           </div>
         )
+      )}
+
+      {/* ─── ACCEPTED ORDER MODAL ─────────────────────────────────── */}
+      {acceptedDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-gray-800 bg-gray-800/30 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span className="text-xl">✅</span> Order Accepted!
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  You are now assigned to deliver to <span className="font-semibold text-white">{acceptedDetails.userName}</span>
+                </p>
+              </div>
+              <button onClick={() => { setAcceptedDetails(null); setActiveTab("mine"); }} className="text-gray-400 hover:text-white transition-colors">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Items to Deliver</h4>
+              {acceptedDetails.items && acceptedDetails.items.length > 0 ? (
+                <div className="space-y-2">
+                  {acceptedDetails.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-gray-800/50 p-3 rounded-xl border border-gray-700/50">
+                      <span className="font-medium text-white text-sm">{item.product}</span>
+                      <span className="bg-gray-900 text-fresh-400 text-xs font-bold px-2.5 py-1 rounded-lg border border-gray-700">
+                        {item.qty}{item.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 bg-gray-800/30 p-4 rounded-xl text-center border border-gray-800/50">
+                  No explicit items found or items are auto-generated.
+                </p>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-gray-800 bg-gray-800/30">
+              <button
+                onClick={() => { setAcceptedDetails(null); setActiveTab("mine"); }}
+                className="btn-primary w-full py-2.5 font-bold"
+              >
+                Go to My Deliveries
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

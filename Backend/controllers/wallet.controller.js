@@ -127,7 +127,11 @@ export const getUserSubscriptions = async (req, res) => {
 // GET /api/admin/users
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await User.findAll({ attributes: { exclude: ['password_hash'] }, order: [['created_at', 'DESC']] });
+        const users = await User.findAll({ 
+            attributes: { exclude: ['password_hash'] }, 
+            include: [{ model: Address }],
+            order: [['created_at', 'DESC']] 
+        });
         res.status(200).json({ success: true, users });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

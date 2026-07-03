@@ -1,41 +1,47 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
+import { 
+  LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin, 
+  Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator, 
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut
+} from "lucide-react";
 
 const adminLinks = [
-  { to: "/admin", label: "Dashboard", icon: "🏠" },
-  { to: "/admin/products", label: "Products", icon: "🥦" },
-  { to: "/admin/packages", label: "Packages", icon: "📦" },
-  { to: "/admin/subscriptions", label: "Subscriptions", icon: "🔄" },
-  { to: "/admin/users", label: "Users", icon: "👥" },
-  { to: "/admin/deliveries", label: "Delivery Logs", icon: "🚚" },
-  { to: "/admin/demands", label: "Stock Demands", icon: "📊" },
-  { to: "/admin/seasonal-selections", label: "Seasonal Picks", icon: "🥦" },
-  { to: "/admin/returns", label: "Returns", icon: "↩️" },
-  { to: "/admin/summary", label: "Daily Summary", icon: "📋" },
-  { to: "/admin/calculator", label: "Price Calculator", icon: "🧮" },
-  { to: "/admin/retail-orders", label: "Retail Orders", icon: "🛒" },
-  { to: "/admin/batches", label: "Batches", icon: "📑" },
-  { to: "/admin/all-orders", label: "All Orders", icon: "📋" },
+  { to: "/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+  { to: "/admin/products", label: "Products", icon: <ShoppingBag size={20} /> },
+  { to: "/admin/packages", label: "Packages", icon: <Package size={20} /> },
+  { to: "/admin/subscriptions", label: "Subscriptions", icon: <RefreshCw size={20} /> },
+  { to: "/admin/users", label: "Users", icon: <Users size={20} /> },
+  { to: "/admin/user-addresses", label: "User Addresses", icon: <MapPin size={20} /> },
+  { to: "/admin/deliveries", label: "Delivery Logs", icon: <Truck size={20} /> },
+  { to: "/admin/demands", label: "Stock Demands", icon: <BarChart3 size={20} /> },
+  { to: "/admin/seasonal-selections", label: "Seasonal Picks", icon: <Leaf size={20} /> },
+  { to: "/admin/returns", label: "Returns", icon: <Undo2 size={20} /> },
+  { to: "/admin/summary", label: "Daily Summary", icon: <ClipboardList size={20} /> },
+  { to: "/admin/calculator", label: "Price Calculator", icon: <Calculator size={20} /> },
+  { to: "/admin/retail-orders", label: "Retail Orders", icon: <ShoppingCart size={20} /> },
+  { to: "/admin/batches", label: "Batches", icon: <Layers size={20} /> },
+  { to: "/admin/all-orders", label: "All Orders", icon: <ListOrdered size={20} /> },
 ];
 
 const userLinks = [
-  { to: "/dashboard", label: "Dashboard", icon: "🏠" },
-  { to: "/packages", label: "Browse Packages", icon: "📦" },
-  { to: "/my-subscriptions", label: "My Subscriptions", icon: "🔄" },
-  { to: "/wallet", label: "Wallet", icon: "💰" },
-  { to: "/deliveries", label: "Delivery History", icon: "📦" },
-  { to: "/water", label: "Water Subscription", icon: "💧" },
-  { to: "/addresses", label: "My Addresses", icon: "📍" },
-  { to: "/notifications", label: "Notifications", icon: "🔔" },
-  { to: "/retail-store", label: "Retail Store", icon: "🛒" },
-  { to: "/my-retail-orders", label: "My Retail Orders", icon: "📋" },
+  { to: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+  { to: "/packages", label: "Browse Packages", icon: <Package size={20} /> },
+  { to: "/my-subscriptions", label: "My Subscriptions", icon: <RefreshCw size={20} /> },
+  { to: "/wallet", label: "Wallet", icon: <Wallet size={20} /> },
+  { to: "/deliveries", label: "Delivery History", icon: <Package size={20} /> },
+  { to: "/water", label: "Water Subscription", icon: <Droplet size={20} className="text-aqua-400" /> },
+  { to: "/addresses", label: "My Addresses", icon: <MapPin size={20} /> },
+  { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
+  { to: "/retail-store", label: "Retail Store", icon: <ShoppingCart size={20} /> },
+  { to: "/my-retail-orders", label: "My Retail Orders", icon: <ClipboardList size={20} /> },
 ];
 
 const deliveryLinks = [
-  { to: "/delivery", label: "Today's Deliveries", icon: "🚚" },
+  { to: "/delivery", label: "Today's Deliveries", icon: <Truck size={20} /> },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -46,46 +52,62 @@ export default function Sidebar() {
   const handleLogout = () => { logout(); navigate("/login"); };
 
   return (
-    <aside className="h-screen w-64 bg-gray-900 border-r border-gray-800 flex flex-col fixed left-0 top-0 z-30">
-      {/* Logo */}
-      <div className="p-6 border-b border-gray-800">
+    <aside className="h-screen w-64 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800/60 flex flex-col shadow-2xl z-50">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-800/60 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-fresh-600 rounded-xl flex items-center justify-center text-lg">🥦</div>
+          <div className="w-10 h-10 bg-gradient-to-br from-fresh-400 to-fresh-600 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-fresh-500/30">
+            🥦
+          </div>
           <div>
-            <h1 className="font-bold text-white text-lg leading-none">FreshBox</h1>
-            <p className="text-xs text-gray-500 capitalize">{user?.role} Panel</p>
+            <h1 className="font-bold text-white text-lg leading-none tracking-tight">FreshBox</h1>
+            <p className="text-xs text-fresh-400 font-medium capitalize tracking-wide">{user?.role} Panel</p>
           </div>
         </div>
+        {onClose && (
+          <button onClick={onClose} className="lg:hidden text-gray-400 hover:text-white transition-colors p-1 bg-gray-800 rounded-md">
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       {/* Nav links */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {links.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            end={link.to === "/admin" || link.to === "/dashboard" || link.to === "/delivery"}
-            className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-          >
-            <span>{link.icon}</span>
-            <span>{link.label}</span>
-          </NavLink>
-        ))}
+      <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto scrollbar-thin">
+        {links.map((link) => {
+          const isAqua = link.to === "/water";
+          return (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              onClick={() => onClose && onClose()}
+              end={link.to === "/admin" || link.to === "/dashboard" || link.to === "/delivery"}
+              className={({ isActive }) => `nav-link group relative overflow-hidden ${isActive ? (isAqua ? "nav-link-aqua active" : "active") : ""}`}
+            >
+              <div className={`transition-transform duration-300 group-hover:scale-110 ${link.to === "/water" ? "text-aqua-400" : ""}`}>
+                {link.icon}
+              </div>
+              <span className="z-10">{link.label}</span>
+              {/* Hover effect background */}
+              <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* User info + logout */}
-      <div className="p-4 border-t border-gray-800">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 bg-fresh-800 rounded-full flex items-center justify-center text-fresh-300 font-bold text-sm">
+      <div className="p-4 border-t border-gray-800/60 bg-gray-950/50">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 bg-gradient-to-br from-gray-700 to-gray-800 border border-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md">
             {user?.name?.[0]?.toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-            <p className="text-xs text-gray-500">{user?.phone}</p>
+            <p className="text-sm font-semibold text-white truncate tracking-wide">{user?.name}</p>
+            <p className="text-xs text-gray-400 truncate">{user?.phone}</p>
           </div>
         </div>
-        <button onClick={handleLogout} className="w-full btn-secondary text-sm py-2 flex items-center justify-center gap-2">
-          <span>🚪</span> Logout
+        <button onClick={handleLogout} className="w-full btn-secondary text-sm py-2.5 flex items-center justify-center gap-2 group border-red-900/30 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400">
+          <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" /> 
+          <span className="font-semibold tracking-wide">Logout</span>
         </button>
       </div>
     </aside>

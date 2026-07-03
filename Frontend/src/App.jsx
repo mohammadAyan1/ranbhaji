@@ -22,6 +22,7 @@ import AddressPage from "./pages/user/AddressPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminUsers from "./pages/admin/AdminUsers";
+import AdminUserAddresses from "./pages/admin/AdminUserAddresses";
 import AdminPackages from "./pages/admin/AdminPackages";
 import AdminSubscriptions from "./pages/admin/AdminSubscriptions";
 import AdminReturns from "./pages/admin/AdminReturns";
@@ -83,6 +84,7 @@ function App() {
           <Route path="/admin/packages" element={<AdminPackages />} />
           <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
           <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/user-addresses" element={<AdminUserAddresses />} />
           <Route path="/admin/returns" element={<AdminReturns />} />
           <Route path="/admin/deliveries" element={<AdminDeliveries />} />
           <Route path="/admin/demands" element={<AdminDemands />} />
