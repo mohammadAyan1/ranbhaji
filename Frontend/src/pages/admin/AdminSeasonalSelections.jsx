@@ -56,7 +56,7 @@ export default function AdminSeasonalSelections() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <label className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Target Date:</label>
+            <label className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Target Date:</label>
             <input
               type="date"
               value={date}
@@ -75,7 +75,7 @@ export default function AdminSeasonalSelections() {
       </div>
 
       {msg && (
-        <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+        <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-600 border border-red-700/50">
           {msg}
         </div>
       )}
@@ -83,17 +83,17 @@ export default function AdminSeasonalSelections() {
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
-          <p className="text-gray-400 text-xs font-medium">Total Seasonal Deliveries</p>
-          <p className="text-3xl font-extrabold text-white mt-1">{selections.length}</p>
+          <p className="text-gray-600 text-xs font-medium">Total Seasonal Deliveries</p>
+          <p className="text-3xl font-extrabold text-gray-900 mt-1">{selections.length}</p>
         </div>
         <div className="card">
-          <p className="text-gray-400 text-xs font-medium">User Selected</p>
-          <p className="text-3xl font-extrabold text-fresh-400 mt-1">
+          <p className="text-gray-600 text-xs font-medium">User Selected</p>
+          <p className="text-3xl font-extrabold text-fresh-600 mt-1">
             {selections.filter(s => s.status === 'selected' && !s.is_auto).length}
           </p>
         </div>
         <div className="card">
-          <p className="text-gray-400 text-xs font-medium">Auto-filled / Default Fallback</p>
+          <p className="text-gray-600 text-xs font-medium">Auto-filled / Default Fallback</p>
           <p className="text-3xl font-extrabold text-blue-400 mt-1">
             {selections.filter(s => s.is_auto || s.status === 'fallback').length}
           </p>
@@ -102,13 +102,13 @@ export default function AdminSeasonalSelections() {
 
       {/* List of customer picks */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-400">
+        <div className="flex items-center justify-center py-16 text-gray-600">
           <span className="animate-pulse">Loading seasonal selections...</span>
         </div>
       ) : filteredSelections.length === 0 ? (
         <div className="card text-center py-16 text-gray-500">
           <p className="text-5xl mb-4">🥦</p>
-          <p className="text-lg font-medium text-white">No seasonal packages scheduled</p>
+          <p className="text-lg font-medium text-gray-900">No seasonal packages scheduled</p>
           <p className="text-sm">No customers with active seasonal configuration have deliveries scheduled on this date.</p>
         </div>
       ) : (
@@ -118,15 +118,15 @@ export default function AdminSeasonalSelections() {
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-base font-bold text-white">{sel.user.name}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">{sel.user.phone}</p>
+                    <h3 className="text-base font-bold text-gray-900">{sel.user.name}</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">{sel.user.phone}</p>
                   </div>
                   {getStatusBadge(sel.status, sel.is_auto)}
                 </div>
 
-                <div className="border-t border-gray-800 my-2 pt-2">
-                  <p className="text-xs text-gray-400 font-semibold mb-1">Package: <span className="text-gray-300 font-normal">{sel.package_name}</span></p>
-                  <p className="text-xs text-gray-400 font-semibold">Schedule ID: <span className="text-gray-300 font-normal">#{sel.schedule_id}</span></p>
+                <div className="border-t border-gray-200 my-2 pt-2">
+                  <p className="text-xs text-gray-600 font-semibold mb-1">Package: <span className="text-gray-700 font-normal">{sel.package_name}</span></p>
+                  <p className="text-xs text-gray-600 font-semibold">Schedule ID: <span className="text-gray-700 font-normal">#{sel.schedule_id}</span></p>
                 </div>
 
                 {/* Fixed items display */}
@@ -135,9 +135,9 @@ export default function AdminSeasonalSelections() {
                   {sel.fixed_items && sel.fixed_items.length > 0 ? (
                     <div className="flex flex-col gap-1">
                       {sel.fixed_items.map((item, index) => (
-                        <div key={index} className="flex justify-between items-center bg-gray-800/40 px-2.5 py-1.5 rounded-lg border border-gray-700/50 text-xs">
-                          <span className="text-gray-300 font-medium">{item.name} ({parseFloat(item.qty_gm)}{item.unit})</span>
-                          <span className="text-fresh-400 font-semibold">₹{parseFloat(item.amount || 0).toFixed(2)}</span>
+                        <div key={index} className="flex justify-between items-center bg-gray-100/40 px-2.5 py-1.5 rounded-lg border border-gray-300/50 text-xs">
+                          <span className="text-gray-700 font-medium">{item.name} ({parseFloat(item.qty_gm)}{item.unit})</span>
+                          <span className="text-fresh-600 font-semibold">₹{parseFloat(item.amount || 0).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -153,8 +153,8 @@ export default function AdminSeasonalSelections() {
                     <div className="flex flex-col gap-1">
                       {sel.seasonal_items.map((item, index) => (
                         <div key={index} className="flex justify-between items-center bg-fresh-950/20 px-2.5 py-1.5 rounded-lg border border-fresh-800/20 text-xs">
-                          <span className="text-fresh-300 font-medium">🌿 {item.name} ({parseFloat(item.qty_gm)}{item.unit})</span>
-                          <span className="text-fresh-400 font-semibold">₹{parseFloat(item.amount || 0).toFixed(2)}</span>
+                          <span className="text-fresh-700 font-medium">🌿 {item.name} ({parseFloat(item.qty_gm)}{item.unit})</span>
+                          <span className="text-fresh-600 font-semibold">₹{parseFloat(item.amount || 0).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>

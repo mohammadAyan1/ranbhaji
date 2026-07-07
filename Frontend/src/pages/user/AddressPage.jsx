@@ -103,7 +103,7 @@ export default function AddressPage() {
   };
 
   if (loading && addresses.length === 0) {
-    return <div className="flex items-center justify-center h-64 text-gray-400">Loading addresses...</div>;
+    return <div className="flex items-center justify-center h-64 text-gray-600">Loading addresses...</div>;
   }
 
   return (
@@ -119,20 +119,20 @@ export default function AddressPage() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
 
       {/* Address Form Modal */}
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-lg font-gradient">
+              <h3 className="font-bold text-gray-900 text-lg font-gradient">
                 {editingId ? "Edit Address" : "Add New Address"}
               </h3>
-              <button onClick={() => setIsFormOpen(false)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              <button onClick={() => setIsFormOpen(false)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -192,12 +192,12 @@ export default function AddressPage() {
                   checked={form.is_default}
                   onChange={e => setForm({...form, is_default: e.target.checked})}
                 />
-                <label htmlFor="default-chk" className="text-sm text-gray-300 cursor-pointer">
+                <label htmlFor="default-chk" className="text-sm text-gray-700 cursor-pointer">
                   Set as default delivery address
                 </label>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-gray-800">
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <button type="submit" disabled={submitting} className="btn-primary flex-1 py-2">
                   {submitting ? "Saving..." : "Save Address"}
                 </button>
@@ -213,34 +213,34 @@ export default function AddressPage() {
       {/* Address List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {addresses.map(addr => (
-          <div key={addr.id} className={`card border transition-all ${addr.is_default ? "border-fresh-700/50 bg-fresh-950/5" : "border-gray-800"}`}>
+          <div key={addr.id} className={`card border transition-all ${addr.is_default ? "border-fresh-700/50 bg-fresh-950/5" : "border-gray-200"}`}>
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">📍</span>
-                  <p className="font-bold text-white text-base">{addr.city}</p>
+                  <p className="font-bold text-gray-900 text-base">{addr.city}</p>
                   {addr.is_default && (
                     <span className="badge badge-green text-xs font-semibold">Default</span>
                   )}
                 </div>
-                <p className="text-gray-300 text-sm">{addr.address_line}</p>
+                <p className="text-gray-700 text-sm">{addr.address_line}</p>
                 {addr.landmark && (
-                  <p className="text-gray-400 text-xs font-medium">Landmark: {addr.landmark}</p>
+                  <p className="text-gray-600 text-xs font-medium">Landmark: {addr.landmark}</p>
                 )}
                 <p className="text-gray-500 text-xs">Pincode: {addr.pincode}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-800/60">
+            <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-200/60">
               {!addr.is_default && (
-                <button onClick={() => handleSetDefault(addr.id)} className="text-xs text-fresh-400 hover:text-fresh-300 font-medium">
+                <button onClick={() => handleSetDefault(addr.id)} className="text-xs text-fresh-600 hover:text-fresh-700 font-medium">
                   Set as Default
                 </button>
               )}
               <button onClick={() => handleOpenEdit(addr)} className="text-xs text-blue-400 hover:text-blue-300 font-medium ml-auto">
                 ✏️ Edit
               </button>
-              <button onClick={() => handleDelete(addr.id)} className="text-xs text-red-400 hover:text-red-300 font-medium">
+              <button onClick={() => handleDelete(addr.id)} className="text-xs text-red-600 hover:text-red-300 font-medium">
                 🗑️ Delete
               </button>
             </div>
@@ -250,7 +250,7 @@ export default function AddressPage() {
         {addresses.length === 0 && (
           <div className="md:col-span-2 card text-center py-16 text-gray-500">
             <p className="text-5xl mb-4">📍</p>
-            <p className="text-lg font-medium text-white mb-1">No addresses saved yet</p>
+            <p className="text-lg font-medium text-gray-900 mb-1">No addresses saved yet</p>
             <p className="text-sm max-w-sm mx-auto mb-4">Please add a delivery address so that our delivery boy can deliver your packages safely.</p>
             <button onClick={handleOpenAdd} className="btn-primary inline-block py-2 px-6">
               Add Your First Address

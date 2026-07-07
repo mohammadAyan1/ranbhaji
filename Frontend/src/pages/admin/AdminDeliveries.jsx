@@ -38,7 +38,7 @@ export default function AdminDeliveries() {
     );
   });
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading delivery logs...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading delivery logs...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -66,11 +66,11 @@ export default function AdminDeliveries() {
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="relative max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-gray-700 bg-gray-950 flex flex-col cursor-default"
+            className="relative max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-gray-300 bg-gray-50 flex flex-col cursor-default"
           >
             <button
               onClick={() => setSelectedPhoto(null)}
-              className="absolute top-4 right-4 bg-gray-900/80 hover:bg-gray-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl z-50 transition-all"
+              className="absolute top-4 right-4 bg-white/80 hover:bg-gray-100 text-gray-900 rounded-full w-10 h-10 flex items-center justify-center text-xl z-50 transition-all"
             >
               &times;
             </button>
@@ -79,7 +79,7 @@ export default function AdminDeliveries() {
               alt="Delivery confirmation zoom"
               className="object-contain max-h-[75vh]"
             />
-            <div className="p-4 bg-gray-900 text-center text-gray-400 text-sm border-t border-gray-850">
+            <div className="p-4 bg-white text-center text-gray-600 text-sm border-t border-gray-850">
               Delivery Confirmation Photo
             </div>
           </div>
@@ -99,7 +99,7 @@ export default function AdminDeliveries() {
                   <th className="text-left p-3">Customer</th>
                   <th className="text-left p-3">Delivery Person</th>
                   <th className="text-left p-3">Package / Plan</th>
-                  <th className="text-left p-3">Delivered Items</th>
+                  <th className="text-left p-3">Items Details</th>
                   <th className="text-left p-3">Photo & Remark</th>
                   <th className="text-right p-3 rounded-tr-xl">Schedule ID</th>
                 </tr>
@@ -117,52 +117,73 @@ export default function AdminDeliveries() {
                   return (
                     <tr key={d.id} className="table-row">
                       <td className="p-3">
-                        <span className="font-semibold text-white">{formattedDate}</span>
+                        <span className="font-semibold text-gray-900">{formattedDate}</span>
                       </td>
                       <td className="p-3">
-                        <p className="text-white font-medium">{customer.name}</p>
+                        <p className="text-gray-900 font-medium">{customer.name}</p>
                         <p className="text-gray-500 text-xs">📞 {customer.phone}</p>
                       </td>
                       <td className="p-3">
                         {d.DeliveryBoy ? (
                           <>
-                            <p className="text-white font-medium">{d.DeliveryBoy.name}</p>
+                            <p className="text-gray-900 font-medium">{d.DeliveryBoy.name}</p>
                             <p className="text-gray-500 text-xs">📞 {d.DeliveryBoy.phone}</p>
                           </>
                         ) : (
                           <span className="text-gray-500 text-xs italic">Not assigned</span>
                         )}
                       </td>
-                      <td className="p-3 text-gray-300 font-medium">
+                      <td className="p-3 text-gray-700 font-medium">
                         {packageName}
                       </td>
                       <td className="p-3">
-                        <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {d.DeliveryItems?.map((item, idx) => (
-                            <span key={idx} className="bg-gray-800 text-gray-300 text-[10px] px-2 py-0.5 rounded border border-gray-700">
-                              {item.Product?.name} ({parseFloat(item.qty_gm).toFixed(0)}{item.Product?.unit || 'g'})
-                            </span>
-                          ))}
+                        <div className="flex flex-col gap-2 max-w-[280px]">
+                          {d.DeliveryItems?.map((item, idx) => {
+                            const demanded = parseFloat(item.qty_gm) || 0;
+                            const delivered = parseFloat(item.packed_qty ?? item.delivered_qty ?? item.qty_gm) || 0;
+                            const isMissed = delivered === 0 && demanded > 0;
+
+                            return (
+                              <div key={idx} className={`text-[11px] px-2 py-1.5 rounded border flex flex-col ${isMissed ? 'bg-red-900/20 border-red-800/50 text-red-300' : 'bg-gray-100/80 border-gray-300 text-gray-700'}`}>
+                                <span className="font-semibold text-gray-900 mb-0.5">
+                                  {item.Product?.name} {item.Product?.hindi_name ? <span className="text-gray-500 font-normal">({item.Product.hindi_name})</span> : ""}
+                                </span>
+                                <div className="flex justify-between items-center">
+                                  {isMissed ? (
+                                    <>
+                                      <span className="text-red-600 font-bold">Missed</span>
+                                      <span className="opacity-70 text-[10px]">Demanded: {demanded.toFixed(0)}{item.Product?.unit || 'g'}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-fresh-600 font-medium">Delivered: {delivered.toFixed(0)}{item.Product?.unit || 'g'}</span>
+                                      <span className="text-gray-500 text-[10px]">Req: {demanded.toFixed(0)}{item.Product?.unit || 'g'}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </td>
                       <td className="p-3">
                         <div className="space-y-1">
                           {d.delivery_remark && (
-                            <p className="text-gray-300 text-xs bg-gray-800/40 border border-gray-800/60 p-2 rounded-lg max-w-[180px] italic">
+                            <p className="text-gray-700 text-xs bg-gray-100/40 border border-gray-200/60 p-2 rounded-lg max-w-[180px] italic">
                               "{d.delivery_remark}"
                             </p>
                           )}
                           {d.delivery_photo_url ? (
                             <button
                               onClick={() => setSelectedPhoto(d.delivery_photo_url)}
-                              className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-750 hover:border-fresh-500 transition-all bg-gray-950"
+                              className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-750 hover:border-fresh-500 transition-all bg-gray-50"
                             >
                               <img
                                 src={`http://localhost:3000${d.delivery_photo_url}`}
                                 alt="Delivery confirmation"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-all"
                               />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-medium transition-all">
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-gray-900 font-medium transition-all">
                                 Zoom 🔍
                               </div>
                             </button>

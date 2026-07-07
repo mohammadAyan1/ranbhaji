@@ -222,7 +222,7 @@ export default function RetailStore() {
 
   const filteredProducts = products.filter(p => filterCategory === "all" || p.category === filterCategory);
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading shop products...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading shop products...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in relative">
@@ -233,7 +233,7 @@ export default function RetailStore() {
 
       {/* 8 PM Cutoff Banner */}
       <div className={`rounded-2xl p-4 border flex items-center justify-between gap-4 ${deliveryTomorrow
-        ? "bg-fresh-950/20 border-fresh-800/40 text-fresh-400"
+        ? "bg-fresh-950/20 border-fresh-800/40 text-fresh-600"
         : "bg-orange-950/20 border-orange-850/40 text-orange-400"
         }`}>
         <div>
@@ -242,15 +242,15 @@ export default function RetailStore() {
               ? "⚡ Ordered before 8:00 PM: Delivery Tomorrow!"
               : "⏳ Ordered after 8:00 PM: Delivery day after tomorrow!"}
           </p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Expected Delivery: <strong className="text-white">{getExpectedDeliveryDate()}</strong>
+          <p className="text-xs text-gray-600 mt-0.5">
+            Expected Delivery: <strong className="text-gray-900">{getExpectedDeliveryDate()}</strong>
           </p>
         </div>
         <span className="text-2xl">{deliveryTomorrow ? "🚚" : "🌙"}</span>
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
@@ -260,12 +260,12 @@ export default function RetailStore() {
         {/* Products Grid */}
         <div className="lg:col-span-2 space-y-6">
           {/* Category Tabs */}
-          <div className="flex flex-wrap gap-1.5 bg-gray-800/60 p-1.5 rounded-xl border border-gray-700 w-fit">
+          <div className="flex flex-wrap gap-1.5 bg-gray-100/60 p-1.5 rounded-xl border border-gray-300 w-fit">
             {["all", "vegetable", "fruit", "water", "exotic", "salad"].map(c => (
               <button
                 key={c}
                 onClick={() => setFilterCategory(c)}
-                className={`px-4 py-2 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"
+                className={`px-4 py-2 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"
                   }`}
               >
                 {c === "all" ? "All Shop" : c}
@@ -280,34 +280,51 @@ export default function RetailStore() {
 
               return (
                 <div key={p.id} className="card hover:border-fresh-700/40 hover:scale-[1.01] transition-all flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between">
-                      <h3 className="font-bold text-white text-lg">{p.name}</h3>
-                      <span className="badge badge-blue text-[10px] capitalize">{p.category}</span>
+                  <div className="flex gap-4">
+                    {p.image_url ? (
+                      <div className="w-20 h-20 shrink-0">
+                        <img 
+                          src={`${import.meta.env.VITE_API_URL}${p.image_url}`} 
+                          alt={p.name} 
+                          className="w-full h-full object-cover rounded-xl border border-gray-300 bg-gray-100"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 shrink-0 rounded-xl bg-gray-100 border border-gray-300 flex items-center justify-center text-gray-500 text-xs">
+                        No Img
+                      </div>
+                    )}
+                    <div className="space-y-1 w-full">
+                      <div className="flex items-start justify-between">
+                        <h3 className="font-bold text-gray-900 text-lg">
+                          {p.name} {p.hindi_name ? <span className="text-gray-600 font-normal text-sm block">({p.hindi_name})</span> : ""}
+                        </h3>
+                        <span className="badge badge-blue text-[10px] capitalize shrink-0 ml-2">{p.category}</span>
+                      </div>
+                      <p className="text-gray-600 text-xs capitalize">{p.sub_category || "Fresh Produce"}</p>
+                      <p className="text-xl font-extrabold text-gradient pt-1">{formatProductPrice(p)}</p>
                     </div>
-                    <p className="text-gray-400 text-xs capitalize">{p.sub_category || "Fresh Produce"}</p>
-                    <p className="text-xl font-extrabold text-gradient pt-1">{formatProductPrice(p)}</p>
                   </div>
 
                   <div className="pt-4 mt-4 border-t border-gray-850 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-fresh-400 bg-fresh-950/20 border border-fresh-800/30 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-fresh-600 bg-fresh-950/20 border border-fresh-800/30 px-2 py-0.5 rounded-full">
                       In Stock
                     </span>
 
                     {cartItem ? (
-                      <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg p-0.5">
+                      <div className="flex items-center gap-2 bg-gray-100 border border-gray-300 rounded-lg p-0.5">
                         <button
                           onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity - (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
-                          className="w-7 h-7 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-all"
+                          className="w-7 h-7 flex items-center justify-center font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-700 rounded-md transition-all"
                         >
                           -
                         </button>
-                        <span className="text-white text-xs font-semibold px-1 min-w-[36px] text-center">
+                        <span className="text-gray-900 text-xs font-semibold px-1 min-w-[36px] text-center">
                           {cartItem.quantity} {p.unit === 'piece' ? 'pcs' : 'kg'}
                         </span>
                         <button
                           onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity + (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
-                          className="w-7 h-7 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-gray-700 rounded-md transition-all"
+                          className="w-7 h-7 flex items-center justify-center font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-700 rounded-md transition-all"
                         >
                           +
                         </button>
@@ -335,10 +352,10 @@ export default function RetailStore() {
         <div className="lg:col-span-1 space-y-6">
           <div className="card sticky top-6 space-y-6">
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 Shopping Cart 🛍️
                 {cartItems.length > 0 && (
-                  <span className="bg-fresh-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  <span className="bg-fresh-600 text-gray-900 text-[10px] font-bold px-2 py-0.5 rounded-full">
                     {cartItems.length}
                   </span>
                 )}
@@ -356,17 +373,17 @@ export default function RetailStore() {
                   return (
                     <div key={item.product.id} className="flex items-center justify-between gap-4 py-2 border-b border-gray-850 last:border-b-0 text-sm">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-white truncate">{item.product.name}</p>
+                        <p className="font-semibold text-gray-900 truncate">{item.product.name}</p>
                         <p className="text-gray-500 text-xs">
                           {item.quantity} {item.product.unit === 'piece' ? 'pcs' : 'kg'} @ ₹{rate.toFixed(2)}
                         </p>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className="text-white font-bold">₹{cost.toFixed(2)}</span>
+                        <span className="text-gray-900 font-bold">₹{cost.toFixed(2)}</span>
                         <button
                           onClick={() => removeFromCart(item.product.id)}
-                          className="text-gray-500 hover:text-red-400 text-base"
+                          className="text-gray-500 hover:text-red-600 text-base"
                         >
                           &times;
                         </button>
@@ -382,9 +399,9 @@ export default function RetailStore() {
             )}
 
             {/* Delivery Location Section */}
-            <div className="border-t border-gray-800 pt-4 space-y-2">
+            <div className="border-t border-gray-200 pt-4 space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-gray-400 text-xs uppercase tracking-wider font-bold">📍 Delivery Location</label>
+                <label className="text-gray-600 text-xs uppercase tracking-wider font-bold">📍 Delivery Location</label>
               </div>
 
               {addresses.length === 0 ? (
@@ -398,7 +415,7 @@ export default function RetailStore() {
                   </button>
                 </div>
               ) : (
-                <div className="bg-gray-900/30 rounded-xl p-3 border border-gray-800 text-xs text-gray-300">
+                <div className="bg-white/30 rounded-xl p-3 border border-gray-200 text-xs text-gray-700">
                   {(() => {
                     const addr = addresses.find(a => a.id === parseInt(selectedAddressId));
                     return addr ? `${addr.address_line}, ${addr.city} - ${addr.pincode}` : "No address selected";
@@ -409,17 +426,17 @@ export default function RetailStore() {
 
             {/* Price Calculations */}
             {cartItems.length > 0 && (
-              <div className="border-t border-gray-800 pt-4 space-y-2 text-xs">
-                <div className="flex justify-between text-gray-400">
+              <div className="border-t border-gray-200 pt-4 space-y-2 text-xs">
+                <div className="flex justify-between text-gray-600">
                   <span>Subtotal:</span>
                   <span>₹{subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-gray-600">
                   <span>Delivery Charges:</span>
                   <span>₹{deliveryCharge.toFixed(2)}</span>
                 </div>
                 <div className="border-t border-gray-850/80 my-1"></div>
-                <div className="flex justify-between text-sm font-bold text-white">
+                <div className="flex justify-between text-sm font-bold text-gray-900">
                   <span>Grand Total:</span>
                   <span className="text-gradient">₹{grandTotal.toFixed(2)}</span>
                 </div>
@@ -431,13 +448,13 @@ export default function RetailStore() {
               <div className="space-y-4">
                 {/* Payment Selection */}
                 <div className="space-y-2">
-                  <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Payment Mode</p>
+                  <p className="text-gray-600 text-xs font-bold uppercase tracking-wider">Payment Mode</p>
                   <div className="grid grid-cols-1 gap-2">
                     <button
                       onClick={() => setPaymentMethod("wallet")}
                       className={`py-2 rounded-xl border text-xs font-semibold transition-all ${paymentMethod === "wallet"
                         ? "border-purple-600 bg-purple-950/20 text-purple-400"
-                        : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
+                        : "border-gray-200 bg-white/50 text-gray-600 hover:text-gray-900"
                         }`}
                     >
                       💳 Pay via Package Wallet
@@ -446,8 +463,8 @@ export default function RetailStore() {
                       <button
                         onClick={() => setPaymentMethod("cod")}
                         className={`py-2 rounded-xl border text-xs font-semibold transition-all ${paymentMethod === "cod"
-                          ? "border-fresh-600 bg-fresh-950/20 text-fresh-400"
-                          : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
+                          ? "border-fresh-600 bg-fresh-950/20 text-fresh-600"
+                          : "border-gray-200 bg-white/50 text-gray-600 hover:text-gray-900"
                           }`}
                       >
                         💵 Cash on Delivery
@@ -456,7 +473,7 @@ export default function RetailStore() {
                         onClick={() => setPaymentMethod("phonepe")}
                         className={`py-2 rounded-xl border text-xs font-semibold transition-all ${paymentMethod === "phonepe"
                           ? "border-blue-600 bg-blue-950/20 text-blue-400"
-                          : "border-gray-800 bg-gray-900/50 text-gray-400 hover:text-white"
+                          : "border-gray-200 bg-white/50 text-gray-600 hover:text-gray-900"
                           }`}
                       >
                         🌐 Pay Online
@@ -481,18 +498,18 @@ export default function RetailStore() {
       {/* Address Choice Modal */}
       {showAddressChoiceModal && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
+          <div className="bg-[#0f172a] border border-gray-200 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
             <button
               onClick={() => setShowAddressChoiceModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none"
+              className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl leading-none"
             >
               &times;
             </button>
-            <h2 className="text-xl font-bold text-white mb-4">📍 Where to deliver?</h2>
-            <p className="text-gray-400 text-sm mb-6">Aap apne retail order ki delivery kahan receive karna chahte hain?</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">📍 Where to deliver?</h2>
+            <p className="text-gray-600 text-sm mb-6">Aap apne retail order ki delivery kahan receive karna chahte hain?</p>
 
             <div className="space-y-4">
-              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
@@ -501,7 +518,7 @@ export default function RetailStore() {
                     onChange={() => setAddressChoiceMode('existing')}
                     className="w-4 h-4 accent-fresh-500"
                   />
-                  <span className="text-white font-medium">Use my existing address</span>
+                  <span className="text-gray-900 font-medium">Use my existing address</span>
                 </div>
                 {addressChoiceMode === 'existing' && (
                   <div className="mt-3 ml-7">
@@ -524,7 +541,7 @@ export default function RetailStore() {
                 )}
               </label>
 
-              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
@@ -533,7 +550,7 @@ export default function RetailStore() {
                     onChange={() => setAddressChoiceMode('new')}
                     className="w-4 h-4 accent-fresh-500"
                   />
-                  <span className="text-white font-medium">Deliver to a new address</span>
+                  <span className="text-gray-900 font-medium">Deliver to a new address</span>
                 </div>
               </label>
             </div>
@@ -564,12 +581,12 @@ export default function RetailStore() {
       {/* Inline Address Creation Modal */}
       {showAddressModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-lg">Add Delivery Address</h3>
+              <h3 className="font-bold text-gray-900 text-lg">Add Delivery Address</h3>
               <button
                 onClick={() => setShowAddressModal(false)}
-                className="text-gray-400 hover:text-white text-2xl leading-none"
+                className="text-gray-600 hover:text-gray-900 text-2xl leading-none"
               >
                 &times;
               </button>
@@ -632,7 +649,7 @@ export default function RetailStore() {
                   checked={addressForm.is_default}
                   onChange={e => setAddressForm({ ...addressForm, is_default: e.target.checked })}
                 />
-                <label htmlFor="modal-default-chk" className="text-xs text-gray-300 cursor-pointer">Set as default delivery address</label>
+                <label htmlFor="modal-default-chk" className="text-xs text-gray-700 cursor-pointer">Set as default delivery address</label>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-850">

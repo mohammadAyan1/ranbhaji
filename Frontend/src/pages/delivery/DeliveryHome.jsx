@@ -92,7 +92,7 @@ export default function DeliveryHome() {
     );
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading deliveries...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading deliveries...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -101,16 +101,16 @@ export default function DeliveryHome() {
           <h1 className="page-header">Delivery Dashboard 🚚</h1>
           <p className="page-sub">{new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}</p>
         </div>
-        <div className="flex bg-gray-900 rounded-lg p-1 border border-gray-800 self-start">
+        <div className="flex bg-white rounded-lg p-1 border border-gray-200 self-start">
           <button
             onClick={() => setActiveTab("mine")}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "mine" ? "bg-gray-800 text-white shadow" : "text-gray-400 hover:text-gray-200"}`}
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "mine" ? "bg-gray-100 text-gray-900 shadow" : "text-gray-600 hover:text-gray-800"}`}
           >
             My Deliveries
           </button>
           <button
             onClick={() => setActiveTab("available")}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "available" ? "bg-gray-800 text-white shadow" : "text-gray-400 hover:text-gray-200"}`}
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "available" ? "bg-gray-100 text-gray-900 shadow" : "text-gray-600 hover:text-gray-800"}`}
           >
             Available Orders
           </button>
@@ -118,7 +118,7 @@ export default function DeliveryHome() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
@@ -127,7 +127,7 @@ export default function DeliveryHome() {
         deliveries.length === 0 ? (
           <div className="card text-center py-16 text-gray-500">
             <p className="text-5xl mb-4">🎉</p>
-            <p className="text-lg font-medium text-white">All done!</p>
+            <p className="text-lg font-medium text-gray-900">All done!</p>
             <p>No deliveries scheduled for today.</p>
           </div>
         ) : (
@@ -136,14 +136,14 @@ export default function DeliveryHome() {
               <div key={delivery.user.id} className="card">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h3 className="font-bold text-white text-lg">{delivery.user.name}</h3>
-                    <p className="text-gray-400 text-sm">📞 {delivery.user.phone}</p>
-                    <p className="text-gray-400 text-sm mt-1">📍 {delivery.user.address}</p>
+                    <h3 className="font-bold text-gray-900 text-lg">{delivery.user.name}</h3>
+                    <p className="text-gray-600 text-sm">📞 {delivery.user.phone}</p>
+                    <p className="text-gray-600 text-sm mt-1">📍 {delivery.user.address}</p>
                     {delivery.user.address_id && (
                       <button
                         onClick={() => handleTagLocation(delivery.user.address_id)}
                         disabled={taggingLocation}
-                        className="mt-2 text-[11px] font-semibold bg-gray-800 text-fresh-400 border border-fresh-900/50 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                        className="mt-2 text-[11px] font-semibold bg-gray-100 text-fresh-600 border border-fresh-900/50 px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
                       >
                         {taggingLocation ? "Fetching..." : "📍 Tag Live Location"}
                       </button>
@@ -153,24 +153,24 @@ export default function DeliveryHome() {
                 </div>
 
                 {delivery.schedules.map(sched => (
-                  <div key={sched.schedule_id} className="bg-gray-800/50 rounded-xl p-4 mb-3 border border-gray-700/50">
+                  <div key={sched.schedule_id} className="bg-white rounded-xl p-4 mb-3 border border-gray-300/50">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="font-medium text-white">{sched.package}</p>
+                      <p className="font-medium text-gray-900">{sched.package}</p>
                       <span className="text-gray-500 text-xs">#{sched.schedule_id}</span>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-3">
                       {sched.items.map((item, idx) => (
-                        <span key={idx} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700">
-                          {item.product}: {item.qty_gm}{item.unit}
+                        <span key={idx} className="bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-lg border border-gray-300">
+                          {item.product} {item.hindi_name ? `(${item.hindi_name})` : ""}: {item.qty_gm}{item.unit}
                         </span>
                       ))}
                     </div>
 
                     {selected === sched.schedule_id ? (
-                      <div className="space-y-3 pt-3 border-t border-gray-700">
+                      <div className="space-y-3 pt-3 border-t border-gray-300">
                         <div>
                           <label className="label text-xs">Upload Photo</label>
-                          <input type="file" accept="image/*" onChange={e => setPhoto(e.target.files[0])} className="block text-xs text-gray-400 file:btn-secondary file:text-xs file:mr-3 file:border-0" />
+                          <input type="file" accept="image/*" onChange={e => setPhoto(e.target.files[0])} className="block text-xs text-gray-600 file:btn-secondary file:text-xs file:mr-3 file:border-0" />
                         </div>
                         <div>
                           <label className="label text-xs">Remark</label>
@@ -197,11 +197,11 @@ export default function DeliveryHome() {
       ) : (
         /* AVAILABLE ORDERS TAB */
         loadingAvailable ? (
-          <div className="flex items-center justify-center h-32 text-gray-400">Loading available orders...</div>
+          <div className="flex items-center justify-center h-32 text-gray-600">Loading available orders...</div>
         ) : (availableOrders.schedules.length === 0 && availableOrders.retailOrders.length === 0) ? (
           <div className="card text-center py-16 text-gray-500">
             <p className="text-4xl mb-3">📭</p>
-            <p className="text-lg font-medium text-white">No pending orders to claim.</p>
+            <p className="text-lg font-medium text-gray-900">No pending orders to claim.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -212,8 +212,8 @@ export default function DeliveryHome() {
                     <span className="badge-blue badge">Package</span>
                     <span className="text-xs text-gray-500">Batch: {sched.Batch?.name || 'Unassigned'}</span>
                   </div>
-                  <h3 className="font-bold text-white text-lg">{sched.Subscription?.User?.name}</h3>
-                  <p className="text-gray-400 text-sm">📍 {sched.Subscription?.Address?.address_line || 'No address'}</p>
+                  <h3 className="font-bold text-gray-900 text-lg">{sched.Subscription?.User?.name}</h3>
+                  <p className="text-gray-600 text-sm">📍 {sched.Subscription?.Address?.address_line || 'No address'}</p>
                 </div>
                 <button
                   onClick={async () => {
@@ -253,8 +253,8 @@ export default function DeliveryHome() {
                     <span className="badge-purple badge">Retail</span>
                     <span className="text-xs text-gray-500">Batch: {ro.Batch?.name || 'Unassigned'}</span>
                   </div>
-                  <h3 className="font-bold text-white text-lg">{ro.User?.name}</h3>
-                  <p className="text-gray-400 text-sm">📍 {ro.Address?.address_line || 'No address'}</p>
+                  <h3 className="font-bold text-gray-900 text-lg">{ro.User?.name}</h3>
+                  <p className="text-gray-600 text-sm">📍 {ro.Address?.address_line || 'No address'}</p>
                 </div>
                 <button
                   onClick={async () => {
@@ -292,43 +292,43 @@ export default function DeliveryHome() {
 
       {/* ─── ACCEPTED ORDER MODAL ─────────────────────────────────── */}
       {acceptedDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-5 border-b border-gray-800 bg-gray-800/30 flex justify-between items-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/10 backdrop-blur-sm animate-fade-in p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-gray-200 bg-gray-100/30 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <span className="text-xl">✅</span> Order Accepted!
                 </h3>
-                <p className="text-xs text-gray-400 mt-1">
-                  You are now assigned to deliver to <span className="font-semibold text-white">{acceptedDetails.userName}</span>
+                <p className="text-xs text-gray-600 mt-1">
+                  You are now assigned to deliver to <span className="font-semibold text-gray-900">{acceptedDetails.userName}</span>
                 </p>
               </div>
-              <button onClick={() => { setAcceptedDetails(null); setActiveTab("mine"); }} className="text-gray-400 hover:text-white transition-colors">
+              <button onClick={() => { setAcceptedDetails(null); setActiveTab("mine"); }} className="text-gray-600 hover:text-gray-900 transition-colors">
                 ✕
               </button>
             </div>
 
             <div className="p-5 overflow-y-auto">
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Items to Deliver</h4>
+              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Items to Deliver</h4>
               {acceptedDetails.items && acceptedDetails.items.length > 0 ? (
                 <div className="space-y-2">
                   {acceptedDetails.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-gray-800/50 p-3 rounded-xl border border-gray-700/50">
-                      <span className="font-medium text-white text-sm">{item.product}</span>
-                      <span className="bg-gray-900 text-fresh-400 text-xs font-bold px-2.5 py-1 rounded-lg border border-gray-700">
+                    <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-300/50">
+                      <span className="font-medium text-gray-900 text-sm">{item.product}</span>
+                      <span className="bg-white text-fresh-600 text-xs font-bold px-2.5 py-1 rounded-lg border border-gray-300">
                         {item.qty}{item.unit}
                       </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 bg-gray-800/30 p-4 rounded-xl text-center border border-gray-800/50">
+                <p className="text-sm text-gray-500 bg-gray-100/30 p-4 rounded-xl text-center border border-gray-200/50">
                   No explicit items found or items are auto-generated.
                 </p>
               )}
             </div>
 
-            <div className="p-5 border-t border-gray-800 bg-gray-800/30">
+            <div className="p-5 border-t border-gray-200 bg-gray-100/30">
               <button
                 onClick={() => { setAcceptedDetails(null); setActiveTab("mine"); }}
                 className="btn-primary w-full py-2.5 font-bold"

@@ -13,7 +13,7 @@ const adminLinks = [
   { to: "/admin/subscriptions", label: "Subscriptions", icon: <RefreshCw size={20} /> },
   { to: "/admin/users", label: "Users", icon: <Users size={20} /> },
   { to: "/admin/user-addresses", label: "User Addresses", icon: <MapPin size={20} /> },
-  { to: "/admin/deliveries", label: "Delivery Logs", icon: <Truck size={20} /> },
+  { to: "/admin/deliveries", label: "Delivered Orders", icon: <Truck size={20} /> },
   { to: "/admin/demands", label: "Stock Demands", icon: <BarChart3 size={20} /> },
   { to: "/admin/seasonal-selections", label: "Seasonal Picks", icon: <Leaf size={20} /> },
   { to: "/admin/returns", label: "Returns", icon: <Undo2 size={20} /> },
@@ -30,7 +30,7 @@ const userLinks = [
   { to: "/my-subscriptions", label: "My Subscriptions", icon: <RefreshCw size={20} /> },
   { to: "/wallet", label: "Wallet", icon: <Wallet size={20} /> },
   { to: "/deliveries", label: "Delivery History", icon: <Package size={20} /> },
-  { to: "/water", label: "Water Subscription", icon: <Droplet size={20} className="text-aqua-400" /> },
+  { to: "/water", label: "Water Subscription", icon: <Droplet size={20} className="text-aqua-600" /> },
   { to: "/addresses", label: "My Addresses", icon: <MapPin size={20} /> },
   { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
   { to: "/retail-store", label: "Retail Store", icon: <ShoppingCart size={20} /> },
@@ -52,20 +52,20 @@ export default function Sidebar({ onClose }) {
   const handleLogout = () => { logout(); navigate("/login"); };
 
   return (
-    <aside className="h-screen w-64 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800/60 flex flex-col shadow-2xl z-50">
+    <aside className="h-screen w-64 bg-white/95 backdrop-blur-xl border-r border-gray-200/60 flex flex-col shadow-2xl z-50">
       {/* Header */}
-      <div className="p-6 border-b border-gray-800/60 flex items-center justify-between">
+      <div className="p-6 border-b border-gray-200/60 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-fresh-400 to-fresh-600 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-fresh-500/30">
             🥦
           </div>
           <div>
-            <h1 className="font-bold text-white text-lg leading-none tracking-tight">FreshBox</h1>
-            <p className="text-xs text-fresh-400 font-medium capitalize tracking-wide">{user?.role} Panel</p>
+            <h1 className="font-bold text-gray-900 text-lg leading-none tracking-tight">FreshBox</h1>
+            <p className="text-xs text-fresh-600 font-medium capitalize tracking-wide">{user?.role} Panel</p>
           </div>
         </div>
         {onClose && (
-          <button onClick={onClose} className="lg:hidden text-gray-400 hover:text-white transition-colors p-1 bg-gray-800 rounded-md">
+          <button onClick={onClose} className="lg:hidden text-gray-600 hover:text-gray-900 transition-colors p-1 bg-gray-100 rounded-md">
             <X size={20} />
           </button>
         )}
@@ -83,7 +83,7 @@ export default function Sidebar({ onClose }) {
               end={link.to === "/admin" || link.to === "/dashboard" || link.to === "/delivery"}
               className={({ isActive }) => `nav-link group relative overflow-hidden ${isActive ? (isAqua ? "nav-link-aqua active" : "active") : ""}`}
             >
-              <div className={`transition-transform duration-300 group-hover:scale-110 ${link.to === "/water" ? "text-aqua-400" : ""}`}>
+              <div className={`transition-transform duration-300 group-hover:scale-110 ${link.to === "/water" ? "text-aqua-600" : ""}`}>
                 {link.icon}
               </div>
               <span className="z-10">{link.label}</span>
@@ -95,17 +95,17 @@ export default function Sidebar({ onClose }) {
       </nav>
 
       {/* User info + logout */}
-      <div className="p-4 border-t border-gray-800/60 bg-gray-950/50">
+      <div className="p-4 border-t border-gray-200/60 bg-gray-50/50">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 bg-gradient-to-br from-gray-700 to-gray-800 border border-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md">
+          <div className="w-9 h-9 bg-gradient-to-br from-fresh-100 to-fresh-200 border border-fresh-300 rounded-full flex items-center justify-center text-fresh-700 font-bold text-sm shadow-sm">
             {user?.name?.[0]?.toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate tracking-wide">{user?.name}</p>
-            <p className="text-xs text-gray-400 truncate">{user?.phone}</p>
+            <p className="text-sm font-semibold text-gray-900 truncate tracking-wide">{user?.name}</p>
+            <p className="text-xs text-gray-600 truncate">{user?.phone}</p>
           </div>
         </div>
-        <button onClick={handleLogout} className="w-full btn-secondary text-sm py-2.5 flex items-center justify-center gap-2 group border-red-900/30 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400">
+        <button onClick={handleLogout} className="w-full btn-secondary text-sm py-2.5 flex items-center justify-center gap-2 group border-red-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600">
           <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" /> 
           <span className="font-semibold tracking-wide">Logout</span>
         </button>

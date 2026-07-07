@@ -354,7 +354,7 @@ export default function MySubscriptions() {
     return <span className={`${map[s] || "badge-gray"} badge`}>{s}</span>;
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading subscriptions...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading subscriptions...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -367,51 +367,51 @@ export default function MySubscriptions() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
 
       {/* Seasonal Edit Modal */}
       {editingSub && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slide-up space-y-4">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-slide-up space-y-4">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-bold text-white text-lg">Customize Plan Items</h3>
-              <button onClick={() => setEditingSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              <h3 className="font-bold text-gray-900 text-lg">Customize Plan Items</h3>
+              <button onClick={() => setEditingSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
-            <p className="text-gray-400 text-xs">
+            <p className="text-gray-600 text-xs">
               Modify the quantities of fixed products or adjust your seasonal item selections within your budget.
             </p>
 
             {/* Live Budget Tracking Box */}
             {isOverBudget && (
               <div className="p-4 border rounded-xl text-sm border-red-500/50 bg-red-950/20 text-red-200">
-                <p className="text-xs text-red-400 font-medium mt-1">
+                <p className="text-xs text-red-600 font-medium mt-1">
                   ⚠️ Limit exceeded. Allowed budget is ₹{Math.min(perServiceAmount, walletBalance).toFixed(2)}. Please reduce product quantities.
                 </p>
               </div>
             )}
 
             {seasonalMsg && (
-              <div className={`rounded-xl px-4 py-3 text-sm ${seasonalMsg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+              <div className={`rounded-xl px-4 py-3 text-sm ${seasonalMsg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
                 {seasonalMsg}
               </div>
             )}
 
             {/* 1. Customize Fixed Items */}
             <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">1. Fixed Items</h4>
+              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">1. Fixed Items</h4>
               <div className="space-y-2">
                 {fixedItems.map(fi => {
                   const qty = fi.qty_gm;
                   const itemCost = parseFloat(qty || 0) * parseFloat(fi.Product?.purchase_price_per_gm || 0);
 
                   return (
-                    <div key={fi.product_id} className="rounded-xl p-3 border border-gray-800 bg-gray-850/20">
+                    <div key={fi.product_id} className="rounded-xl p-3 border border-gray-200 bg-gray-850/20">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="font-medium text-white text-sm">{fi.Product?.name}</p>
+                          <p className="font-medium text-gray-900 text-sm">{fi.Product?.name}</p>
                           <p className="text-[10px] text-gray-500 capitalize">
                             Fixed Item
                           </p>
@@ -435,7 +435,7 @@ export default function MySubscriptions() {
                               <button
                                 type="button"
                                 onClick={() => updateFixedQty(fi.product_id, parseFloat(qty || 0) + maxAddable)}
-                                className="text-[10px] text-fresh-400 hover:text-fresh-300 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
+                                className="text-[10px] text-fresh-600 hover:text-fresh-700 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
                               >
                                 💡 {maxAddable}g add kar sakte ho
                               </button>
@@ -452,8 +452,8 @@ export default function MySubscriptions() {
             {/* 2. Pick Seasonal Items */}
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">2. Seasonal Items</h4>
-                <span className="text-gray-400 text-xs">Selected: {selectedCount} / {maxSelectCount}</span>
+                <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">2. Seasonal Items</h4>
+                <span className="text-gray-600 text-xs">Selected: {selectedCount} / {maxSelectCount}</span>
               </div>
               <div className="space-y-2">
                 {seasonalPool.map(sp => {
@@ -463,7 +463,7 @@ export default function MySubscriptions() {
                   const itemCost = isSelected ? parseFloat(qty || 0) * parseFloat(sp.Product?.purchase_price_per_gm || 0) : 0;
 
                   return (
-                    <div key={sp.id} className={`rounded-xl p-3 border transition-all ${isSelected ? "border-fresh-600/50 bg-fresh-900/20" : "border-gray-700 bg-gray-800/30"}`}>
+                    <div key={sp.id} className={`rounded-xl p-3 border transition-all ${isSelected ? "border-fresh-600/50 bg-fresh-100/20" : "border-gray-300 bg-gray-100/30"}`}>
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
@@ -481,7 +481,7 @@ export default function MySubscriptions() {
                           className="w-4 h-4 accent-green-500"
                         />
                         <label htmlFor={`edit-chk-${pid}`} className="flex-1 cursor-pointer">
-                          <p className="font-medium text-white text-sm">{sp.Product?.name}</p>
+                          <p className="font-medium text-gray-900 text-sm">{sp.Product?.name}</p>
                           <p className="text-xs text-gray-500 capitalize">
                             {sp.Product?.category}
                           </p>
@@ -504,7 +504,7 @@ export default function MySubscriptions() {
                                 <button
                                   type="button"
                                   onClick={() => setSelectedItems({ ...selectedItems, [pid]: parseFloat(qty || 0) + maxAddable })}
-                                  className="text-[10px] text-fresh-400 hover:text-fresh-300 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
+                                  className="text-[10px] text-fresh-600 hover:text-fresh-700 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
                                 >
                                   💡 {maxAddable}g add kar sakte ho
                                 </button>
@@ -532,15 +532,15 @@ export default function MySubscriptions() {
 
       {/* Pause Configuration Modal */}
       {pausingSub && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-lg font-gradient">Pause Subscription ⏸</h3>
-              <button onClick={() => setPausingSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              <h3 className="font-bold text-gray-900 text-lg font-gradient">Pause Subscription ⏸</h3>
+              <button onClick={() => setPausingSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
 
             {pausingMsg && (
-              <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+              <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-600 border border-red-700/50">
                 {pausingMsg}
               </div>
             )}
@@ -552,7 +552,7 @@ export default function MySubscriptions() {
                   <button
                     type="button"
                     onClick={() => { setPauseType("monthly"); setDaysToPause(5); }}
-                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "monthly" ? "border-fresh-500 bg-fresh-900/40 text-fresh-400" : "border-gray-800 text-gray-400 hover:border-gray-700"}`}
+                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "monthly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     📅 Monthly Pause
                     <span className="block text-[10px] text-gray-500 font-normal mt-0.5">Max 15 days total</span>
@@ -560,7 +560,7 @@ export default function MySubscriptions() {
                   <button
                     type="button"
                     onClick={() => { setPauseType("yearly"); setDaysToPause(10); }}
-                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "yearly" ? "border-fresh-500 bg-fresh-900/40 text-fresh-400" : "border-gray-800 text-gray-400 hover:border-gray-700"}`}
+                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "yearly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     🏆 Yearly Pause
                     <span className="block text-[10px] text-gray-500 font-normal mt-0.5">Max 45 days (once a year)</span>
@@ -599,7 +599,7 @@ export default function MySubscriptions() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t border-gray-800">
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
               <button
                 onClick={handleConfirmPause}
                 disabled={pausingLoader || !daysToPause}
@@ -617,18 +617,18 @@ export default function MySubscriptions() {
 
       {/* Resume Date Modal */}
       {resumingSub && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white text-lg font-gradient">Resume Delivery 📅</h3>
-              <button onClick={() => setResumingSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              <h3 className="font-bold text-gray-900 text-lg font-gradient">Resume Delivery 📅</h3>
+              <button onClick={() => setResumingSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
-            <p className="text-gray-400 text-sm mb-4">
+            <p className="text-gray-600 text-sm mb-4">
               Choose a start date to resume your deliveries. The suggested dates are synchronized with other deliveries of this package type.
             </p>
 
             {resumeMsg && (
-              <div className="rounded-xl px-4 py-3 text-sm mb-4 bg-red-900/30 text-red-400 border border-red-700/50">
+              <div className="rounded-xl px-4 py-3 text-sm mb-4 bg-red-900/30 text-red-600 border border-red-700/50">
                 {resumeMsg}
               </div>
             )}
@@ -645,12 +645,12 @@ export default function MySubscriptions() {
                       type="button"
                       onClick={() => setSelectedResumeDate(date)}
                       className={`p-3 rounded-xl border text-left transition-all duration-200 ${selectedResumeDate === date
-                        ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
-                        : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
+                        ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
+                        : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
                         }`}
                     >
                       <p className="font-semibold text-sm">{dayName}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatted}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">{formatted}</p>
                     </button>
                   );
                 })}
@@ -688,18 +688,18 @@ export default function MySubscriptions() {
 
       {/* Start Date Confirmation Modal */}
       {confirmingStartSub && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
             <div className="flex items-center justify-between mb-2">
-               <h3 className="font-bold text-white text-lg font-gradient">Select Start Date 📅</h3>
-               <button onClick={() => setConfirmingStartSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+               <h3 className="font-bold text-gray-900 text-lg font-gradient">Select Start Date 📅</h3>
+               <button onClick={() => setConfirmingStartSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
-            <p className="text-gray-400 text-xs">
+            <p className="text-gray-600 text-xs">
               Please choose a start date for your package. 
               {new Date().getHours() >= 20 ? " Since it's past 8 PM, the earliest available date is the day after tomorrow." : " Order before 8 PM to start tomorrow."}
             </p>
             {confirmStartMsg && (
-              <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+              <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-600 border border-red-700/50">
                 {confirmStartMsg}
               </div>
             )}
@@ -724,22 +724,22 @@ export default function MySubscriptions() {
 
       {/* Schedule Seasonal Selection Modal */}
       {scheduleSub && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-slide-up space-y-4">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-slide-up space-y-4">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h3 className="font-bold text-white text-lg font-gradient">🥦 Select Seasonal Sabji</h3>
-                <p className="text-gray-400 text-xs mt-0.5">Choose seasonal vegetables for each upcoming delivery service of {scheduleSub.Package?.name}</p>
+                <h3 className="font-bold text-gray-900 text-lg font-gradient">🥦 Select Seasonal Sabji</h3>
+                <p className="text-gray-600 text-xs mt-0.5">Choose seasonal vegetables for each upcoming delivery service of {scheduleSub.Package?.name}</p>
               </div>
-              <button onClick={() => setScheduleSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              <button onClick={() => setScheduleSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
 
             {loadingSchedules ? (
-              <div className="flex items-center justify-center h-48 text-gray-400">Loading delivery dates...</div>
+              <div className="flex items-center justify-center h-48 text-gray-600">Loading delivery dates...</div>
             ) : (
               <div className="space-y-4">
                 {scheduleSelectionMsg && (
-                  <div className={`rounded-xl px-4 py-3 text-sm ${scheduleSelectionMsg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+                  <div className={`rounded-xl px-4 py-3 text-sm ${scheduleSelectionMsg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
                     {scheduleSelectionMsg}
                   </div>
                 )}
@@ -755,10 +755,10 @@ export default function MySubscriptions() {
                       const formattedDate = dateObj.toLocaleDateString("en-IN", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
                       return (
-                        <div key={schedule.id} className="border border-gray-800 rounded-xl p-4 bg-gray-950/20 space-y-3">
+                        <div key={schedule.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50/20 space-y-3">
                           <div className="flex items-start justify-between">
                             <div>
-                              <p className="font-semibold text-white text-sm">{formattedDate}</p>
+                              <p className="font-semibold text-gray-900 text-sm">{formattedDate}</p>
                               <div className="flex flex-wrap gap-2 mt-1">
                                 {schedule.is_window_open ? (
                                   <span className="badge badge-green text-[10px]">⏳ Open for changes</span>
@@ -785,12 +785,12 @@ export default function MySubscriptions() {
 
                           {/* Display selected items when not editing */}
                           {!isEditing && (
-                            <div className="bg-gray-900/50 rounded-xl p-3 border border-gray-800/50">
-                              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1.5">Tomorrow's picks / default preferences:</p>
+                            <div className="bg-white/50 rounded-xl p-3 border border-gray-200/50">
+                              <p className="text-[10px] text-gray-600 font-semibold uppercase tracking-wider mb-1.5">Tomorrow's picks / default preferences:</p>
                               {hasSelections ? (
                                 <div className="flex flex-wrap gap-1.5">
                                   {schedule.selections.map(sel => (
-                                    <span key={sel.id} className="bg-fresh-950/40 border border-fresh-800/50 text-fresh-400 text-xs px-2 py-0.5 rounded-lg">
+                                    <span key={sel.id} className="bg-fresh-950/40 border border-fresh-800/50 text-fresh-600 text-xs px-2 py-0.5 rounded-lg">
                                       {sel.Product?.name} ({parseFloat(sel.qty_gm)}{sel.Product?.unit})
                                     </span>
                                   ))}
@@ -802,7 +802,7 @@ export default function MySubscriptions() {
                           )}
                           {/* Editing Area */}
                           {isEditing && (
-                            <div className="border-t border-gray-800 pt-3 space-y-3 animate-fade-in">
+                            <div className="border-t border-gray-200 pt-3 space-y-3 animate-fade-in">
                               <div className="text-xs text-yellow-400 font-medium">
                                 ⚠️ Selection deadline: 8:00 PM on {new Date(new Date(schedule.scheduled_date).getTime() - 86400000).toLocaleDateString("en-IN", { day: 'numeric', month: 'long' })}
                               </div>
@@ -810,7 +810,7 @@ export default function MySubscriptions() {
                               {/* Budget Status */}
                               {isActiveOverBudget && (
                                 <div className="p-3 border rounded-xl text-xs border-red-500/50 bg-red-950/20 text-red-200">
-                                  <p className="text-xs text-red-400 font-medium mt-1">
+                                  <p className="text-xs text-red-600 font-medium mt-1">
                                     ⚠️ Limit exceeded. Please reduce product quantities.
                                   </p>
                                 </div>
@@ -818,17 +818,17 @@ export default function MySubscriptions() {
 
                               {/* 1. Customize Fixed Items */}
                               <div className="space-y-2">
-                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">1. Fixed Items (Cannot be removed, adjust quantity)</p>
+                                <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">1. Fixed Items (Cannot be removed, adjust quantity)</p>
                                 <div className="space-y-2">
                                   {schedulesFixedItems.map(fi => {
                                     const qty = editingScheduleFixedItems[fi.product_id] || fi.qty_gm;
                                     const itemCost = parseFloat(qty || 0) * parseFloat(fi.Product?.purchase_price_per_gm || 0);
 
                                     return (
-                                      <div key={fi.product_id} className="rounded-xl p-3 border border-gray-800 bg-gray-850/20">
+                                      <div key={fi.product_id} className="rounded-xl p-3 border border-gray-200 bg-gray-850/20">
                                         <div className="flex items-center justify-between gap-3">
                                           <div>
-                                            <p className="font-medium text-white text-sm">{fi.Product?.name}</p>
+                                            <p className="font-medium text-gray-900 text-sm">{fi.Product?.name}</p>
                                             <p className="text-[10px] text-gray-500 capitalize">
                                               Fixed Item
                                             </p>
@@ -841,7 +841,7 @@ export default function MySubscriptions() {
                                                 step="50"
                                                 value={qty}
                                                 onChange={e => updateScheduleFixedQty(fi.product_id, e.target.value)}
-                                                className="input w-20 py-0.5 px-1.5 text-xs text-center border border-gray-700 bg-gray-850"
+                                                className="input w-20 py-0.5 px-1.5 text-xs text-center border border-gray-300 bg-gray-850"
                                                 required
                                               />
                                               <span className="text-gray-500 text-xs">{fi.Product?.unit || "gm"}</span>
@@ -852,7 +852,7 @@ export default function MySubscriptions() {
                                                 <button
                                                   type="button"
                                                   onClick={() => updateScheduleFixedQty(fi.product_id, parseFloat(qty || 0) + maxAddable)}
-                                                  className="text-[9px] text-fresh-400 hover:text-fresh-300 bg-fresh-950/40 border border-fresh-800/30 px-1.5 py-0.5 rounded cursor-pointer transition-all"
+                                                  className="text-[9px] text-fresh-600 hover:text-fresh-700 bg-fresh-950/40 border border-fresh-800/30 px-1.5 py-0.5 rounded cursor-pointer transition-all"
                                                 >
                                                   💡 {maxAddable}g add kar sakte ho
                                                 </button>
@@ -869,8 +869,8 @@ export default function MySubscriptions() {
                               {/* 2. Customize Seasonal Items */}
                               <div className="space-y-2">
                                 <div className="flex justify-between items-center">
-                                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">2. Seasonal Items</p>
-                                  <span className="text-gray-400 text-xs">Chosen: {activeSelectedCount}/{schedulesMaxCount}</span>
+                                  <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">2. Seasonal Items</p>
+                                  <span className="text-gray-600 text-xs">Chosen: {activeSelectedCount}/{schedulesMaxCount}</span>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                   {schedulesPool.map(sp => {
@@ -878,7 +878,7 @@ export default function MySubscriptions() {
                                     const isChecked = parseFloat(qty) > 0;
 
                                     return (
-                                      <div key={sp.product_id} className={`rounded-xl p-2.5 border transition-all ${isChecked ? "border-fresh-700/50 bg-fresh-950/10" : "border-gray-800 bg-gray-900/30"}`}>
+                                      <div key={sp.product_id} className={`rounded-xl p-2.5 border transition-all ${isChecked ? "border-fresh-700/50 bg-fresh-950/10" : "border-gray-200 bg-white/30"}`}>
                                         <div className="flex items-center justify-between gap-2">
                                           <div className="flex items-center gap-2">
                                             <input
@@ -898,10 +898,10 @@ export default function MySubscriptions() {
                                                 }
                                                 setSelectedScheduleItems(newItems);
                                               }}
-                                              className="rounded text-fresh-500 focus:ring-fresh-500 bg-gray-800 border-gray-700 w-4 h-4"
+                                              className="rounded text-fresh-500 focus:ring-fresh-500 bg-gray-100 border-gray-300 w-4 h-4"
                                             />
                                             <div>
-                                              <p className="text-xs font-medium text-white">{sp.Product?.name}</p>
+                                              <p className="text-xs font-medium text-gray-900">{sp.Product?.name}</p>
                                             </div>
                                           </div>
 
@@ -920,9 +920,9 @@ export default function MySubscriptions() {
                                                       [sp.product_id]: val ? parseFloat(val) : 0
                                                     });
                                                   }}
-                                                  className="input w-16 py-0.5 px-1.5 text-xs text-center border border-gray-700 bg-gray-850"
+                                                  className="input w-16 py-0.5 px-1.5 text-xs text-center border border-gray-300 bg-gray-850"
                                                 />
-                                                <span className="text-[10px] text-gray-400">{sp.Product?.unit}</span>
+                                                <span className="text-[10px] text-gray-600">{sp.Product?.unit}</span>
                                               </div>
                                               {(() => {
                                                 const maxAddable = activeRemainingBudget > 0 && sp.Product?.purchase_price_per_gm ? Math.floor(activeRemainingBudget / (parseFloat(sp.Product.purchase_price_per_gm) * 50)) * 50 : 0;
@@ -933,7 +933,7 @@ export default function MySubscriptions() {
                                                       ...selectedScheduleItems,
                                                       [sp.product_id]: parseFloat(qty || 0) + maxAddable
                                                     })}
-                                                    className="text-[9px] text-fresh-400 hover:text-fresh-300 bg-fresh-950/40 border border-fresh-800/30 px-1.5 py-0.5 rounded cursor-pointer transition-all"
+                                                    className="text-[9px] text-fresh-600 hover:text-fresh-700 bg-fresh-950/40 border border-fresh-800/30 px-1.5 py-0.5 rounded cursor-pointer transition-all"
                                                   >
                                                     💡 {maxAddable}g add kar sakte ho
                                                   </button>
@@ -973,7 +973,7 @@ export default function MySubscriptions() {
               </div>
             )}
 
-            <div className="flex justify-end border-t border-gray-800 pt-3">
+            <div className="flex justify-end border-t border-gray-200 pt-3">
               <button onClick={() => setScheduleSub(null)} className="btn-secondary text-sm">Close</button>
             </div>
           </div>
@@ -983,7 +983,7 @@ export default function MySubscriptions() {
       {subs.length === 0 ? (
         <div className="card text-center py-12 text-gray-500">
           <p className="text-5xl mb-4">📦</p>
-          <p className="text-lg font-medium text-white mb-2">No subscriptions yet</p>
+          <p className="text-lg font-medium text-gray-900 mb-2">No subscriptions yet</p>
           <p className="mb-4">Browse our packages and start your fresh delivery journey.</p>
           <Link to="/packages" className="btn-primary inline-block">Browse Packages</Link>
         </div>
@@ -997,11 +997,11 @@ export default function MySubscriptions() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
-                      <h2 className="text-lg font-bold text-white">{sub.Package?.name}</h2>
+                      <h2 className="text-lg font-bold text-gray-900">{sub.Package?.name}</h2>
                       {statusBadge(sub.status)}
                       <span className="badge badge-gray capitalize">{sub.type}</span>
                     </div>
-                    <p className="text-gray-400 text-sm">{sub.Package?.services_per_month} deliveries/month · ₹{sub.Package?.price}/month</p>
+                    <p className="text-gray-600 text-sm">{sub.Package?.services_per_month} deliveries/month · ₹{sub.Package?.price}/month</p>
                     {sub.start_date ? (
                       <p className="text-gray-500 text-xs mt-1">📅 {sub.start_date} → {sub.end_date} · {sub.services_completed}/{sub.total_services} deliveries done</p>
                     ) : (
@@ -1016,20 +1016,20 @@ export default function MySubscriptions() {
                       </div>
                     )}
                   </div>
-                  <button onClick={() => setExpandedId(isExpanded ? null : sub.id)} className="text-gray-400 hover:text-white text-sm px-3 py-1 rounded-lg hover:bg-gray-800 transition-all">
+                  <button onClick={() => setExpandedId(isExpanded ? null : sub.id)} className="text-gray-600 hover:text-gray-900 text-sm px-3 py-1 rounded-lg hover:bg-gray-100 transition-all">
                     {isExpanded ? "▲ Less" : "▼ More"}
                   </button>
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-5 pt-4 border-t border-gray-800 space-y-4 animate-fade-in">
+                  <div className="mt-5 pt-4 border-t border-gray-200 space-y-4 animate-fade-in">
                     {/* Fixed Items */}
                     {sub.Items?.filter(i => i.is_fixed).length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Subscription Fixed Items</p>
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Subscription Fixed Items</p>
                         <div className="flex flex-wrap gap-2">
                           {sub.Items.filter(i => i.is_fixed).map(item => (
-                            <span key={item.id} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700 font-medium">
+                            <span key={item.id} className="bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-lg border border-gray-300 font-medium">
                               {item.Product?.name} ({parseFloat(item.qty_gm)}{item.Product?.unit})
                             </span>
                           ))}
@@ -1040,7 +1040,7 @@ export default function MySubscriptions() {
                     {/* Delivery Schedule & Selections */}
                     {sub.Package?.SeasonalConfig && (
                       <div className="space-y-3">
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Delivery Schedule & Vegetable Selections 🥦</p>
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Delivery Schedule & Vegetable Selections 🥦</p>
                         <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-1">
                           {sub.Schedules && sub.Schedules.length > 0 ? (
                             sub.Schedules.map(sched => {
@@ -1056,16 +1056,16 @@ export default function MySubscriptions() {
                               const hasSeasonalSelections = customSeasonal.length > 0;
 
                               return (
-                                <div key={sched.id} className="bg-gray-900/40 border border-gray-800 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                                <div key={sched.id} className="bg-white/40 border border-gray-200 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
                                   <div>
-                                    <p className="font-semibold text-white">{formattedDate} ({sched.status})</p>
+                                    <p className="font-semibold text-gray-900">{formattedDate} ({sched.status})</p>
 
                                     {/* Seasonal Selections */}
                                     <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
                                       <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider mr-1">Seasonal:</span>
                                       {hasSeasonalSelections ? (
                                         customSeasonal.map(sel => (
-                                          <span key={sel.id} className="bg-fresh-950/40 border border-fresh-850/50 text-fresh-400 text-xs px-2 py-0.5 rounded-lg">
+                                          <span key={sel.id} className="bg-fresh-950/40 border border-fresh-850/50 text-fresh-600 text-xs px-2 py-0.5 rounded-lg">
                                             {sel.Product?.name} ({parseFloat(sel.qty_gm)}{sel.Product?.unit})
                                           </span>
                                         ))
@@ -1079,13 +1079,13 @@ export default function MySubscriptions() {
                                       <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider mr-1">Fixed:</span>
                                       {customFixed.length > 0 ? (
                                         customFixed.map(sel => (
-                                          <span key={sel.id} className="bg-gray-800 border border-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded-lg">
+                                          <span key={sel.id} className="bg-gray-100 border border-gray-300 text-gray-700 text-xs px-2 py-0.5 rounded-lg">
                                             {sel.Product?.name} ({parseFloat(sel.qty_gm)}{sel.Product?.unit})
                                           </span>
                                         ))
                                       ) : (
                                         sub.Items?.filter(i => i.is_fixed).map(item => (
-                                          <span key={item.id} className="bg-gray-800/60 border border-gray-750 text-gray-400 text-xs px-2 py-0.5 rounded-lg">
+                                          <span key={item.id} className="bg-gray-100/60 border border-gray-750 text-gray-600 text-xs px-2 py-0.5 rounded-lg">
                                             {item.Product?.name} ({parseFloat(item.qty_gm)}{item.Product?.unit})
                                           </span>
                                         ))
@@ -1103,7 +1103,7 @@ export default function MySubscriptions() {
                     )}
 
 
-                    <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-800">
+                    <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-200">
                       {sub.status === "active" && (
                         <>
                           {sub.Package?.SeasonalConfig && (

@@ -93,7 +93,7 @@ export default function AdminDemands() {
           <p className="page-sub">Aggregated product requirements for scheduled deliveries</p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Batch:</label>
+          <label className="text-gray-600 text-xs font-semibold uppercase tracking-wider">Batch:</label>
           <select 
             value={selectedBatch} 
             onChange={(e) => setSelectedBatch(e.target.value)}
@@ -104,7 +104,7 @@ export default function AdminDemands() {
               <option key={b} value={b}>{b}</option>
             ))}
           </select>
-          <label className="text-gray-400 text-xs font-semibold uppercase tracking-wider ml-2">Date:</label>
+          <label className="text-gray-600 text-xs font-semibold uppercase tracking-wider ml-2">Date:</label>
           <input
             type="date"
             value={date}
@@ -115,7 +115,7 @@ export default function AdminDemands() {
       </div>
 
       {msg && (
-        <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+        <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-600 border border-red-700/50">
           {msg}
         </div>
       )}
@@ -123,16 +123,16 @@ export default function AdminDemands() {
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card">
-          <p className="text-gray-400 text-xs font-medium">Distinct Products Needed</p>
-          <p className="text-3xl font-extrabold text-white mt-1">{filteredDemands.length}</p>
+          <p className="text-gray-600 text-xs font-medium">Distinct Products Needed</p>
+          <p className="text-3xl font-extrabold text-gray-900 mt-1">{filteredDemands.length}</p>
         </div>
         <div className="card">
-          <p className="text-gray-400 text-xs font-medium">Total Weight Demand</p>
-          <p className="text-3xl font-extrabold text-fresh-400 mt-1">{formatWeight(totalWeightGm)}</p>
+          <p className="text-gray-600 text-xs font-medium">Total Weight Demand</p>
+          <p className="text-3xl font-extrabold text-fresh-600 mt-1">{formatWeight(totalWeightGm)}</p>
         </div>
         <div className="card">
-          <p className="text-gray-400 text-xs font-medium">Report Date</p>
-          <p className="text-lg font-bold text-gray-300 mt-1.5">
+          <p className="text-gray-600 text-xs font-medium">Report Date</p>
+          <p className="text-lg font-bold text-gray-700 mt-1.5">
             {new Date(date).toLocaleDateString("en-IN", {
               weekday: "short",
               day: "numeric",
@@ -146,13 +146,13 @@ export default function AdminDemands() {
       {/* Demands Table */}
       <div className="card">
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-gray-400">
+          <div className="flex items-center justify-center py-16 text-gray-600">
             <span className="animate-pulse">Loading stock aggregates...</span>
           </div>
         ) : filteredDemands.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <p className="text-5xl mb-4">📭</p>
-            <p className="text-lg font-medium text-white">No deliveries scheduled</p>
+            <p className="text-lg font-medium text-gray-900">No deliveries scheduled</p>
             <p className="text-sm">There are no pending delivery schedules on this date for the selected batch.</p>
           </div>
         ) : (
@@ -170,15 +170,15 @@ export default function AdminDemands() {
               <tbody className="divide-y divide-gray-800">
                 {filteredDemands.map((d) => (
                   <React.Fragment key={d.id}>
-                    <tr onClick={() => toggleRow(d.id)} className="hover:bg-gray-800/50 cursor-pointer transition-colors">
-                      <td className="p-3 text-gray-400">
+                    <tr onClick={() => toggleRow(d.id)} className="hover:bg-white cursor-pointer transition-colors">
+                      <td className="p-3 text-gray-600">
                         {expandedId === d.id ? '▼' : '▶'}
                       </td>
                       <td className="p-3">
-                        <span className="bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded border border-gray-700 mr-2">
+                        <span className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded border border-gray-300 mr-2">
                           {getCategoryEmoji(d.category)}
                         </span>
-                        <span className="text-white font-semibold">{d.name}</span>
+                        <span className="text-gray-900 font-semibold">{d.name}</span>
                       </td>
                       <td className="p-3 text-blue-400 font-medium">
                         {formatQuantity(d.total_package_qty, d.unit)}
@@ -186,17 +186,17 @@ export default function AdminDemands() {
                       <td className="p-3 text-purple-400 font-medium">
                         {formatQuantity(d.total_retail_qty, d.unit)}
                       </td>
-                      <td className="p-3 text-right text-lg font-bold text-fresh-400">
+                      <td className="p-3 text-right text-lg font-bold text-fresh-600">
                         {formatQuantity(d.total_package_qty + d.total_retail_qty, d.unit)}
                       </td>
                     </tr>
                     
                     {expandedId === d.id && (
-                      <tr className="bg-gray-900/50">
+                      <tr className="bg-white/50">
                         <td colSpan="5" className="p-4 border-l-2 border-fresh-500">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Package Details */}
-                            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                            <div className="bg-white rounded-lg p-4 border border-gray-300">
                               <h4 className="text-blue-400 font-bold mb-3 flex justify-between">
                                 <span>📦 Package Subscriptions</span>
                                 <span>{formatQuantity(d.total_package_qty, d.unit)}</span>
@@ -204,10 +204,10 @@ export default function AdminDemands() {
                               {d.package_details.length > 0 ? (
                                 <ul className="space-y-3">
                                   {d.package_details.map((detail, idx) => (
-                                    <li key={idx} className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                      <div className="flex justify-between items-center text-gray-300 mb-2">
+                                    <li key={idx} className="bg-gray-100 p-3 rounded-lg border border-gray-300">
+                                      <div className="flex justify-between items-center text-gray-700 mb-2">
                                         <span>
-                                          <span className="font-semibold text-white">{formatQuantity(detail.qty, d.unit)}</span>
+                                          <span className="font-semibold text-gray-900">{formatQuantity(detail.qty, d.unit)}</span>
                                           <span className="text-gray-500 mx-2">x</span>
                                           <span className="bg-gray-700 px-2 py-0.5 rounded text-xs">{detail.count} orders</span>
                                         </span>
@@ -219,7 +219,7 @@ export default function AdminDemands() {
                                       {detail.orders && detail.orders.length > 0 && (
                                         <div className="mt-2 pl-2 border-l-2 border-gray-600 space-y-1">
                                           {detail.orders.map((u, ui) => (
-                                            <div key={ui} className="flex justify-between items-center text-xs text-gray-400">
+                                            <div key={ui} className="flex justify-between items-center text-xs text-gray-600">
                                               <span>👤 {u.userName || 'Unknown User'}</span>
                                               <span>{u.phone || 'N/A'}</span>
                                             </div>
@@ -235,7 +235,7 @@ export default function AdminDemands() {
                             </div>
 
                             {/* Retail Details */}
-                            <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                            <div className="bg-white rounded-lg p-4 border border-gray-300">
                               <h4 className="text-purple-400 font-bold mb-3 flex justify-between">
                                 <span>🛒 Retail Orders</span>
                                 <span>{formatQuantity(d.total_retail_qty, d.unit)}</span>
@@ -243,10 +243,10 @@ export default function AdminDemands() {
                               {d.retail_details.length > 0 ? (
                                 <ul className="space-y-3">
                                   {d.retail_details.map((detail, idx) => (
-                                    <li key={idx} className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                      <div className="flex justify-between items-center text-gray-300 mb-2">
+                                    <li key={idx} className="bg-gray-100 p-3 rounded-lg border border-gray-300">
+                                      <div className="flex justify-between items-center text-gray-700 mb-2">
                                         <span>
-                                          <span className="font-semibold text-white">{formatQuantity(detail.qty, d.unit)}</span>
+                                          <span className="font-semibold text-gray-900">{formatQuantity(detail.qty, d.unit)}</span>
                                           <span className="text-gray-500 mx-2">x</span>
                                           <span className="bg-gray-700 px-2 py-0.5 rounded text-xs">{detail.count} orders</span>
                                         </span>
@@ -258,7 +258,7 @@ export default function AdminDemands() {
                                       {detail.orders && detail.orders.length > 0 && (
                                         <div className="mt-2 pl-2 border-l-2 border-gray-600 space-y-1">
                                           {detail.orders.map((u, ui) => (
-                                            <div key={ui} className="flex justify-between items-center text-xs text-gray-400">
+                                            <div key={ui} className="flex justify-between items-center text-xs text-gray-600">
                                               <span>👤 {u.userName || 'Unknown User'}</span>
                                               <span>{u.phone || 'N/A'}</span>
                                             </div>

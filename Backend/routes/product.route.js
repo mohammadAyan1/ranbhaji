@@ -1,12 +1,13 @@
 import express from "express";
 import { createProduct, getProducts, updateProduct, deleteProduct, createPurchase, getPurchases, getStockSummary } from "../controllers/product.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
+import { upload } from "../middlewares/multer.js";
 
 const router = express.Router();
 
 router.get("/", requireAuth, getProducts);
-router.post("/", requireAuth, requireRole(["admin"]), createProduct);
-router.put("/:id", requireAuth, requireRole(["admin"]), updateProduct);
+router.post("/", requireAuth, requireRole(["admin"]), upload.single("image"), createProduct);
+router.put("/:id", requireAuth, requireRole(["admin"]), upload.single("image"), updateProduct);
 router.delete("/:id", requireAuth, requireRole(["admin"]), deleteProduct);
 
 // Purchase & Stock routes

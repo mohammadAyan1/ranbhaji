@@ -62,18 +62,18 @@ export default function AdminBatches() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Manage Batches</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Manage Batches</h2>
         <button onClick={() => handleOpenModal()} className="btn-primary">
           + New Batch
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400 py-10">Loading...</div>
+        <div className="text-center text-gray-600 py-10">Loading...</div>
       ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full text-left">
-            <thead className="bg-gray-800 text-gray-400">
+            <thead className="bg-gray-100 text-gray-600">
               <tr>
                 <th className="p-4 font-medium">ID</th>
                 <th className="p-4 font-medium">Name</th>
@@ -81,19 +81,19 @@ export default function AdminBatches() {
                 <th className="p-4 font-medium text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800 text-gray-300">
+            <tbody className="divide-y divide-gray-800 text-gray-700">
               {batches.map(batch => (
-                <tr key={batch.id} className="hover:bg-gray-800/50">
+                <tr key={batch.id} className="hover:bg-white">
                   <td className="p-4">#{batch.id}</td>
                   <td className="p-4">{batch.name}</td>
                   <td className="p-4">
-                    <span className={`px-2 py-1 text-xs rounded-lg ${batch.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                    <span className={`px-2 py-1 text-xs rounded-lg ${batch.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-600'}`}>
                       {batch.status}
                     </span>
                   </td>
                   <td className="p-4 text-right flex gap-3 justify-end">
                     <button onClick={() => handleOpenModal(batch)} className="text-blue-400 hover:text-blue-300">Edit</button>
-                    <button onClick={() => handleDelete(batch.id)} className="text-red-400 hover:text-red-300">Delete</button>
+                    <button onClick={() => handleDelete(batch.id)} className="text-red-600 hover:text-red-300">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -108,12 +108,12 @@ export default function AdminBatches() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-white mb-4">{currentBatch ? 'Edit Batch' : 'New Batch'}</h3>
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">{currentBatch ? 'Edit Batch' : 'New Batch'}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Batch Name</label>
+                <label className="block text-sm text-gray-600 mb-1">Batch Name</label>
                 <input
                   type="text"
                   required
@@ -124,7 +124,7 @@ export default function AdminBatches() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Status</label>
+                <label className="block text-sm text-gray-600 mb-1">Status</label>
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}

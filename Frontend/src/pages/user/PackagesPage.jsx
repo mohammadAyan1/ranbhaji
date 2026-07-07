@@ -323,7 +323,7 @@ export default function PackagesPage() {
   const calcYearly = (price) => (price * 12 * 0.75).toFixed(0);
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64 text-gray-400">Loading packages...</div>
+    <div className="flex items-center justify-center h-64 text-gray-600">Loading packages...</div>
   );
 
   // ─── STEP: CONFIRM DATE ─────────────────────────────────────────────────────
@@ -332,17 +332,17 @@ export default function PackagesPage() {
       <div className="max-w-xl mx-auto space-y-6 animate-slide-up">
         <div>
           <h1 className="page-header">Select Start Date 📅</h1>
-          <p className="page-sub">Package: <span className="text-white font-semibold">{currentSub?.package_name}</span></p>
+          <p className="page-sub">Package: <span className="text-gray-900 font-semibold">{currentSub?.package_name}</span></p>
         </div>
 
         {msg && (
-          <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+          <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
             {msg}
           </div>
         )}
 
         <div className="card">
-          <p className="text-gray-400 text-sm mb-4">
+          <p className="text-gray-600 text-sm mb-4">
             Choose from available delivery start dates. These dates are synchronized with other active subscribers of the same package.
           </p>
 
@@ -356,12 +356,12 @@ export default function PackagesPage() {
                   key={date}
                   onClick={() => setSelectedDate(date)}
                   className={`p-3 rounded-xl border text-left transition-all duration-200 ${selectedDate === date
-                    ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
-                    : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
+                    ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
                     }`}
                 >
                   <p className="font-semibold text-sm">{dayName}</p>
-                  <p className="text-xs mt-0.5 text-gray-400">{formatted}</p>
+                  <p className="text-xs mt-0.5 text-gray-600">{formatted}</p>
                 </button>
               );
             })}
@@ -404,12 +404,12 @@ export default function PackagesPage() {
         <div>
           <h1 className="page-header">Customize Your Plan 🌿</h1>
           <p className="page-sub">
-            Adjust fixed item quantities and choose up to <span className="text-white font-semibold">{maxSelectCount}</span> seasonal items.
+            Adjust fixed item quantities and choose up to <span className="text-gray-900 font-semibold">{maxSelectCount}</span> seasonal items.
           </p>
         </div>
 
         {seasonalMsg && (
-          <div className={`rounded-xl px-4 py-3 text-sm ${seasonalMsg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+          <div className={`rounded-xl px-4 py-3 text-sm ${seasonalMsg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
             {seasonalMsg}
           </div>
         )}
@@ -417,7 +417,7 @@ export default function PackagesPage() {
         {/* Live Budget Tracking Box */}
         {isOverBudget && (
           <div className="card p-5 border border-red-500/50 bg-red-950/20 text-red-200 flex flex-col gap-2 rounded-2xl">
-            <p className="text-xs text-red-400 font-medium mt-1 animate-pulse">
+            <p className="text-xs text-red-600 font-medium mt-1 animate-pulse">
               ⚠️ You have exceeded the delivery budget limit. Please reduce product quantities.
             </p>
           </div>
@@ -426,7 +426,7 @@ export default function PackagesPage() {
         {/* 1. Customize Fixed Items */}
         <div className="card space-y-4">
           <div>
-            <h3 className="font-semibold text-white text-base">1. Customize Fixed Items</h3>
+            <h3 className="font-semibold text-gray-900 text-base">1. Customize Fixed Items</h3>
             <p className="text-xs text-gray-500">You cannot remove fixed products, but you can decrease their quantity to save budget.</p>
           </div>
           <div className="space-y-3">
@@ -434,10 +434,10 @@ export default function PackagesPage() {
               const qty = fi.qty_gm;
 
               return (
-                <div key={fi.product_id} className="rounded-xl p-4 border border-gray-700 bg-gray-800/30">
+                <div key={fi.product_id} className="rounded-xl p-4 border border-gray-300 bg-gray-100/30">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-medium text-white">{fi.Product?.name}</p>
+                      <p className="font-medium text-gray-900">{fi.Product?.name}</p>
                       <p className="text-xs text-gray-500 capitalize">
                         Fixed Item
                       </p>
@@ -462,7 +462,7 @@ export default function PackagesPage() {
                           <button
                             type="button"
                             onClick={() => updateFixedQty(fi.product_id, parseFloat(qty || 0) + maxAddable)}
-                            className="text-[10px] text-fresh-400 hover:text-fresh-300 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
+                            className="text-[10px] text-fresh-600 hover:text-fresh-700 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
                           >
                             💡 {maxAddable}g add kar sakte ho
                           </button>
@@ -480,11 +480,11 @@ export default function PackagesPage() {
         <div className="card space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold text-white text-base">2. Pick Seasonal Items</h3>
+              <h3 className="font-semibold text-gray-900 text-base">2. Pick Seasonal Items</h3>
               <p className="text-xs text-gray-500">Select up to {maxSelectCount} seasonal items from the pool.</p>
             </div>
-            <p className="text-gray-400 text-sm">
-              Selected: <span className={`font-bold ${selectedCount > maxSelectCount ? "text-red-400" : "text-fresh-400"}`}>{selectedCount}</span> / {maxSelectCount}
+            <p className="text-gray-600 text-sm">
+              Selected: <span className={`font-bold ${selectedCount > maxSelectCount ? "text-red-600" : "text-fresh-600"}`}>{selectedCount}</span> / {maxSelectCount}
             </p>
           </div>
 
@@ -499,8 +499,8 @@ export default function PackagesPage() {
                 <div
                   key={sp.id}
                   className={`rounded-xl p-4 border transition-all duration-200 ${isSelected
-                    ? "border-fresh-600/50 bg-fresh-900/20"
-                    : "border-gray-700 bg-gray-800/30"
+                    ? "border-fresh-600/50 bg-fresh-100/20"
+                    : "border-gray-300 bg-gray-100/30"
                     }`}
                 >
                   <div className="flex items-center gap-4">
@@ -525,7 +525,7 @@ export default function PackagesPage() {
                       className="w-4 h-4 accent-green-500"
                     />
                     <label htmlFor={`chk-${pid}`} className="flex-1 cursor-pointer">
-                      <p className="font-medium text-white">{sp.Product?.name}</p>
+                      <p className="font-medium text-gray-900">{sp.Product?.name}</p>
                       <p className="text-xs text-gray-500 capitalize">
                         {sp.Product?.category}
                       </p>
@@ -552,7 +552,7 @@ export default function PackagesPage() {
                             <button
                               type="button"
                               onClick={() => setSelectedItems({ ...selectedItems, [pid]: parseFloat(qty || 0) + maxAddable })}
-                              className="text-[10px] text-fresh-400 hover:text-fresh-300 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
+                              className="text-[10px] text-fresh-600 hover:text-fresh-700 bg-fresh-950/40 border border-fresh-800/30 px-2 py-0.5 rounded-lg cursor-pointer transition-all"
                             >
                               💡 {maxAddable}g add kar sakte ho
                             </button>
@@ -592,14 +592,14 @@ export default function PackagesPage() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
 
       {/* Address Selector Section */}
       <div className="card max-w-xl space-y-2">
-        <h3 className="font-semibold text-white text-sm">📍 Delivery Address</h3>
+        <h3 className="font-semibold text-gray-900 text-sm">📍 Delivery Address</h3>
         {addresses.length === 0 ? (
           <div className="flex flex-col gap-2">
             <p className="text-yellow-400 text-xs font-semibold">⚠️ No delivery address found. You must add an address before subscribing.</p>
@@ -618,18 +618,18 @@ export default function PackagesPage() {
                 </option>
               ))}
             </select>
-            <button onClick={() => navigate("/addresses")} className="text-xs text-fresh-400 hover:underline">Manage Addresses</button>
+            <button onClick={() => navigate("/addresses")} className="text-xs text-fresh-600 hover:underline">Manage Addresses</button>
           </div>
         )}
       </div>
 
       {/* Type toggle */}
-      <div className="flex gap-2 bg-gray-800 rounded-xl p-1 w-fit">
+      <div className="flex gap-2 bg-gray-100 rounded-xl p-1 w-fit">
         {["monthly", "yearly"].map(t => (
           <button
             key={t}
             onClick={() => setSelectedType(t)}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${selectedType === t ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"}`}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${selectedType === t ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
           >
             {t === "yearly" ? "🏆 Yearly (25% off)" : "📅 Monthly"}
           </button>
@@ -646,8 +646,8 @@ export default function PackagesPage() {
               }`}>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-bold text-white">{pkg.name}</h2>
-                  <p className="text-gray-400 text-sm">
+                  <h2 className="text-xl font-bold text-gray-900">{pkg.name}</h2>
+                  <p className="text-gray-600 text-sm">
                     {pkg.num_persons_max
                       ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
                       : `${pkg.num_persons} persons`
@@ -657,7 +657,7 @@ export default function PackagesPage() {
                 <div className="flex flex-col items-end gap-1.5">
                   <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
                   {alreadyActive && (
-                    <span className="inline-flex items-center gap-1 bg-fresh-900/60 text-fresh-400 border border-fresh-600/50 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 bg-fresh-100/60 text-fresh-600 border border-fresh-600/50 text-[10px] font-bold px-2 py-0.5 rounded-full">
                       ✅ Active
                     </span>
                   )}
@@ -665,15 +665,15 @@ export default function PackagesPage() {
               </div>
 
               {/* Price */}
-              <div className="bg-gray-800/60 rounded-xl p-4 mb-4">
+              <div className="bg-gray-100/60 rounded-xl p-4 mb-4">
                 {selectedType === "yearly" ? (
                   <div>
-                    <p className="text-gray-400 text-xs line-through">₹{(pkg.price * 12).toFixed(0)}/year</p>
-                    <p className="text-2xl font-bold text-gradient">₹{calcYearly(pkg.price)}<span className="text-sm text-gray-400 font-normal">/year</span></p>
-                    <p className="text-fresh-400 text-xs mt-1">💰 Save ₹{(pkg.price * 12 * 0.25).toFixed(0)} (25% off)</p>
+                    <p className="text-gray-600 text-xs line-through">₹{(pkg.price * 12).toFixed(0)}/year</p>
+                    <p className="text-2xl font-bold text-gradient">₹{calcYearly(pkg.price)}<span className="text-sm text-gray-600 font-normal">/year</span></p>
+                    <p className="text-fresh-600 text-xs mt-1">💰 Save ₹{(pkg.price * 12 * 0.25).toFixed(0)} (25% off)</p>
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold text-gradient">₹{pkg.price}<span className="text-sm text-gray-400 font-normal">/month</span></p>
+                  <p className="text-2xl font-bold text-gradient">₹{pkg.price}<span className="text-sm text-gray-600 font-normal">/month</span></p>
                 )}
                 <p className="text-gray-500 text-xs mt-1">₹{(pkg.price / pkg.services_per_month).toFixed(1)} per delivery</p>
               </div>
@@ -681,10 +681,10 @@ export default function PackagesPage() {
               {/* Fixed items */}
               {pkg.FixedItems?.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Fixed Items (every delivery)</p>
+                  <p className="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Fixed Items (every delivery)</p>
                   <div className="flex flex-wrap gap-2">
                     {pkg.FixedItems.map(fi => (
-                      <span key={fi.id} className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700">
+                      <span key={fi.id} className="bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-lg border border-gray-300">
                         {fi.Product?.name} ({fi.default_qty_gm}g)
                       </span>
                     ))}
@@ -695,12 +695,12 @@ export default function PackagesPage() {
               {/* Seasonal pool */}
               {pkg.SeasonalPool?.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-                    Seasonal Options <span className="text-fresh-400">(choose {pkg.SeasonalConfig?.max_select_count})</span>
+                  <p className="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">
+                    Seasonal Options <span className="text-fresh-600">(choose {pkg.SeasonalConfig?.max_select_count})</span>
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {pkg.SeasonalPool.map(sp => (
-                      <span key={sp.id} className="bg-fresh-900/30 text-fresh-400 text-xs px-2 py-1 rounded-lg border border-fresh-800/50">
+                      <span key={sp.id} className="bg-fresh-100/30 text-fresh-600 text-xs px-2 py-1 rounded-lg border border-fresh-800/50">
                         🌿 {sp.Product?.name}
                       </span>
                     ))}
@@ -711,7 +711,7 @@ export default function PackagesPage() {
               <div className="mt-auto">
                 {alreadyActive ? (
                   <div className="space-y-2">
-                    <div className="w-full py-2.5 bg-fresh-900/30 border border-fresh-700/40 text-fresh-400 font-semibold rounded-xl text-sm text-center">
+                    <div className="w-full py-2.5 bg-fresh-100/30 border border-fresh-700/40 text-fresh-600 font-semibold rounded-xl text-sm text-center">
                       ✅ Already Subscribed
                     </div>
                     <p className="text-[11px] text-gray-500 text-center">
@@ -744,18 +744,18 @@ export default function PackagesPage() {
       {/* Address Choice Modal */}
       {showAddressChoiceModal && checkoutPkg && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
+          <div className="bg-[#0f172a] border border-gray-200 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
             <button
               onClick={() => setShowAddressChoiceModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none"
+              className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl leading-none"
             >
               &times;
             </button>
-            <h2 className="text-xl font-bold text-white mb-4">📍 Where to deliver?</h2>
-            <p className="text-gray-400 text-sm mb-6">Aap "{checkoutPkg.name}" package kahan receive karna chahte hain?</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">📍 Where to deliver?</h2>
+            <p className="text-gray-600 text-sm mb-6">Aap "{checkoutPkg.name}" package kahan receive karna chahte hain?</p>
             
             <div className="space-y-4">
-              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
                   <input 
                     type="radio" 
@@ -764,7 +764,7 @@ export default function PackagesPage() {
                     onChange={() => setAddressChoiceMode('existing')}
                     className="w-4 h-4 accent-fresh-500"
                   />
-                  <span className="text-white font-medium">Use my existing address</span>
+                  <span className="text-gray-900 font-medium">Use my existing address</span>
                 </div>
                 {addressChoiceMode === 'existing' && (
                   <div className="mt-3 ml-7">
@@ -787,7 +787,7 @@ export default function PackagesPage() {
                 )}
               </label>
 
-              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
                   <input 
                     type="radio" 
@@ -796,7 +796,7 @@ export default function PackagesPage() {
                     onChange={() => setAddressChoiceMode('new')}
                     className="w-4 h-4 accent-fresh-500"
                   />
-                  <span className="text-white font-medium">Deliver to a new address</span>
+                  <span className="text-gray-900 font-medium">Deliver to a new address</span>
                 </div>
               </label>
             </div>
@@ -827,15 +827,15 @@ export default function PackagesPage() {
       {/* PhonePe Package Checkout Modal */}
       {showCheckoutModal && checkoutPkg && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-5 relative animate-scale-up">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+          <div className="bg-[#0f172a] border border-gray-200 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-5 relative animate-scale-up">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-purple-400 font-extrabold text-lg tracking-tight">PhonePe</span>
                 <span className="bg-purple-500/10 text-purple-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-purple-500/20">SECURE PAY</span>
               </div>
               <button
                 onClick={() => setShowCheckoutModal(false)}
-                className="text-gray-400 hover:text-white text-2xl leading-none"
+                className="text-gray-600 hover:text-gray-900 text-2xl leading-none"
                 disabled={initiatingPayment}
               >
                 &times;
@@ -845,21 +845,21 @@ export default function PackagesPage() {
             <div className="space-y-4 text-sm">
               <div>
                 <p className="text-gray-500 text-xs uppercase tracking-wider font-bold">Package Selection</p>
-                <p className="text-white font-bold text-base mt-0.5">{checkoutPkg.name}</p>
+                <p className="text-gray-900 font-bold text-base mt-0.5">{checkoutPkg.name}</p>
               </div>
 
-              <div className="bg-gray-900/50 rounded-2xl p-4 border border-gray-850 space-y-2.5">
+              <div className="bg-white/50 rounded-2xl p-4 border border-gray-850 space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-400">Duration:</span>
-                  <span className="font-semibold text-white capitalize">{selectedType} Plan</span>
+                  <span className="text-gray-600">Duration:</span>
+                  <span className="font-semibold text-gray-900 capitalize">{selectedType} Plan</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-400">Total Services:</span>
-                  <span className="font-semibold text-white">{selectedType === "yearly" ? checkoutPkg.services_per_month * 12 : checkoutPkg.services_per_month} deliveries</span>
+                  <span className="text-gray-600">Total Services:</span>
+                  <span className="font-semibold text-gray-900">{selectedType === "yearly" ? checkoutPkg.services_per_month * 12 : checkoutPkg.services_per_month} deliveries</span>
                 </div>
                 <div className="border-t border-gray-850 my-1"></div>
                 <div className="flex justify-between items-center text-sm font-bold">
-                  <span className="text-gray-200">Amount to Pay:</span>
+                  <span className="text-gray-800">Amount to Pay:</span>
                   <span className="text-gradient">
                     ₹{selectedType === "yearly" ? calcYearly(checkoutPkg.price) : checkoutPkg.price}
                   </span>
@@ -869,11 +869,11 @@ export default function PackagesPage() {
               {/* Address selector inside modal */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-gray-400 text-xs font-bold uppercase tracking-wider">📍 Delivery Address</label>
+                  <label className="text-gray-600 text-xs font-bold uppercase tracking-wider">📍 Delivery Address</label>
                   <button
                     type="button"
                     onClick={() => setShowInlineAddressModal(true)}
-                    className="text-[10px] text-fresh-400 hover:underline"
+                    className="text-[10px] text-fresh-600 hover:underline"
                   >
                     + Add New Address
                   </button>
@@ -910,14 +910,14 @@ export default function PackagesPage() {
                   type="button"
                   onClick={handlePhonePeCheckout}
                   disabled={initiatingPayment || !selectedAddressId}
-                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-950 flex items-center justify-center gap-2 text-sm"
+                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-gray-900 font-bold rounded-xl transition-all shadow-lg shadow-purple-950 flex items-center justify-center gap-2 text-sm"
                 >
                   {initiatingPayment ? "Initiating Gateway..." : `🔒 Pay ₹${selectedType === "yearly" ? calcYearly(checkoutPkg.price) : checkoutPkg.price} via PhonePe`}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCheckoutModal(false)}
-                  className="w-full py-2 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium rounded-xl transition-all text-xs"
+                  className="w-full py-2 bg-transparent hover:bg-white text-gray-600 hover:text-gray-900 font-medium rounded-xl transition-all text-xs"
                 >
                   Cancel
                 </button>
@@ -930,13 +930,13 @@ export default function PackagesPage() {
       {/* Inline Address Creation Modal for package checkout */}
       {showInlineAddressModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-base">Add New Address</h3>
+              <h3 className="font-bold text-gray-900 text-base">Add New Address</h3>
               <button
                 type="button"
                 onClick={() => setShowInlineAddressModal(false)}
-                className="text-gray-400 hover:text-white text-2xl leading-none"
+                className="text-gray-600 hover:text-gray-900 text-2xl leading-none"
               >
                 &times;
               </button>
@@ -999,7 +999,7 @@ export default function PackagesPage() {
                   checked={inlineAddressForm.is_default}
                   onChange={e => setInlineAddressForm({ ...inlineAddressForm, is_default: e.target.checked })}
                 />
-                <label htmlFor="inline-default-chk" className="text-xs text-gray-300 cursor-pointer">Set as default address</label>
+                <label htmlFor="inline-default-chk" className="text-xs text-gray-700 cursor-pointer">Set as default address</label>
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-gray-850">
@@ -1026,14 +1026,14 @@ export default function PackagesPage() {
       {/* Razorpay Simulated Overage Checkout Modal */}
       {showRazorpay && razorpayPkg && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0b1220] border border-gray-700/80 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-6 relative overflow-hidden animate-slide-up">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+          <div className="bg-[#0b1220] border border-gray-300/80 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-6 relative overflow-hidden animate-slide-up">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-4">
               <div className="flex items-center gap-2">
                 <span className="text-blue-400 font-extrabold text-xl tracking-tight">Overage Payment</span>
               </div>
               <button
                 onClick={() => setShowRazorpay(false)}
-                className="text-gray-400 hover:text-white text-2xl leading-none transition-colors"
+                className="text-gray-600 hover:text-gray-900 text-2xl leading-none transition-colors"
                 disabled={paymentStatus === "processing"}
               >
                 &times;
@@ -1041,14 +1041,14 @@ export default function PackagesPage() {
             </div>
 
             <div className="space-y-5">
-              <div className="bg-gray-900/50 rounded-2xl p-4 border border-gray-800 space-y-3">
+              <div className="bg-white/50 rounded-2xl p-4 border border-gray-200 space-y-3">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-400">Overage Detail:</span>
-                  <span className="font-semibold text-white">{razorpayPkg.name}</span>
+                  <span className="text-gray-600">Overage Detail:</span>
+                  <span className="font-semibold text-gray-900">{razorpayPkg.name}</span>
                 </div>
-                <div className="border-t border-gray-800/80 my-1"></div>
+                <div className="border-t border-gray-200/80 my-1"></div>
                 <div className="flex justify-between items-center text-base font-bold">
-                  <span className="text-gray-200">Amount Due:</span>
+                  <span className="text-gray-800">Amount Due:</span>
                   <span className="text-gradient">₹{parseFloat(razorpayPkg.price || 0).toFixed(2)}</span>
                 </div>
               </div>
@@ -1056,13 +1056,13 @@ export default function PackagesPage() {
               <div className="flex flex-col gap-3 pt-2">
                 <button
                   onClick={handleSimulatedPayment}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-gray-900 font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
                 >
                   🔒 Pay Overage Securely
                 </button>
                 <button
                   onClick={() => setShowRazorpay(false)}
-                  className="w-full py-2.5 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium rounded-xl transition-all text-sm"
+                  className="w-full py-2.5 bg-transparent hover:bg-white text-gray-600 hover:text-gray-900 font-medium rounded-xl transition-all text-sm"
                 >
                   Cancel
                 </button>

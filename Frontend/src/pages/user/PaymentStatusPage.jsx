@@ -73,7 +73,7 @@ export default function PaymentStatusPage() {
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center p-4">
-      <div className="card max-w-md w-full border border-gray-800 text-center p-8 space-y-6">
+      <div className="card max-w-md w-full border border-gray-200 text-center p-8 space-y-6">
         {status === "checking" && (
           <div className="space-y-4">
             <div className="relative w-16 h-16 mx-auto">
@@ -81,7 +81,7 @@ export default function PaymentStatusPage() {
               <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-white">Verifying Payment{dots}</h2>
+              <h2 className="text-xl font-bold text-gray-900">Verifying Payment{dots}</h2>
               <p className="text-gray-500 text-xs">Connecting to PhonePe secure gateway for transaction lookup. Please do not close this window.</p>
             </div>
           </div>
@@ -93,8 +93,8 @@ export default function PaymentStatusPage() {
               ✓
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-white">Payment Successful 🎉</h2>
-              <p className="text-gray-400 text-xs">
+              <h2 className="text-xl font-bold text-gray-900">Payment Successful 🎉</h2>
+              <p className="text-gray-600 text-xs">
                 Your payment for the {type === "package" ? "Subscription Package" : "Retail Shop Order"} was successfully verified.
               </p>
               <p className="text-gray-500 text-[10px]">Txn ID: {txnId}</p>
@@ -108,12 +108,12 @@ export default function PaymentStatusPage() {
 
         {status === "failed" && (
           <div className="space-y-5 animate-scale-up">
-            <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center text-red-400 text-3xl mx-auto font-bold">
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center text-red-600 text-3xl mx-auto font-bold">
               !
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-bold text-white">Payment Verification Failed</h2>
-              <p className="text-red-400 text-xs">{errorMsg || "We were unable to verify your payment."}</p>
+              <h2 className="text-xl font-bold text-gray-900">Payment Verification Failed</h2>
+              <p className="text-red-600 text-xs">{errorMsg || "We were unable to verify your payment."}</p>
             </div>
 
             <button onClick={() => navigate("/retail-store")} className="w-full btn-secondary py-2.5 text-sm">

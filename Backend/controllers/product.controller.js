@@ -1,13 +1,23 @@
+import fs from "fs";
+import path from "path";
 import { Product, PurchaseLog, sequelize } from "../models/index.js";
 
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit } = req.body;
         if (!name || !category || !purchase_price_per_gm || !selling_price_per_gm || !unit) {
             return res.status(400).json({ success: false, message: "name, category, purchase_price_per_gm, selling_price_per_gm and unit are required" });
         }
-        const product = await Product.create({ name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit });
+        
+        let image_url = null;
+        if (req.file) {
+            image_url = `/uploads/${req.file.filename}`;
+        }
+
+        const product = await Product.create({ 
+            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit 
+        });
         res.status(201).json({ success: true, product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -46,7 +56,23 @@ export const updateProduct = async (req, res) => {
     try {
         const product = await Product.findByPk(req.params.id);
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
-        await product.update(req.body);
+
+        const updateData = { ...req.body };
+        
+        if (req.file) {
+            // New image uploaded, set new image url
+            updateData.image_url = `/uploads/${req.file.filename}`;
+            
+            // Delete old image if it exists and starts with /uploads/
+            if (product.image_url && product.image_url.startsWith("/uploads/")) {
+                const oldImagePath = path.join(process.cwd(), product.image_url);
+                if (fs.existsSync(oldImagePath)) {
+                    fs.unlinkSync(oldImagePath);
+                }
+            }
+        }
+
+        await product.update(updateData);
         res.status(200).json({ success: true, product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

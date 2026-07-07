@@ -89,7 +89,7 @@ export default function DeliveryHistory() {
     rejected: <span className="badge badge-red">Rejected</span>,
   }[s] || null);
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading history...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading history...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -99,33 +99,33 @@ export default function DeliveryHistory() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
 
       {/* Return Modal */}
       {selectedSchedule && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white">Request Return ↩️</h3>
-              <button onClick={() => setSelectedSchedule(null)} className="text-gray-400 hover:text-white text-2xl">&times;</button>
+              <h3 className="font-bold text-gray-900">Request Return ↩️</h3>
+              <button onClick={() => setSelectedSchedule(null)} className="text-gray-600 hover:text-gray-900 text-2xl">&times;</button>
             </div>
             
             {/* Return Type Selector */}
-            <div className="flex gap-2 p-1 bg-gray-800 rounded-xl mb-4">
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-xl mb-4">
               <button
                 type="button"
                 onClick={() => setReturnType("all")}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${returnType === "all" ? "bg-fresh-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${returnType === "all" ? "bg-fresh-600 text-gray-900 shadow" : "text-gray-600 hover:text-gray-900"}`}
               >
                 Whole Order
               </button>
               <button
                 type="button"
                 onClick={() => setReturnType("specific")}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${returnType === "specific" ? "bg-fresh-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${returnType === "specific" ? "bg-fresh-600 text-gray-900 shadow" : "text-gray-600 hover:text-gray-900"}`}
               >
                 Specific Products
               </button>
@@ -133,10 +133,10 @@ export default function DeliveryHistory() {
 
             <form onSubmit={handleReturnSubmit} className="space-y-4">
               {returnType === "all" ? (
-                <div className="bg-gray-800/30 border border-gray-800 p-3 rounded-xl space-y-1">
-                  <p className="text-xs text-gray-400 mb-2">The following items will be returned in full:</p>
+                <div className="bg-gray-100/30 border border-gray-200 p-3 rounded-xl space-y-1">
+                  <p className="text-xs text-gray-600 mb-2">The following items will be returned in full:</p>
                   {selectedSchedule.DeliveryItems?.filter(i => i.return_status === "none").map(item => (
-                    <p key={item.id} className="text-white text-xs font-medium">• {item.Product?.name} ({item.qty_gm}{item.Product?.unit || 'g'})</p>
+                    <p key={item.id} className="text-gray-900 text-xs font-medium">• {item.Product?.name} ({item.qty_gm}{item.Product?.unit || 'g'})</p>
                   ))}
                 </div>
               ) : (
@@ -144,7 +144,7 @@ export default function DeliveryHistory() {
                   {selectedSchedule.DeliveryItems?.filter(i => i.return_status === "none").map(item => {
                     const info = selectedItems[item.id] || { checked: false, return_qty: item.qty_gm };
                     return (
-                      <div key={item.id} className="flex items-center justify-between gap-3 p-2.5 bg-gray-800/40 rounded-xl border border-gray-850">
+                      <div key={item.id} className="flex items-center justify-between gap-3 p-2.5 bg-gray-100/40 rounded-xl border border-gray-850">
                         <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
                           <input
                             type="checkbox"
@@ -156,7 +156,7 @@ export default function DeliveryHistory() {
                             className="checkbox"
                           />
                           <div className="min-w-0">
-                            <p className="text-white font-medium text-xs truncate">{item.Product?.name}</p>
+                            <p className="text-gray-900 font-medium text-xs truncate">{item.Product?.name}</p>
                             <p className="text-gray-500 text-[10px]">Delivered: {item.qty_gm}{item.Product?.unit || 'g'}</p>
                           </div>
                         </label>
@@ -201,7 +201,7 @@ export default function DeliveryHistory() {
                   type="file"
                   accept="image/*"
                   onChange={e => setReturnPhoto(e.target.files[0])}
-                  className="block text-xs text-gray-400 file:btn-secondary file:text-xs file:mr-3 file:border-0"
+                  className="block text-xs text-gray-600 file:btn-secondary file:text-xs file:mr-3 file:border-0"
                 />
               </div>
 
@@ -227,8 +227,8 @@ export default function DeliveryHistory() {
             <div key={sched.id} className="card">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="font-semibold text-white">{sched.Subscription?.Package?.name}</p>
-                  <p className="text-gray-400 text-sm">Delivered: {sched.actual_delivery_date || sched.scheduled_date}</p>
+                  <p className="font-semibold text-gray-900">{sched.Subscription?.Package?.name}</p>
+                  <p className="text-gray-600 text-sm">Delivered: {sched.actual_delivery_date || sched.scheduled_date}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="badge badge-green">Delivered ✓</span>
@@ -241,7 +241,7 @@ export default function DeliveryHistory() {
                 <div className="flex flex-wrap gap-2">
                   {sched.DeliveryItems.map(item => (
                     <div key={item.id} className="flex items-center gap-1.5">
-                      <span className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-lg border border-gray-700">
+                      <span className="bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-lg border border-gray-300">
                         {item.Product?.name} ({item.qty_gm}g)
                       </span>
                       {returnStatusBadge(item.return_status)}

@@ -316,7 +316,7 @@ export default function WaterPage() {
     completed: "badge-blue"
   }[s] || "badge-gray");
 
-  if (loading && waters.length === 0) return <div className="flex items-center justify-center h-64 text-gray-400">Loading water subscriptions...</div>;
+  if (loading && waters.length === 0) return <div className="flex items-center justify-center h-64 text-gray-600">Loading water subscriptions...</div>;
 
   // ─── STEP: CONFIRM START DATE ───────────────────────────────────────────
   if (step === "confirm_date") {
@@ -328,13 +328,13 @@ export default function WaterPage() {
         </div>
 
         {msg && (
-          <div className="rounded-xl px-4 py-3 text-sm bg-fresh-900/30 text-fresh-400 border border-fresh-700/50">
+          <div className="rounded-xl px-4 py-3 text-sm bg-fresh-100/30 text-fresh-600 border border-fresh-700/50">
             {msg}
           </div>
         )}
 
         <div className="card">
-          <p className="text-gray-400 text-sm mb-4">
+          <p className="text-gray-600 text-sm mb-4">
             Select a start date from our recommended schedule to synchronize with existing delivery routes in your area.
           </p>
 
@@ -349,12 +349,12 @@ export default function WaterPage() {
                   onClick={() => setSelectedDate(date)}
                   className={`p-3 rounded-xl border text-left transition-all duration-200 ${
                     selectedDate === date
-                      ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
-                      : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
+                      ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
+                      : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
                   }`}
                 >
                   <p className="font-semibold text-sm">{dayName}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{formatted}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">{formatted}</p>
                 </button>
               );
             })}
@@ -398,22 +398,22 @@ export default function WaterPage() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
 
       {/* Pause Configuration Modal */}
       {pausingSub && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-lg font-gradient">Pause Water Subscription ⏸</h3>
-              <button onClick={() => setPausingSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              <h3 className="font-bold text-gray-900 text-lg font-gradient">Pause Water Subscription ⏸</h3>
+              <button onClick={() => setPausingSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
 
             {pausingMsg && (
-              <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-400 border border-red-700/50">
+              <div className="rounded-xl px-4 py-3 text-sm bg-red-900/30 text-red-600 border border-red-700/50">
                 {pausingMsg}
               </div>
             )}
@@ -425,7 +425,7 @@ export default function WaterPage() {
                   <button 
                     type="button"
                     onClick={() => { setPauseType("monthly"); setDaysToPause(5); }}
-                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "monthly" ? "border-fresh-500 bg-fresh-900/40 text-fresh-400" : "border-gray-800 text-gray-400 hover:border-gray-700"}`}
+                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "monthly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     📅 Monthly Pause
                     <span className="block text-[10px] text-gray-500 font-normal mt-0.5">Max 15 days total</span>
@@ -433,7 +433,7 @@ export default function WaterPage() {
                   <button 
                     type="button"
                     onClick={() => { setPauseType("yearly"); setDaysToPause(10); }}
-                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "yearly" ? "border-fresh-500 bg-fresh-900/40 text-fresh-400" : "border-gray-800 text-gray-400 hover:border-gray-700"}`}
+                    className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "yearly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     🏆 Yearly Pause
                     <span className="block text-[10px] text-gray-500 font-normal mt-0.5">Max 45 days (once a year)</span>
@@ -472,7 +472,7 @@ export default function WaterPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t border-gray-800">
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
               <button 
                 onClick={handleConfirmPause} 
                 disabled={pausingLoader || !daysToPause} 
@@ -490,18 +490,18 @@ export default function WaterPage() {
 
       {/* Resume Date Modal */}
       {resumingSub && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md animate-slide-up">
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-white text-lg font-gradient">Resume Water Delivery 📅</h3>
-              <button onClick={() => setResumingSub(null)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              <h3 className="font-bold text-gray-900 text-lg font-gradient">Resume Water Delivery 📅</h3>
+              <button onClick={() => setResumingSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
-            <p className="text-gray-400 text-sm mb-4">
+            <p className="text-gray-600 text-sm mb-4">
               Select a date to resume your water deliveries. The suggested dates coordinate with our active delivery boy routes.
             </p>
 
             {resumeMsg && (
-              <div className="rounded-xl px-4 py-3 text-sm mb-4 bg-red-900/30 text-red-400 border border-red-700/50">
+              <div className="rounded-xl px-4 py-3 text-sm mb-4 bg-red-900/30 text-red-600 border border-red-700/50">
                 {resumeMsg}
               </div>
             )}
@@ -519,12 +519,12 @@ export default function WaterPage() {
                       onClick={() => setSelectedResumeDate(date)}
                       className={`p-3 rounded-xl border text-left transition-all duration-200 ${
                         selectedResumeDate === date
-                          ? "border-fresh-500 bg-fresh-900/40 text-fresh-400"
-                          : "border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600"
+                          ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
+                          : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
                       }`}
                     >
                       <p className="font-semibold text-sm">{dayName}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatted}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">{formatted}</p>
                     </button>
                   );
                 })}
@@ -565,16 +565,16 @@ export default function WaterPage() {
         <div className="lg:col-span-1">
           {!waters.some(w => ["active", "paused"].includes(w.status)) ? (
             <div className="card space-y-4">
-              <h3 className="font-bold text-white text-lg border-b border-gray-800 pb-3">New Water Plan</h3>
+              <h3 className="font-bold text-gray-900 text-lg border-b border-gray-200 pb-3">New Water Plan</h3>
               
               {/* Type toggle */}
-              <div className="flex gap-2 bg-gray-800 rounded-xl p-1 w-full">
+              <div className="flex gap-2 bg-gray-100 rounded-xl p-1 w-full">
                 {["monthly", "yearly"].map(t => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setSelectedType(t)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${selectedType === t ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"}`}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${selectedType === t ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
                   >
                     {t === "yearly" ? "🏆 Yearly (-25%)" : "📅 Monthly"}
                   </button>
@@ -593,7 +593,7 @@ export default function WaterPage() {
                     <option value="">Choose water plan...</option>
                     {products.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name} (₹{parseFloat(p.selling_price_per_gm || 0).toFixed(2)} / bottle)
+                        {p.name} {p.hindi_name ? `(${p.hindi_name})` : ""} (₹{parseFloat(p.selling_price_per_gm || 0).toFixed(2)} / bottle)
                       </option>
                     ))}
                   </select>
@@ -628,23 +628,23 @@ export default function WaterPage() {
                 </div>
 
                 {/* Price Preview */}
-                <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 space-y-2">
+                <div className="bg-white rounded-xl p-4 border border-gray-300 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Price per Bottle:</span>
-                    <span className="text-white font-semibold">₹{pricePerBottle.toFixed(2)}</span>
+                    <span className="text-gray-600">Price per Bottle:</span>
+                    <span className="text-gray-900 font-semibold">₹{pricePerBottle.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Total Deliveries:</span>
-                    <span className="text-white font-semibold">{totalServices}</span>
+                    <span className="text-gray-600">Total Deliveries:</span>
+                    <span className="text-gray-900 font-semibold">{totalServices}</span>
                   </div>
                   {selectedType === "yearly" && (
-                    <div className="flex justify-between text-xs text-fresh-400">
+                    <div className="flex justify-between text-xs text-fresh-600">
                       <span>Annual Discount Applied:</span>
                       <span>-25%</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-sm pt-2 border-t border-gray-700 font-bold">
-                    <span className="text-white">Amount Due:</span>
+                  <div className="flex justify-between text-sm pt-2 border-t border-gray-300 font-bold">
+                    <span className="text-gray-900">Amount Due:</span>
                     <span className="text-gradient">₹{totalPrice.toFixed(2)}</span>
                   </div>
                 </div>
@@ -655,7 +655,7 @@ export default function WaterPage() {
               </form>
             </div>
           ) : (
-            <div className="card bg-gray-800/10 border-dashed border-gray-800 text-center py-12 text-gray-500">
+            <div className="card bg-gray-100/10 border-dashed border-gray-200 text-center py-12 text-gray-500">
               <p className="text-4xl mb-3">💧</p>
               <p className="text-sm">You currently have an active or paused Alkaline Water subscription.</p>
             </div>
@@ -664,17 +664,17 @@ export default function WaterPage() {
 
         {/* Existing Subscriptions List */}
         <div className="lg:col-span-2 space-y-4">
-          <h3 className="font-bold text-white text-lg">Your Water Subscriptions</h3>
+          <h3 className="font-bold text-gray-900 text-lg">Your Water Subscriptions</h3>
           {waters.map(w => (
             <div key={w.id} className="card space-y-4">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-lg font-bold text-white capitalize">{w.water_type} Water</h3>
+                    <h3 className="text-lg font-bold text-gray-900 capitalize">{w.water_type} Water</h3>
                     <span className={`badge ${statusBadge(w.status)}`}>{w.status}</span>
                     <span className="badge badge-gray capitalize">{w.type}</span>
                   </div>
-                   <p className="text-gray-400 text-sm capitalize">{w.container} bottle · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
+                   <p className="text-gray-600 text-sm capitalize">{w.container} bottle · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
                   
                   {w.start_date ? (
                     <p className="text-gray-500 text-xs mt-1.5">
@@ -687,7 +687,7 @@ export default function WaterPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-gray-800">
+              <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-gray-200">
                 {w.status === "active" && (
                   <>
                     <button onClick={() => {
@@ -732,7 +732,7 @@ export default function WaterPage() {
           {waters.length === 0 && (
             <div className="card text-center py-12 text-gray-500">
               <p className="text-5xl mb-3">💧</p>
-              <p className="text-lg text-white font-medium mb-1">No water subscriptions yet</p>
+              <p className="text-lg text-gray-900 font-medium mb-1">No water subscriptions yet</p>
               <p className="text-sm">Configure your water type and frequency on the left to start receiving premium alkaline water.</p>
             </div>
           )}
@@ -742,18 +742,18 @@ export default function WaterPage() {
       {/* Address Choice Modal */}
       {showAddressChoiceModal && matchedProduct && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
+          <div className="bg-[#0f172a] border border-gray-200 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-scale-up">
             <button
               onClick={() => setShowAddressChoiceModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none"
+              className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl leading-none"
             >
               &times;
             </button>
-            <h2 className="text-xl font-bold text-white mb-4">📍 Where to deliver?</h2>
-            <p className="text-gray-400 text-sm mb-6">Aap {form.water_type} water deliveries kahan receive karna chahte hain?</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">📍 Where to deliver?</h2>
+            <p className="text-gray-600 text-sm mb-6">Aap {form.water_type} water deliveries kahan receive karna chahte hain?</p>
             
             <div className="space-y-4">
-              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
                   <input 
                     type="radio" 
@@ -762,7 +762,7 @@ export default function WaterPage() {
                     onChange={() => setAddressChoiceMode('existing')}
                     className="w-4 h-4 accent-fresh-500"
                   />
-                  <span className="text-white font-medium">Use my existing address</span>
+                  <span className="text-gray-900 font-medium">Use my existing address</span>
                 </div>
                 {addressChoiceMode === 'existing' && (
                   <div className="mt-3 ml-7">
@@ -785,7 +785,7 @@ export default function WaterPage() {
                 )}
               </label>
 
-              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-900/20' : 'border-gray-700 bg-gray-800/40'}`}>
+              <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
                   <input 
                     type="radio" 
@@ -794,7 +794,7 @@ export default function WaterPage() {
                     onChange={() => setAddressChoiceMode('new')}
                     className="w-4 h-4 accent-fresh-500"
                   />
-                  <span className="text-white font-medium">Deliver to a new address</span>
+                  <span className="text-gray-900 font-medium">Deliver to a new address</span>
                 </div>
               </label>
             </div>
@@ -825,13 +825,13 @@ export default function WaterPage() {
       {/* Inline Address Modal */}
       {showInlineAddressModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 w-full max-w-md animate-scale-up space-y-4 relative">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-base">Add New Address</h3>
+              <h3 className="font-bold text-gray-900 text-base">Add New Address</h3>
               <button
                 type="button"
                 onClick={() => setShowInlineAddressModal(false)}
-                className="text-gray-400 hover:text-white text-2xl leading-none"
+                className="text-gray-600 hover:text-gray-900 text-2xl leading-none"
               >
                 &times;
               </button>
@@ -894,7 +894,7 @@ export default function WaterPage() {
                   checked={inlineAddressForm.is_default}
                   onChange={e => setInlineAddressForm({ ...inlineAddressForm, is_default: e.target.checked })}
                 />
-                <label htmlFor="inline-default-chk" className="text-xs text-gray-300 cursor-pointer">Set as default address</label>
+                <label htmlFor="inline-default-chk" className="text-xs text-gray-700 cursor-pointer">Set as default address</label>
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-gray-850">
@@ -921,9 +921,9 @@ export default function WaterPage() {
       {/* Razorpay Simulated Checkout Drawer/Modal */}
       {showRazorpay && matchedProduct && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0b1220] border border-gray-700/80 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-6 relative overflow-hidden animate-slide-up">
+          <div className="bg-[#0b1220] border border-gray-300/80 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-6 relative overflow-hidden animate-slide-up">
             {/* Razorpay Brand Header */}
-            <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-4">
               <div className="flex items-center gap-2">
                 <span className="text-blue-400 font-extrabold text-xl tracking-tight">Razorpay</span>
                 <span className="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-500/20">SECURE CHECKOUT</span>
@@ -931,7 +931,7 @@ export default function WaterPage() {
               <button 
                 type="button"
                 onClick={() => setShowRazorpay(false)} 
-                className="text-gray-400 hover:text-white text-2xl leading-none transition-colors"
+                className="text-gray-600 hover:text-gray-900 text-2xl leading-none transition-colors"
                 disabled={paymentStatus === "processing"}
               >
                 &times;
@@ -942,29 +942,29 @@ export default function WaterPage() {
               <div className="space-y-5">
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Merchant</p>
-                  <p className="text-sm font-bold text-white">FreshBox Delivery Subscriptions</p>
+                  <p className="text-sm font-bold text-gray-900">FreshBox Delivery Subscriptions</p>
                 </div>
 
-                <div className="bg-gray-900/50 rounded-2xl p-4 border border-gray-800 space-y-3">
+                <div className="bg-white/50 rounded-2xl p-4 border border-gray-200 space-y-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Water Type:</span>
-                    <span className="font-semibold text-white capitalize">{form.water_type} Water</span>
+                    <span className="text-gray-600">Water Type:</span>
+                    <span className="font-semibold text-gray-900 capitalize">{form.water_type} Water</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Container:</span>
-                    <span className="font-semibold text-white capitalize">{form.container}</span>
+                    <span className="text-gray-600">Container:</span>
+                    <span className="font-semibold text-gray-900 capitalize">{form.container}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Duration:</span>
-                    <span className="font-semibold text-white capitalize">{selectedType} Plan</span>
+                    <span className="text-gray-600">Duration:</span>
+                    <span className="font-semibold text-gray-900 capitalize">{selectedType} Plan</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Deliveries:</span>
-                    <span className="font-semibold text-white">{totalServices} services</span>
+                    <span className="text-gray-600">Deliveries:</span>
+                    <span className="font-semibold text-gray-900">{totalServices} services</span>
                   </div>
-                  <div className="border-t border-gray-800/80 my-1"></div>
+                  <div className="border-t border-gray-200/80 my-1"></div>
                   <div className="flex justify-between items-center text-base font-bold">
-                    <span className="text-gray-200">Amount Due:</span>
+                    <span className="text-gray-800">Amount Due:</span>
                     <span className="text-gradient">
                       ₹{totalPrice.toFixed(2)}
                     </span>
@@ -973,7 +973,7 @@ export default function WaterPage() {
 
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Delivery Address</p>
-                  <div className="bg-gray-900/30 rounded-xl p-3 border border-gray-800 text-xs text-gray-300">
+                  <div className="bg-white/30 rounded-xl p-3 border border-gray-200 text-xs text-gray-700">
                     {(() => {
                       const addr = addresses.find(a => a.id === parseInt(selectedAddressId));
                       return addr ? `${addr.address_line}, ${addr.city} - ${addr.pincode}` : "No address selected";
@@ -985,14 +985,14 @@ export default function WaterPage() {
                   <button 
                     type="button"
                     onClick={handleSimulatedPayment} 
-                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-gray-900 font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
                   >
                     🔒 Pay ₹{totalPrice.toFixed(2)} Securely
                   </button>
                   <button 
                     type="button"
                     onClick={() => setShowRazorpay(false)} 
-                    className="w-full py-2.5 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white font-medium rounded-xl transition-all text-sm"
+                    className="w-full py-2.5 bg-transparent hover:bg-white text-gray-600 hover:text-gray-900 font-medium rounded-xl transition-all text-sm"
                   >
                     Cancel Payment
                   </button>
@@ -1007,8 +1007,8 @@ export default function WaterPage() {
                   <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
                 </div>
                 <div className="text-center space-y-2">
-                  <p className="text-white font-semibold text-base">Processing Payment...</p>
-                  <p className="text-xs text-gray-400 animate-pulse">{paymentProgressMsg}</p>
+                  <p className="text-gray-900 font-semibold text-base">Processing Payment...</p>
+                  <p className="text-xs text-gray-600 animate-pulse">{paymentProgressMsg}</p>
                 </div>
               </div>
             )}
@@ -1019,8 +1019,8 @@ export default function WaterPage() {
                   ✓
                 </div>
                 <div className="text-center space-y-1">
-                  <p className="text-white font-bold text-lg">Payment Successful</p>
-                  <p className="text-xs text-gray-400">Reference: pay_sim_{Math.random().toString(36).substr(2, 9)}</p>
+                  <p className="text-gray-900 font-bold text-lg">Payment Successful</p>
+                  <p className="text-xs text-gray-600">Reference: pay_sim_{Math.random().toString(36).substr(2, 9)}</p>
                 </div>
               </div>
             )}

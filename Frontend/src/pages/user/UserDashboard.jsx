@@ -52,32 +52,32 @@ export default function UserDashboard() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="stat-card">
-          <div className="w-12 h-12 bg-fresh-500/20 rounded-xl flex items-center justify-center text-fresh-400">
+          <div className="w-12 h-12 bg-fresh-500/20 rounded-xl flex items-center justify-center text-fresh-600">
             <Wallet size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm font-medium">Wallet Balance</p>
-            <p className="text-2xl font-bold text-white tracking-tight">₹{parseFloat(wallet?.wallet_balance || 0).toFixed(2)}</p>
+            <p className="text-gray-600 text-sm font-medium">Wallet Balance</p>
+            <p className="text-2xl font-bold text-gray-900 tracking-tight">₹{parseFloat(wallet?.wallet_balance || 0).toFixed(2)}</p>
           </div>
         </div>
         
         <div className="stat-card border border-red-900/30 hover:border-red-500/50 hover:shadow-red-900/20">
-          <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-400">
+          <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-red-600">
             <AlertTriangle size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm font-medium">Due Amount</p>
-            <p className="text-2xl font-bold text-white tracking-tight">₹{parseFloat(wallet?.due_amount || 0).toFixed(2)}</p>
+            <p className="text-gray-600 text-sm font-medium">Due Amount</p>
+            <p className="text-2xl font-bold text-gray-900 tracking-tight">₹{parseFloat(wallet?.due_amount || 0).toFixed(2)}</p>
           </div>
         </div>
         
         <div className="stat-card stat-card-aqua">
-          <div className="w-12 h-12 bg-aqua-500/20 rounded-xl flex items-center justify-center text-aqua-400">
+          <div className="w-12 h-12 bg-aqua-500/20 rounded-xl flex items-center justify-center text-aqua-600">
             <Package size={24} />
           </div>
           <div>
-            <p className="text-gray-400 text-sm font-medium">Active Subscriptions</p>
-            <p className="text-2xl font-bold text-white tracking-tight">{subscriptions.filter(s => s.status === 'active').length}</p>
+            <p className="text-gray-600 text-sm font-medium">Active Subscriptions</p>
+            <p className="text-2xl font-bold text-gray-900 tracking-tight">{subscriptions.filter(s => s.status === 'active').length}</p>
           </div>
         </div>
       </div>
@@ -87,33 +87,33 @@ export default function UserDashboard() {
         <div className="lg:col-span-2 space-y-6">
           <div className="card-glass">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white tracking-tight">My Subscriptions</h2>
+              <h2 className="text-xl font-bold text-gray-900 tracking-tight">My Subscriptions</h2>
               <Link to="/packages" className="btn-primary text-sm py-2 px-4 shadow-fresh-600/30">
                 + New Subscription
               </Link>
             </div>
             {subscriptions.length === 0 ? (
-              <div className="text-center py-12 text-gray-500 bg-gray-900/30 rounded-xl border border-gray-800 border-dashed">
+              <div className="text-center py-12 text-gray-500 bg-white/30 rounded-xl border border-gray-200 border-dashed">
                 <Package size={48} className="mx-auto mb-4 text-gray-600 opacity-50" />
-                <p className="text-lg font-medium text-gray-400 mb-1">No subscriptions yet</p>
+                <p className="text-lg font-medium text-gray-600 mb-1">No subscriptions yet</p>
                 <p className="text-sm mb-4">Start enjoying fresh vegetables and alkaline water</p>
-                <Link to="/packages" className="text-fresh-400 text-sm font-semibold hover:text-fresh-300 transition-colors flex items-center justify-center gap-1">
+                <Link to="/packages" className="text-fresh-600 text-sm font-semibold hover:text-fresh-700 transition-colors flex items-center justify-center gap-1">
                   Browse packages <ChevronRight size={16} />
                 </Link>
               </div>
             ) : (
               <div className="space-y-4">
                 {subscriptions.map(sub => (
-                  <div key={sub.id} className="bg-gray-900/60 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between border border-gray-700/50 hover:border-gray-600 transition-colors gap-4">
+                  <div key={sub.id} className="bg-white/60 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between border border-gray-300/50 hover:border-gray-600 transition-colors gap-4">
                     <div>
-                      <p className="font-semibold text-white text-lg flex items-center gap-2">
+                      <p className="font-semibold text-gray-900 text-lg flex items-center gap-2">
                         {sub.Package?.name} 
-                        <span className="text-xs px-2 py-1 bg-gray-800 rounded-md text-gray-400 uppercase tracking-wider">{sub.type}</span>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded-md text-gray-600 uppercase tracking-wider">{sub.type}</span>
                       </p>
-                      <p className="text-gray-400 text-sm mt-1">
+                      <p className="text-gray-600 text-sm mt-1">
                         {sub.start_date ? `${sub.start_date} → ${sub.end_date}` : "Start date pending"}
                         <span className="mx-2">•</span> 
-                        <span className="text-fresh-400 font-medium">{sub.services_completed}/{sub.total_services} services</span>
+                        <span className="text-fresh-600 font-medium">{sub.services_completed}/{sub.total_services} services</span>
                       </p>
                     </div>
                     <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
@@ -135,11 +135,11 @@ export default function UserDashboard() {
         <div className="space-y-6">
           <div className="card-glass h-full">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2 tracking-tight">
-                <Bell size={20} className="text-fresh-400" /> Notifications
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+                <Bell size={20} className="text-fresh-600" /> Notifications
               </h2>
               {notifications.length > 0 && (
-                <Link to="/notifications" className="text-gray-400 text-sm hover:text-white transition-colors">
+                <Link to="/notifications" className="text-gray-600 text-sm hover:text-gray-900 transition-colors">
                   View all
                 </Link>
               )}
@@ -153,9 +153,9 @@ export default function UserDashboard() {
             ) : (
               <div className="space-y-3">
                 {notifications.map(n => (
-                  <div key={n.id} className={`rounded-xl px-4 py-3 border transition-colors ${n.is_read ? "bg-gray-800/30 border-gray-800/50" : "bg-fresh-900/10 border-fresh-500/20 shadow-sm shadow-fresh-500/5"}`}>
-                    <p className="font-semibold text-sm text-white mb-0.5">{n.title}</p>
-                    <p className="text-gray-400 text-xs leading-relaxed">{n.message}</p>
+                  <div key={n.id} className={`rounded-xl px-4 py-3 border transition-colors ${n.is_read ? "bg-gray-100/30 border-gray-200/50" : "bg-fresh-100/10 border-fresh-500/20 shadow-sm shadow-fresh-500/5"}`}>
+                    <p className="font-semibold text-sm text-gray-900 mb-0.5">{n.title}</p>
+                    <p className="text-gray-600 text-xs leading-relaxed">{n.message}</p>
                   </div>
                 ))}
               </div>

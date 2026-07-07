@@ -44,7 +44,7 @@ export default function AdminSubscriptions() {
     return <span className={`${map[s] || "badge-gray"} badge`}>{s}</span>;
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading subscriptions...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading subscriptions...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -60,10 +60,10 @@ export default function AdminSubscriptions() {
           value={search} onChange={e => setSearch(e.target.value)}
           className="input flex-1 min-w-48"
         />
-        <div className="flex gap-2 bg-gray-800 rounded-xl p-1">
+        <div className="flex gap-2 bg-gray-100 rounded-xl p-1">
           {["all", "active", "paused", "cancelled", "completed"].map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${filter === f ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${filter === f ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}>
               {f}
             </button>
           ))}
@@ -75,7 +75,7 @@ export default function AdminSubscriptions() {
         {["active", "paused", "cancelled", "completed"].map(s => (
           <div key={s} className="card py-3">
             <p className="text-gray-500 text-xs capitalize">{s}</p>
-            <p className="text-2xl font-bold text-white">{subs.filter(sub => sub.status === s).length}</p>
+            <p className="text-2xl font-bold text-gray-900">{subs.filter(sub => sub.status === s).length}</p>
           </div>
         ))}
       </div>
@@ -103,16 +103,16 @@ export default function AdminSubscriptions() {
                 {filtered.map(s => (
                   <tr key={s.id} className="table-row">
                     <td className="p-3">
-                      <p className="text-white font-medium">{s.User?.name}</p>
+                      <p className="text-gray-900 font-medium">{s.User?.name}</p>
                       <p className="text-gray-500 text-xs">{s.User?.phone}</p>
                     </td>
-                    <td className="p-3 text-gray-300">{s.Package?.name || `#${s.package_id}`}</td>
-                    <td className="p-3 text-gray-400 text-xs max-w-[150px] truncate" title={s.Address ? `${s.Address.address_line}, ${s.Address.city}` : ''}>
+                    <td className="p-3 text-gray-700">{s.Package?.name || `#${s.package_id}`}</td>
+                    <td className="p-3 text-gray-600 text-xs max-w-[150px] truncate" title={s.Address ? `${s.Address.address_line}, ${s.Address.city}` : ''}>
                       {s.Address ? `${s.Address.address_line}, ${s.Address.city}` : <span className="text-gray-600 italic">Not provided</span>}
                     </td>
                     <td className="p-3"><span className="badge badge-gray capitalize">{s.type}</span></td>
-                    <td className="p-3 text-gray-400">{s.start_date || "Not set"}</td>
-                    <td className="p-3 text-gray-400">
+                    <td className="p-3 text-gray-600">{s.start_date || "Not set"}</td>
+                    <td className="p-3 text-gray-600">
                       <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                           <div className="h-full bg-fresh-500 rounded-full" style={{ width: `${s.total_services ? (s.services_completed / s.total_services) * 100 : 0}%` }} />
@@ -121,7 +121,7 @@ export default function AdminSubscriptions() {
                       </div>
                     </td>
                     <td className="p-3 text-center">{statusBadge(s.status)}</td>
-                    <td className="p-3 text-right text-fresh-400 font-medium">
+                    <td className="p-3 text-right text-fresh-600 font-medium">
                       {s.isWater ? (
                         s.type === "yearly" ? `₹${parseFloat(s.yearly_amount_paid || 0).toFixed(0)}` : `₹${parseFloat(s.price_per_bottle * s.total_services).toFixed(0)}/mo`
                       ) : (

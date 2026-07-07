@@ -18,13 +18,15 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/;
+    const allowed = /jpeg|jpg|png|gif|webp|mp4|webm|avi|mov|mkv|pdf|doc|docx|txt|xls|xlsx|csv/;
     const extname = allowed.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowed.test(file.mimetype);
-    if (extname && mimetype) {
+    
+    // We relax mimetype check a bit because documents and videos have varied mimetypes.
+    // If extname matches our allowed list, we will accept it.
+    if (extname) {
         cb(null, true);
     } else {
-        cb(new Error("Only image files are allowed"));
+        cb(new Error("File type not allowed"));
     }
 };
 

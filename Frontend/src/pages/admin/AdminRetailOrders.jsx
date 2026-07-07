@@ -38,7 +38,7 @@ export default function AdminRetailOrders() {
     return `${qty.toFixed(0)} pcs`;
   };
 
-  if (loading && orders.length === 0) return <div className="flex items-center justify-center h-64 text-gray-400">Loading orders...</div>;
+  if (loading && orders.length === 0) return <div className="flex items-center justify-center h-64 text-gray-600">Loading orders...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -48,7 +48,7 @@ export default function AdminRetailOrders() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
@@ -61,11 +61,11 @@ export default function AdminRetailOrders() {
           const addr = order.Address;
 
           return (
-            <div key={order.id} className="card border border-gray-800 hover:border-gray-700 transition-all space-y-4">
+            <div key={order.id} className="card border border-gray-200 hover:border-gray-300 transition-all space-y-4">
               {/* Order Header */}
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-gray-800">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-gray-200">
                 <div className="space-y-1">
-                  <h3 className="font-bold text-white text-base">Order #{order.id}</h3>
+                  <h3 className="font-bold text-gray-900 text-base">Order #{order.id}</h3>
                   <p className="text-gray-500 text-xs">Placed on {dateStr}</p>
                 </div>
 
@@ -77,7 +77,7 @@ export default function AdminRetailOrders() {
                   </span>
 
                   <span className={`badge uppercase text-xs ${
-                    order.payment_status === 'success' ? 'badge-green' : order.payment_status === 'failed' ? 'badge-red' : 'bg-gray-800 text-gray-400 border border-gray-700'
+                    order.payment_status === 'success' ? 'badge-green' : order.payment_status === 'failed' ? 'badge-red' : 'bg-gray-100 text-gray-600 border border-gray-300'
                   }`}>
                     💰 Payment: {order.payment_status}
                   </span>
@@ -95,19 +95,19 @@ export default function AdminRetailOrders() {
                 {/* Customer & Address */}
                 <div className="space-y-2 md:col-span-1">
                   <p className="text-gray-500 font-bold uppercase tracking-wider text-xs">Customer Details</p>
-                  <p className="text-white font-medium">{order.User?.name}</p>
-                  <p className="text-gray-400 text-xs">📞 {order.User?.phone}</p>
+                  <p className="text-gray-900 font-medium">{order.User?.name}</p>
+                  <p className="text-gray-600 text-xs">📞 {order.User?.phone}</p>
 
-                  <div className="mt-3 pt-3 border-t border-gray-800/50 space-y-1">
+                  <div className="mt-3 pt-3 border-t border-gray-200/50 space-y-1">
                     <p className="text-gray-500 font-bold uppercase tracking-wider text-xs">Delivery Address</p>
                     {addr ? (
-                      <p className="text-gray-300 text-xs">
+                      <p className="text-gray-700 text-xs">
                         📍 {addr.address_line}{addr.landmark ? `, ${addr.landmark}` : ""}, {addr.city} - {addr.pincode}
                       </p>
                     ) : (
                       <p className="text-yellow-500 text-xs font-semibold">⚠️ Address data missing</p>
                     )}
-                    <p className="text-fresh-400 text-xs font-semibold pt-1">
+                    <p className="text-fresh-600 text-xs font-semibold pt-1">
                       📅 Scheduled Delivery: {order.delivery_date}
                     </p>
                   </div>
@@ -116,10 +116,10 @@ export default function AdminRetailOrders() {
                 {/* Order Items */}
                 <div className="space-y-2 md:col-span-2">
                   <p className="text-gray-500 font-bold uppercase tracking-wider text-xs mb-1">Items Ordered</p>
-                  <div className="bg-gray-900/35 border border-gray-850 rounded-xl overflow-hidden">
+                  <div className="bg-white/35 border border-gray-850 rounded-xl overflow-hidden">
                     <table className="w-full text-xs text-left">
                       <thead>
-                        <tr className="bg-gray-850 text-gray-400">
+                        <tr className="bg-gray-850 text-gray-600">
                           <th className="p-2">Item</th>
                           <th className="p-2 text-right">Quantity</th>
                           <th className="p-2 text-right">Unit Price</th>
@@ -133,19 +133,19 @@ export default function AdminRetailOrders() {
                             : `₹${(parseFloat(item.price_per_unit) * 1000).toFixed(2)}/kg`;
 
                           return (
-                            <tr key={item.id} className="border-t border-gray-850 text-gray-300">
-                              <td className="p-2 font-medium text-white">{item.Product?.name || "Unknown Product"}</td>
+                            <tr key={item.id} className="border-t border-gray-850 text-gray-700">
+                              <td className="p-2 font-medium text-gray-900">{item.Product?.name || "Unknown Product"}</td>
                               <td className="p-2 text-right">{formatQuantity(item.quantity, item.Product?.unit)}</td>
                               <td className="p-2 text-right text-gray-500">{unitPriceDisplay}</td>
-                              <td className="p-2 text-right text-gray-200">₹{parseFloat(item.total_price).toFixed(2)}</td>
+                              <td className="p-2 text-right text-gray-800">₹{parseFloat(item.total_price).toFixed(2)}</td>
                             </tr>
                           );
                         })}
-                        <tr className="border-t border-gray-800 text-gray-400 font-medium">
+                        <tr className="border-t border-gray-200 text-gray-600 font-medium">
                           <td colSpan="3" className="p-2 text-right">Delivery Charge:</td>
-                          <td className="p-2 text-right text-gray-300">₹{parseFloat(order.delivery_charge).toFixed(2)}</td>
+                          <td className="p-2 text-right text-gray-700">₹{parseFloat(order.delivery_charge).toFixed(2)}</td>
                         </tr>
-                        <tr className="border-t border-gray-800 font-bold text-white bg-gray-800/10">
+                        <tr className="border-t border-gray-200 font-bold text-gray-900 bg-gray-100/10">
                           <td colSpan="3" className="p-2 text-right text-sm">Grand Total:</td>
                           <td className="p-2 text-right text-gradient text-sm">₹{parseFloat(order.total_amount).toFixed(2)}</td>
                         </tr>
@@ -157,7 +157,7 @@ export default function AdminRetailOrders() {
 
               {/* Actions Footer */}
               {order.delivery_status === 'pending' && (
-                <div className="flex items-center gap-3 pt-3 border-t border-gray-800/80">
+                <div className="flex items-center gap-3 pt-3 border-t border-gray-200/80">
                   <button
                     onClick={() => handleUpdateStatus(order.id, 'delivered')}
                     className="btn-primary py-1.5 px-6 text-xs"
@@ -166,7 +166,7 @@ export default function AdminRetailOrders() {
                   </button>
                   <button
                     onClick={() => handleUpdateStatus(order.id, 'cancelled')}
-                    className="btn-secondary py-1.5 px-4 text-xs text-red-400 hover:text-red-300"
+                    className="btn-secondary py-1.5 px-4 text-xs text-red-600 hover:text-red-300"
                   >
                     🗑️ Cancel Order
                   </button>
@@ -179,7 +179,7 @@ export default function AdminRetailOrders() {
         {orders.length === 0 && (
           <div className="card text-center py-16 text-gray-500">
             <p className="text-5xl mb-4">🛒</p>
-            <p className="text-lg font-medium text-white">No retail orders yet</p>
+            <p className="text-lg font-medium text-gray-900">No retail orders yet</p>
             <p className="text-xs max-w-sm mx-auto mt-1">Retail customer orders will show up here for delivery processing.</p>
           </div>
         )}

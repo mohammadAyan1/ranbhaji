@@ -5,8 +5,8 @@ const CATEGORIES = ["vegetable", "fruit", "water", "exotic", "salad"];
 const UNITS = ["gm", "ml", "piece"];
 
 const emptyForm = {
-  name: "", category: "vegetable", sub_category: "",
-  purchase_price_input: "", selling_price_input: "", unit: "gm"
+  name: "", hindi_name: "", category: "vegetable", sub_category: "",
+  purchase_price_input: "", selling_price_input: "", unit: "gm", image: null
 };
 
 const showKgToggle = (category, unit) =>
@@ -98,21 +98,24 @@ export default function AdminProducts() {
     const purchase_price_per_gm = useKg ? purchaseInput / 1000 : purchaseInput;
     const selling_price_per_gm = useKg ? sellingInput / 1000 : sellingInput;
 
-    const payload = {
-      name: form.name,
-      category: form.category,
-      sub_category: form.sub_category,
-      purchase_price_per_gm,
-      selling_price_per_gm,
-      unit: form.unit
-    };
+    const payload = new FormData();
+    payload.append("name", form.name);
+    payload.append("hindi_name", form.hindi_name || "");
+    payload.append("category", form.category);
+    payload.append("sub_category", form.sub_category || "");
+    payload.append("purchase_price_per_gm", purchase_price_per_gm);
+    payload.append("selling_price_per_gm", selling_price_per_gm);
+    payload.append("unit", form.unit);
+    if (form.image) {
+      payload.append("image", form.image);
+    }
 
     try {
       if (editing) {
-        await api.put(`/products/${editing}`, payload);
+        await api.put(`/products/${editing}`, payload, { headers: { "Content-Type": "multipart/form-data" } });
         setMsg("✅ Product updated");
       } else {
-        await api.post("/products", payload);
+        await api.post("/products", payload, { headers: { "Content-Type": "multipart/form-data" } });
         setMsg("✅ Product created");
       }
       setForm(emptyForm);
@@ -147,6 +150,7 @@ export default function AdminProducts() {
 
     setForm({
       name: p.name,
+      hindi_name: p.hindi_name || "",
       category: cat,
       sub_category: p.sub_category || "",
       purchase_price_input: canUseKg
@@ -155,7 +159,8 @@ export default function AdminProducts() {
       selling_price_input: canUseKg
         ? (parseFloat(p.selling_price_per_gm) * 1000).toFixed(2)
         : p.selling_price_per_gm,
-      unit: unt
+      unit: unt,
+      image: null
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -253,7 +258,7 @@ export default function AdminProducts() {
     return `₹${prc.toFixed(2)} / pc`;
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -264,7 +269,7 @@ export default function AdminProducts() {
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex bg-gray-800 p-1 rounded-xl border border-gray-700 w-fit">
+        <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-300 w-fit">
           {[
             { id: "catalog", label: "Product Catalog", icon: "🥦" },
             { id: "purchase", label: "Log Purchase", icon: "➕" },
@@ -275,8 +280,8 @@ export default function AdminProducts() {
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setMsg(""); }}
               className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id
-                ? "bg-fresh-600 text-white shadow-md shadow-fresh-900/20"
-                : "text-gray-400 hover:text-white"
+                ? "bg-fresh-600 text-gray-900 shadow-md shadow-fresh-900/20"
+                : "text-gray-600 hover:text-gray-900"
                 }`}
             >
               <span>{tab.icon}</span>
@@ -287,7 +292,7 @@ export default function AdminProducts() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
@@ -297,7 +302,7 @@ export default function AdminProducts() {
         <div className="space-y-6">
           {/* Form Card */}
           <div className="card">
-            <h3 className="font-semibold text-white mb-5">{editing ? "Edit Product Details" : "Add New Product to System"}</h3>
+            <h3 className="font-semibold text-gray-900 mb-5">{editing ? "Edit Product Details" : "Add New Product to System"}</h3>
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="label">Product Name</label>
@@ -307,6 +312,32 @@ export default function AdminProducts() {
                   value={form.name}
                   onChange={e => handleFormChange("name", e.target.value)}
                   required
+                />
+              </div>
+
+              <div>
+                <label className="label">Hindi Name (Optional)</label>
+                <input
+                  className="input"
+                  placeholder="e.g. टमाटर"
+                  value={form.hindi_name || ""}
+                  onChange={e => handleFormChange("hindi_name", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="label">Product Image (Optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="block w-full text-sm text-gray-600
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-gray-700 file:text-gray-900
+                    hover:file:bg-gray-600
+                    cursor-pointer bg-white border border-gray-300 rounded-lg p-1.5 focus:border-fresh-500 focus:outline-none transition-colors"
+                  onChange={e => handleFormChange("image", e.target.files[0])}
                 />
               </div>
 
@@ -333,7 +364,7 @@ export default function AdminProducts() {
                     {isWater ? "Avg Cost Price per Bottle (₹)" : isPiece ? "Avg Cost Price per Piece (₹)" : `Avg Cost ${priceLabel}`}
                   </label>
                   {showKgToggle(form.category, form.unit) && (
-                    <div className="flex items-center bg-gray-800 rounded-lg p-0.5 border border-gray-700">
+                    <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-300">
                       <button
                         type="button"
                         onClick={() => {
@@ -348,7 +379,7 @@ export default function AdminProducts() {
                           }
                           setPriceUnit(p => p === "kg" ? "gm" : "kg");
                         }}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${priceUnit === "kg" ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"}`}
+                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${priceUnit === "kg" ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
                       >
                         /kg
                       </button>
@@ -361,7 +392,7 @@ export default function AdminProducts() {
                           setForm(f => ({ ...f, purchase_price_input: newPurchase, selling_price_input: newSelling }));
                           setPriceUnit("gm");
                         }}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${priceUnit === "gm" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-white"}`}
+                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${priceUnit === "gm" ? "bg-gray-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
                       >
                         /gm
                       </button>
@@ -417,7 +448,7 @@ export default function AdminProducts() {
                   </button>
                 )}
                 {profit && (
-                  <span className="text-fresh-400 text-sm">
+                  <span className="text-fresh-600 text-sm">
                     Est. Profit margin: <strong>{profit}%</strong>
                   </span>
                 )}
@@ -427,15 +458,15 @@ export default function AdminProducts() {
 
           {/* Table Card */}
           <div className="card">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-gray-800">
-              <h3 className="font-semibold text-white">Catalog Products ({filteredProducts.length})</h3>
-              <div className="flex flex-wrap gap-1 bg-gray-850 p-1 rounded-xl border border-gray-800">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Catalog Products ({filteredProducts.length})</h3>
+              <div className="flex flex-wrap gap-1 bg-gray-850 p-1 rounded-xl border border-gray-200">
                 {["all", "vegetable", "fruit", "water", "exotic", "salad"].map(c => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setFilterCategory(c)}
-                    className={`px-3 py-1.5 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"}`}
+                    className={`px-3 py-1.5 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
                   >
                     {c === "all" ? "All" : c}
                   </button>
@@ -447,7 +478,8 @@ export default function AdminProducts() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="table-header">
-                    <th className="text-left p-3 rounded-tl-xl">Name</th>
+                    <th className="text-left p-3 rounded-tl-xl w-12">Image</th>
+                    <th className="text-left p-3">Name</th>
                     <th className="text-left p-3">Category</th>
                     <th className="text-right p-3">Avg Cost Price</th>
                     <th className="text-right p-3">Default Sell Price</th>
@@ -465,31 +497,46 @@ export default function AdminProducts() {
 
                     return (
                       <tr key={p.id} className="table-row">
-                        <td className="p-3 text-white font-medium">{p.name}</td>
+                        <td className="p-3">
+                          {p.image_url ? (
+                            <img 
+                              src={`${import.meta.env.VITE_API_URL}${p.image_url}`} 
+                              alt={p.name} 
+                              className="w-10 h-10 object-cover rounded-lg border border-gray-300 bg-gray-100"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-300 flex items-center justify-center text-gray-500 text-xs">
+                              No Img
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-gray-900 font-medium">
+                          {p.name} {p.hindi_name ? <span className="text-gray-600 font-normal">({p.hindi_name})</span> : ""}
+                        </td>
                         <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
                         <td className="p-3 text-right">
-                          <p className="text-gray-300 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</p>
+                          <p className="text-gray-700 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</p>
                           <p className="text-gray-600 text-[10px]">₹{p.purchase_price_per_gm} / {p.unit}</p>
                           <button
                             onClick={() => calculateActualAvg(p.id, p.name, p.unit)}
-                            className="mt-1 px-2 py-0.5 text-[10px] bg-gray-800 text-blue-400 rounded hover:bg-gray-700 transition-colors"
+                            className="mt-1 px-2 py-0.5 text-[10px] bg-gray-100 text-blue-400 rounded hover:bg-gray-700 transition-colors"
                           >
                             📊 Check Actual Avg
                           </button>
                         </td>
                         <td className="p-3 text-right">
-                          <p className="text-white font-semibold">{getPricePerKgDisplay(p.selling_price_per_gm, p.unit)}</p>
+                          <p className="text-gray-900 font-semibold">{getPricePerKgDisplay(p.selling_price_per_gm, p.unit)}</p>
                           <p className="text-gray-500 text-[10px]">₹{p.selling_price_per_gm} / {p.unit}</p>
                         </td>
-                        <td className="p-3 text-right text-fresh-400">{margin}%</td>
+                        <td className="p-3 text-right text-fresh-600">{margin}%</td>
                         <td className="p-3 text-right text-gray-500">{p.unit}</td>
                         <td className="p-3 text-center">
                           <span className={p.status === "active" ? "badge-green" : "badge-red"}>{p.status}</span>
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => startEdit(p)} className="text-xs text-fresh-400 hover:text-fresh-300 font-medium">Edit</button>
-                            <button onClick={() => handleDelete(p.id)} className="text-xs text-red-400 hover:text-red-300 font-medium">Delete</button>
+                            <button onClick={() => startEdit(p)} className="text-xs text-fresh-600 hover:text-fresh-700 font-medium">Edit</button>
+                            <button onClick={() => handleDelete(p.id)} className="text-xs text-red-600 hover:text-red-300 font-medium">Delete</button>
                           </div>
                         </td>
                       </tr>
@@ -505,8 +552,8 @@ export default function AdminProducts() {
       {/* ─── TAB 2: LOG STOCK PURCHASE ───────────────────────────────── */}
       {activeTab === "purchase" && (
         <div className="card">
-          <h3 className="font-semibold text-white mb-5">Stock Demand List & Purchase Entry</h3>
-          <p className="text-gray-400 text-xs mb-6">
+          <h3 className="font-semibold text-gray-900 mb-5">Stock Demand List & Purchase Entry</h3>
+          <p className="text-gray-600 text-xs mb-6">
             Admin jo bhi fruits/vegetables buy karega, uska wajan (kg/pieces) aur total price yahan enter karein.
             System automatically per-kg/per-piece rate calculate kar lega.
           </p>
@@ -530,7 +577,7 @@ export default function AdminProducts() {
                   
                   return (
                     <tr key={d.id} className="table-row">
-                      <td className="p-3 text-white font-medium">{d.name}</td>
+                      <td className="p-3 text-gray-900 font-medium">{d.name}</td>
                       <td className="p-3 text-right font-bold text-blue-400">{displayQty} {displayUnit}</td>
                       <td className="p-3 text-right">
                         <button 
@@ -562,12 +609,12 @@ export default function AdminProducts() {
           </div>
 
           {purchaseForm.product_id && (
-            <div className="bg-gray-850 border border-gray-800 rounded-xl p-5">
+            <div className="bg-gray-850 border border-gray-200 rounded-xl p-5">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-white font-semibold">
+                <h4 className="text-gray-900 font-semibold">
                   Log Purchase: {demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}
                 </h4>
-                <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="text-gray-400 hover:text-white">✕</button>
+                <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="text-gray-600 hover:text-gray-900">✕</button>
               </div>
               <form onSubmit={handlePurchaseSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -625,15 +672,15 @@ export default function AdminProducts() {
 
                 {/* Auto Calculated Per Kg Live Preview */}
                 {parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
-                  <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 flex justify-between items-center text-sm mt-4">
-                    <span className="text-gray-400">Calculated Purchase Price:</span>
+                  <div className="bg-white/50 border border-gray-200 rounded-xl p-4 flex justify-between items-center text-sm mt-4">
+                    <span className="text-gray-600">Calculated Purchase Price:</span>
                     <span className="text-lg font-bold text-gradient">
                       ₹{(parseFloat(purchaseForm.total_price) / parseFloat(purchaseForm.quantity)).toFixed(2)} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
                     </span>
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-gray-800">
+                <div className="pt-4 border-t border-gray-200">
                   <button
                     type="submit"
                     disabled={submittingPurchase}
@@ -651,7 +698,7 @@ export default function AdminProducts() {
       {/* ─── TAB 3: STOCK & INVENTORY SUMMARY ────────────────────────── */}
       {activeTab === "stock" && (
         <div className="card">
-          <h3 className="font-semibold text-white mb-4">Current Stock Levels</h3>
+          <h3 className="font-semibold text-gray-900 mb-4">Current Stock Levels</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -674,18 +721,18 @@ export default function AdminProducts() {
                   return (
                     <tr key={p.id} className="table-row">
                       <td className="p-3">
-                        <p className="text-white font-medium">{p.name}</p>
+                        <p className="text-gray-900 font-medium">{p.name}</p>
                         <p className="text-gray-600 text-[10px]">ID: {p.id}</p>
                       </td>
                       <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
                       <td className="p-3 text-right font-medium text-blue-400">{formatQuantity(p.total_purchased_qty, p.unit)}</td>
                       <td className="p-3 text-right font-medium text-orange-400">{formatQuantity(p.total_sold_qty, p.unit)}</td>
-                      <td className={`p-3 text-right font-bold ${isLow ? 'text-red-400' : 'text-fresh-400'}`}>
+                      <td className={`p-3 text-right font-bold ${isLow ? 'text-red-600' : 'text-fresh-600'}`}>
                         {formatQuantity(p.current_stock, p.unit)}
                         {isLow && <span className="block text-[8px] text-red-500 font-bold uppercase animate-pulse">Low Stock</span>}
                       </td>
-                      <td className="p-3 text-right text-gray-300 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</td>
-                      <td className="p-3 text-right text-white font-semibold">{getPricePerKgDisplay(p.selling_price_per_gm, p.unit)}</td>
+                      <td className="p-3 text-right text-gray-700 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</td>
+                      <td className="p-3 text-right text-gray-900 font-semibold">{getPricePerKgDisplay(p.selling_price_per_gm, p.unit)}</td>
                       <td className="p-3 text-center">
                         <span className={`badge ${currentStockVal > 0 ? "badge-green" : "badge-red"}`}>
                           {currentStockVal > 0 ? "In Stock" : "Out of Stock"}
@@ -708,7 +755,7 @@ export default function AdminProducts() {
       {/* ─── TAB 4: PURCHASE HISTORY LOGS ────────────────────────────────── */}
       {activeTab === "logs" && (
         <div className="card">
-          <h3 className="font-semibold text-white mb-4">Stock Purchase Transactions Logs</h3>
+          <h3 className="font-semibold text-gray-900 mb-4">Stock Purchase Transactions Logs</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -730,16 +777,16 @@ export default function AdminProducts() {
 
                   return (
                     <tr key={log.id} className="table-row">
-                      <td className="p-3 text-gray-400">{dateStr}</td>
-                      <td className="p-3 text-white font-medium">{log.Product?.name || "Unknown Product"}</td>
+                      <td className="p-3 text-gray-600">{dateStr}</td>
+                      <td className="p-3 text-gray-900 font-medium">{log.Product?.name || "Unknown Product"}</td>
                       <td className="p-3"><span className="badge-blue badge">{log.Product?.category || "—"}</span></td>
                       <td className="p-3 text-right font-medium text-blue-400">
                         {formatQuantity(log.quantity, log.Product?.unit)}
                       </td>
-                      <td className="p-3 text-right text-gray-300">
+                      <td className="p-3 text-right text-gray-700">
                         ₹{parseFloat(log.purchase_price_per_kg).toFixed(2)} / {log.Product?.unit === 'piece' ? 'pc' : 'kg/L'}
                       </td>
-                      <td className="p-3 text-right text-white">
+                      <td className="p-3 text-right text-gray-900">
                         ₹{parseFloat(log.selling_price_per_kg).toFixed(2)} / {log.Product?.unit === 'piece' ? 'pc' : 'kg/L'}
                       </td>
                       <td className="p-3 text-right font-bold text-gradient">₹{parseFloat(log.total_amount).toFixed(2)}</td>

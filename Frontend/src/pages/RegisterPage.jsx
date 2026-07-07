@@ -20,7 +20,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-fresh-600/10 rounded-full blur-3xl"></div>
       </div>
@@ -28,13 +28,13 @@ export default function RegisterPage() {
       <div className="relative w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-fresh-600 rounded-2xl text-3xl mb-4 shadow-lg shadow-fresh-600/30">🥦</div>
-          <h1 className="text-4xl font-bold text-white">FreshBox</h1>
-          <p className="text-gray-400 mt-1">Create your account</p>
+          <h1 className="text-4xl font-bold text-gray-900">FreshBox</h1>
+          <p className="text-gray-600 mt-1">Create your account</p>
         </div>
 
         <div className="card-glass">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-5 text-red-400 text-sm">{error}</div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-5 text-red-600 text-sm">{error}</div>
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -57,8 +57,8 @@ export default function RegisterPage() {
               {isLoading ? "Creating account..." : "Create Account"}
             </button>
           </form>
-          <p className="text-center text-gray-400 text-sm mt-5">
-            Already have an account? <Link to="/login" className="text-fresh-400 hover:text-fresh-300 font-medium">Sign In</Link>
+          <p className="text-center text-gray-600 text-sm mt-5">
+            Already have an account? <Link to="/login" className="text-fresh-600 hover:text-fresh-700 font-medium">Sign In</Link>
           </p>
         </div>
       </div>

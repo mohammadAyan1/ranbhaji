@@ -166,7 +166,7 @@ export default function AdminCalculator() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading products...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading products...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -185,15 +185,15 @@ export default function AdminCalculator() {
       {msg && (
         <div className={`rounded-xl px-4 py-3 text-sm border ${
           msgType === "success" 
-            ? "bg-fresh-900/30 text-fresh-400 border-fresh-700/50" 
-            : "bg-red-900/30 text-red-400 border-red-700/50"
+            ? "bg-fresh-100/30 text-fresh-600 border-fresh-700/50" 
+            : "bg-red-900/30 text-red-600 border-red-700/50"
         }`}>
           {msg}
         </div>
       )}
 
       {/* ─── SETTINGS PANEL ───────────────────────────────────────── */}
-      <div className="card grid grid-cols-2 md:grid-cols-5 gap-4 border-gray-800 bg-gray-900/50">
+      <div className="card grid grid-cols-2 md:grid-cols-5 gap-4 border-gray-200 bg-white/50">
         <div>
           <label className="label text-xs uppercase tracking-wider">Margin Percent (%)</label>
           <input
@@ -227,8 +227,8 @@ export default function AdminCalculator() {
               }}
               className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border transition-all ${
                 personRangeModeCalc
-                  ? "bg-fresh-900/50 border-fresh-600/50 text-fresh-400"
-                  : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+                  ? "bg-fresh-100/50 border-fresh-600/50 text-fresh-600"
+                  : "bg-gray-100 border-gray-300 text-gray-600 hover:text-gray-900"
               }`}
             >
               {personRangeModeCalc ? "📏 Range" : "→ Range?"}
@@ -263,7 +263,7 @@ export default function AdminCalculator() {
             />
           )}
           {personRangeModeCalc && numPersons && numPersonsMax && (
-            <p className="text-[10px] text-fresh-400 mt-1">{numPersons}–{numPersonsMax} persons</p>
+            <p className="text-[10px] text-fresh-600 mt-1">{numPersons}–{numPersonsMax} persons</p>
           )}
         </div>
         <div>
@@ -317,44 +317,44 @@ export default function AdminCalculator() {
       {/* ─── SUMMARY CARDS ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Base Cost */}
-        <div className="card p-5 border-gray-800 bg-gray-900/50 hover:border-gray-700 transition-all duration-300">
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Total Base Purchase Cost</p>
-          <p className="text-2xl font-bold text-white">₹{totalBasePurchaseCost.toFixed(2)}</p>
+        <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Total Base Purchase Cost</p>
+          <p className="text-2xl font-bold text-gray-900">₹{totalBasePurchaseCost.toFixed(2)}</p>
           <span className="text-[10px] text-gray-500">Fixed: ₹{totalFixedPurchaseCost.toFixed(2)} · Seasonal: ₹{totalSeasonalPurchaseCost.toFixed(2)}</span>
         </div>
 
         {/* Per-Service Margin Price */}
-        <div className="card p-5 border-gray-800 bg-gray-900/50 hover:border-gray-700 transition-all duration-300">
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Selling Price Per Service</p>
+        <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Selling Price Per Service</p>
           <p className="text-2xl font-bold text-yellow-400">₹{pricePerService.toFixed(2)}</p>
           <span className="text-[10px] text-gray-500">Base Cost + {marginPercent}% Margin</span>
         </div>
 
         {/* Deliveries */}
-        <div className="card p-5 border-gray-800 bg-gray-900/50 hover:border-gray-700 transition-all duration-300">
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Deliveries Count</p>
+        <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Deliveries Count</p>
           <p className="text-2xl font-bold text-blue-400">{servicesCount}</p>
           <span className="text-[10px] text-gray-500">Deliveries per package cycle</span>
         </div>
 
         {/* Final Price */}
-        <div className="card p-5 border-gray-800 bg-gray-900/50 hover:border-gray-700 transition-all duration-300">
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1">Calculated Package Price</p>
-          <p className="text-2xl font-bold text-fresh-400">₹{finalPackagePrice.toFixed(2)}</p>
+        <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculated Package Price</p>
+          <p className="text-2xl font-bold text-fresh-600">₹{finalPackagePrice.toFixed(2)}</p>
           <span className="text-[10px] text-gray-500">₹{pricePerService.toFixed(2)} * {servicesCount} services</span>
         </div>
       </div>
 
       {/* ─── FIXED PRODUCTS BUILDER ───────────────────────────────── */}
-      <div className="card border-gray-800 bg-gray-900/30 p-6 space-y-4">
+      <div className="card border-gray-200 bg-white/30 p-6 space-y-4">
         <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
-            <h3 className="font-semibold text-white text-lg">1. Fixed Products Simulation</h3>
+            <h3 className="font-semibold text-gray-900 text-lg">1. Fixed Products Simulation</h3>
             <p className="text-xs text-gray-500">Configure {fixedCount} products to be included in every delivery.</p>
           </div>
           <div>
             <select
-              className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-gray-900"
+              className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-white"
               value={fixedCategoryFilter}
               onChange={(e) => setFixedCategoryFilter(e.target.value)}
             >
@@ -376,7 +376,7 @@ export default function AdminCalculator() {
             return (
               <div
                 key={item.id}
-                className="flex flex-wrap items-center gap-4 bg-gray-800/40 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-all duration-200"
+                className="flex flex-wrap items-center gap-4 bg-gray-100/40 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all duration-200"
               >
                 <div className="w-8 flex items-center justify-center font-bold text-gray-600">
                   {index + 1}.
@@ -384,11 +384,11 @@ export default function AdminCalculator() {
 
                 {/* Product Search */}
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Search & Select Product</label>
+                  <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Search & Select Product</label>
                   <input
                     type="text"
                     list={`fixed-products-list-${item.id}`}
-                    className="input py-1.5 px-3 text-sm w-full bg-gray-900"
+                    className="input py-1.5 px-3 text-sm w-full bg-white"
                     placeholder="Type to search..."
                     value={item.search || ""}
                     onChange={(e) => {
@@ -409,15 +409,15 @@ export default function AdminCalculator() {
 
                 {/* Quantity Input */}
                 <div className="w-full sm:w-32">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Quantity</label>
-                  <div className="flex items-center bg-gray-900 rounded-xl border border-gray-700 px-2.5">
+                  <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Quantity</label>
+                  <div className="flex items-center bg-white rounded-xl border border-gray-300 px-2.5">
                     <input
                       type="number"
                       min="0"
                       placeholder="Qty"
                       value={item.qty}
                       onChange={(e) => updateFixedRow(item.id, "qty", e.target.value)}
-                      className="w-full bg-transparent text-white border-none py-1.5 focus:outline-none text-sm text-center"
+                      className="w-full bg-transparent text-gray-900 border-none py-1.5 focus:outline-none text-sm text-center"
                       required
                     />
                     <span className="text-xs text-gray-500 font-medium ml-1">
@@ -428,11 +428,11 @@ export default function AdminCalculator() {
 
                 {/* Pricing per gm / unit */}
                 {item.product_id && products.find(p => p.id === parseInt(item.product_id)) && (
-                  <div className="flex gap-4 border-l border-gray-800 pl-4 py-1.5 w-full md:w-auto md:border-l md:pl-4">
+                  <div className="flex gap-4 border-l border-gray-200 pl-4 py-1.5 w-full md:w-auto md:border-l md:pl-4">
                     {/* Cost details */}
                     <div className="text-left w-32">
-                      <span className="text-[10px] text-gray-400 block uppercase">Base Purchase Cost</span>
-                      <span className="text-xs font-semibold text-white block">
+                      <span className="text-[10px] text-gray-600 block uppercase">Base Purchase Cost</span>
+                      <span className="text-xs font-semibold text-gray-900 block">
                         ₹{(parseFloat(item.qty || 0) * parseFloat(products.find(p => p.id === parseInt(item.product_id))?.purchase_price_per_gm || 0)).toFixed(2)}
                       </span>
                       <span className="text-[9px] text-gray-500 block">
@@ -448,15 +448,15 @@ export default function AdminCalculator() {
       </div>
 
       {/* ─── SEASONAL PRODUCTS BUILDER ────────────────────────────── */}
-      <div className="card border-gray-800 bg-gray-900/30 p-6 space-y-4">
+      <div className="card border-gray-200 bg-white/30 p-6 space-y-4">
         <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
-            <h3 className="font-semibold text-white text-lg">2. Seasonal Pool Simulation</h3>
+            <h3 className="font-semibold text-gray-900 text-lg">2. Seasonal Pool Simulation</h3>
             <p className="text-xs text-gray-500">Configure {seasonalCount} seasonal products for customer options.</p>
           </div>
           <div>
             <select
-              className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-gray-900"
+              className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-white"
               value={seasonalCategoryFilter}
               onChange={(e) => setSeasonalCategoryFilter(e.target.value)}
             >
@@ -478,7 +478,7 @@ export default function AdminCalculator() {
             return (
               <div
                 key={item.id}
-                className="flex flex-wrap items-center gap-4 bg-gray-800/40 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-all duration-200"
+                className="flex flex-wrap items-center gap-4 bg-gray-100/40 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all duration-200"
               >
                 <div className="w-8 flex items-center justify-center font-bold text-gray-600">
                   {index + 1}.
@@ -486,11 +486,11 @@ export default function AdminCalculator() {
 
                 {/* Product Search */}
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Search & Select Product</label>
+                  <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Search & Select Product</label>
                   <input
                     type="text"
                     list={`seasonal-products-list-${item.id}`}
-                    className="input py-1.5 px-3 text-sm w-full bg-gray-900"
+                    className="input py-1.5 px-3 text-sm w-full bg-white"
                     placeholder="Type to search..."
                     value={item.search || ""}
                     onChange={(e) => {
@@ -511,15 +511,15 @@ export default function AdminCalculator() {
 
                 {/* Quantity Input */}
                 <div className="w-full sm:w-32">
-                  <label className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">Quantity</label>
-                  <div className="flex items-center bg-gray-900 rounded-xl border border-gray-700 px-2.5">
+                  <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Quantity</label>
+                  <div className="flex items-center bg-white rounded-xl border border-gray-300 px-2.5">
                     <input
                       type="number"
                       min="0"
                       placeholder="Qty"
                       value={item.qty}
                       onChange={(e) => updateSeasonalRow(item.id, "qty", e.target.value)}
-                      className="w-full bg-transparent text-white border-none py-1.5 focus:outline-none text-sm text-center"
+                      className="w-full bg-transparent text-gray-900 border-none py-1.5 focus:outline-none text-sm text-center"
                       required
                     />
                     <span className="text-xs text-gray-500 font-medium ml-1">
@@ -530,11 +530,11 @@ export default function AdminCalculator() {
 
                 {/* Pricing per gm / unit */}
                 {item.product_id && products.find(p => p.id === parseInt(item.product_id)) && (
-                  <div className="flex gap-4 border-l border-gray-800 pl-4 py-1.5 w-full md:w-auto md:border-l md:pl-4">
+                  <div className="flex gap-4 border-l border-gray-200 pl-4 py-1.5 w-full md:w-auto md:border-l md:pl-4">
                     {/* Cost details */}
                     <div className="text-left w-32">
-                      <span className="text-[10px] text-gray-400 block uppercase">Base Purchase Cost</span>
-                      <span className="text-xs font-semibold text-white block">
+                      <span className="text-[10px] text-gray-600 block uppercase">Base Purchase Cost</span>
+                      <span className="text-xs font-semibold text-gray-900 block">
                         ₹{(parseFloat(item.qty || 0) * parseFloat(products.find(p => p.id === parseInt(item.product_id))?.purchase_price_per_gm || 0)).toFixed(2)}
                       </span>
                       <span className="text-[9px] text-gray-500 block">
@@ -550,7 +550,7 @@ export default function AdminCalculator() {
       </div>
 
       {/* ─── DRAFT SAVING BAR ─────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-4 bg-gray-900 border border-gray-800 p-6 rounded-2xl">
+      <div className="flex flex-wrap items-center gap-4 bg-white border border-gray-200 p-6 rounded-2xl">
         <div className="flex-1 min-w-[280px]">
           <label className="label text-xs uppercase tracking-wider mb-1.5 block">Save Simulation Draft As Package</label>
           <input

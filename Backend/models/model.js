@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS categories (
 CREATE TABLE IF NOT EXISTS products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    hindi_name VARCHAR(100),
+    image_url VARCHAR(255),
     category_id INT,
     media JSON,
     is_deleted BOOLEAN DEFAULT FALSE,

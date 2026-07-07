@@ -183,7 +183,7 @@ export default function AdminPackages() {
     } catch (err) { setMsg(`❌ ${err.response?.data?.message}`); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -198,7 +198,7 @@ export default function AdminPackages() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-900/30 text-fresh-400 border border-fresh-700/50" : "bg-red-900/30 text-red-400 border border-red-700/50"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
         </div>
       )}
@@ -207,18 +207,18 @@ export default function AdminPackages() {
       {showForm && (
         <form onSubmit={handleSubmit} className="card space-y-6 border-fresh-800/50">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-white text-lg">{editing ? "Edit Package" : "Create New Package"}</h3>
-            <button type="button" onClick={resetForm} className="text-gray-400 hover:text-white">✕ Cancel</button>
+            <h3 className="font-bold text-gray-900 text-lg">{editing ? "Edit Package" : "Create New Package"}</h3>
+            <button type="button" onClick={resetForm} className="text-gray-600 hover:text-gray-900">✕ Cancel</button>
           </div>
 
           {/* Draft Import Dropdown */}
           {!editing && drafts.length > 0 && (
-            <div className="bg-gray-800/40 p-4 rounded-xl border border-gray-700/80 space-y-3">
-              <label className="label text-xs uppercase tracking-wider text-fresh-400 font-semibold">💡 Import from Price Calculator Draft</label>
+            <div className="bg-gray-100/40 p-4 rounded-xl border border-gray-300/80 space-y-3">
+              <label className="label text-xs uppercase tracking-wider text-fresh-600 font-semibold">💡 Import from Price Calculator Draft</label>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex-1 min-w-[200px]">
                   <select
-                    className="input py-2 text-sm w-full bg-gray-900"
+                    className="input py-2 text-sm w-full bg-white"
                     value={selectedDraftId}
                     onChange={(e) => setSelectedDraftId(e.target.value)}
                   >
@@ -261,8 +261,8 @@ export default function AdminPackages() {
                   }}
                   className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all ${
                     personRangeMode
-                      ? "bg-fresh-900/50 border-fresh-600/50 text-fresh-400"
-                      : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"
+                      ? "bg-fresh-100/50 border-fresh-600/50 text-fresh-600"
+                      : "bg-gray-100 border-gray-300 text-gray-600 hover:text-gray-900"
                   }`}
                 >
                   {personRangeMode ? "📏 Range Mode" : "🔢 Single → Range?"}
@@ -298,7 +298,7 @@ export default function AdminPackages() {
                 />
               )}
               {personRangeMode && form.num_persons && form.num_persons_max && (
-                <p className="text-xs text-fresh-400 mt-1">📦 Package for {form.num_persons}–{form.num_persons_max} persons</p>
+                <p className="text-xs text-fresh-600 mt-1">📦 Package for {form.num_persons}–{form.num_persons_max} persons</p>
               )}
             </div>
 
@@ -333,26 +333,26 @@ export default function AdminPackages() {
 
           {/* Validation preview */}
           {validationResult && (
-            <div className={`rounded-xl p-4 text-sm border ${validationResult.valid ? "bg-fresh-900/20 border-fresh-700/50" : "bg-red-900/20 border-red-700/50"}`}>
-              <p className="font-semibold mb-1 text-white">💰 Price Validation</p>
+            <div className={`rounded-xl p-4 text-sm border ${validationResult.valid ? "bg-fresh-100/20 border-fresh-700/50" : "bg-red-900/20 border-red-700/50"}`}>
+              <p className="font-semibold mb-1 text-gray-900">💰 Price Validation</p>
               <div className="grid grid-cols-3 gap-4 text-xs">
                 <div>
-                  <p className="text-gray-400">Per-Service Amount</p>
-                  <p className="font-bold text-white">₹{validationResult.per_service.toFixed(2)}</p>
+                  <p className="text-gray-600">Per-Service Amount</p>
+                  <p className="font-bold text-gray-900">₹{validationResult.per_service.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Fixed Items Cost</p>
-                  <p className={`font-bold ${validationResult.valid ? "text-yellow-400" : "text-red-400"}`}>₹{validationResult.fixed_cost.toFixed(2)}</p>
+                  <p className="text-gray-600">Fixed Items Cost</p>
+                  <p className={`font-bold ${validationResult.valid ? "text-yellow-400" : "text-red-600"}`}>₹{validationResult.fixed_cost.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Seasonal Budget</p>
-                  <p className={`font-bold ${validationResult.seasonal_budget > 0 ? "text-fresh-400" : "text-red-400"}`}>
+                  <p className="text-gray-600">Seasonal Budget</p>
+                  <p className={`font-bold ${validationResult.seasonal_budget > 0 ? "text-fresh-600" : "text-red-600"}`}>
                     ₹{validationResult.seasonal_budget.toFixed(2)}
                   </p>
                 </div>
               </div>
               {!validationResult.valid && (
-                <p className="text-red-400 text-xs mt-2">⚠️ Fixed item cost must be LESS than per-service amount. Increase price or reduce quantities.</p>
+                <p className="text-red-600 text-xs mt-2">⚠️ Fixed item cost must be LESS than per-service amount. Increase price or reduce quantities.</p>
               )}
             </div>
           )}
@@ -361,10 +361,10 @@ export default function AdminPackages() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="label mb-0">Fixed Items (included in every delivery)</label>
-              <button type="button" onClick={addFixedItem} className="text-fresh-400 text-xs hover:text-fresh-300 font-medium">+ Add Item</button>
+              <button type="button" onClick={addFixedItem} className="text-fresh-600 text-xs hover:text-fresh-700 font-medium">+ Add Item</button>
             </div>
             {fixedItems.length === 0 ? (
-              <p className="text-gray-600 text-sm">No fixed items yet. <button type="button" onClick={addFixedItem} className="text-fresh-400 hover:underline">Add one →</button></p>
+              <p className="text-gray-600 text-sm">No fixed items yet. <button type="button" onClick={addFixedItem} className="text-fresh-600 hover:underline">Add one →</button></p>
             ) : (
               <div className="space-y-2">
                 {fixedItems.map((fi, idx) => {
@@ -374,7 +374,7 @@ export default function AdminPackages() {
                     .filter(id => !isNaN(id));
                   const filteredRowProducts = products.filter(p => p.category !== "water" && (!fi.filterCategory || p.category === fi.filterCategory));
                   return (
-                    <div key={idx} className="flex flex-wrap items-center gap-3 bg-gray-800/50 rounded-xl p-3 border border-gray-700">
+                    <div key={idx} className="flex flex-wrap items-center gap-3 bg-white rounded-xl p-3 border border-gray-300">
                       {/* Category filter */}
                       <select
                         className="input w-36 text-xs"
@@ -418,7 +418,7 @@ export default function AdminPackages() {
                           ? `₹${(parseFloat(fi.default_qty_gm) * parseFloat(products.find(p => p.id === parseInt(fi.product_id))?.purchase_price_per_gm || 0)).toFixed(2)}`
                           : ""}
                       </span>
-                      <button type="button" onClick={() => removeFixedItem(idx)} className="text-red-400 hover:text-red-300 text-xl leading-none">×</button>
+                      <button type="button" onClick={() => removeFixedItem(idx)} className="text-red-600 hover:text-red-300 text-xl leading-none">×</button>
                     </div>
                   );
                 })}
@@ -431,7 +431,7 @@ export default function AdminPackages() {
             <div className="flex items-center justify-between mb-3">
               <label className="label mb-0">Seasonal Pool (customer picks from these)</label>
               <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-xs">Max picks:</span>
+                <span className="text-gray-600 text-xs">Max picks:</span>
                 <input
                   type="number" min="1" max="20"
                   value={maxSelectCount}
@@ -441,13 +441,13 @@ export default function AdminPackages() {
               </div>
             </div>
             {/* Category filter tabs */}
-            <div className="flex flex-wrap gap-2 mb-3 bg-gray-800/40 p-1.5 rounded-xl w-fit border border-gray-800">
+            <div className="flex flex-wrap gap-2 mb-3 bg-gray-100/40 p-1.5 rounded-xl w-fit border border-gray-200">
               {["all", "vegetable", "fruit", "exotic", "salad"].map(c => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setSeasonalFilter(c)}
-                  className={`px-3 py-1 text-xs font-semibold capitalize rounded-lg transition-all ${seasonalFilter === c ? "bg-fresh-600 text-white" : "text-gray-400 hover:text-white"
+                  className={`px-3 py-1 text-xs font-semibold capitalize rounded-lg transition-all ${seasonalFilter === c ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"
                     }`}
                 >
                   {c === "all" ? "All Categories" : c}
@@ -468,10 +468,10 @@ export default function AdminPackages() {
                       disabled={inFixed}
                       onClick={() => !inFixed && toggleSeasonalProduct(p.id)}
                       className={`text-left p-2.5 rounded-xl border text-xs transition-all duration-200 ${inFixed
-                        ? "border-gray-800 bg-gray-800/20 text-gray-600 cursor-not-allowed"
+                        ? "border-gray-200 bg-gray-100/20 text-gray-600 cursor-not-allowed"
                         : inPool
-                          ? "border-fresh-600/50 bg-fresh-900/30 text-fresh-300"
-                          : "border-gray-700 bg-gray-800/30 text-gray-400 hover:border-gray-600"
+                          ? "border-fresh-600/50 bg-fresh-100/30 text-fresh-700"
+                          : "border-gray-300 bg-gray-100/30 text-gray-600 hover:border-gray-600"
                         }`}
                     >
                       <p className="font-medium truncate">{p.name}</p>
@@ -497,7 +497,7 @@ export default function AdminPackages() {
 
       {/* ─── PACKAGES LIST ──────────────────────────────────────────── */}
       <div className="space-y-4">
-        <h3 className="font-semibold text-white text-lg">All Packages ({packages.length})</h3>
+        <h3 className="font-semibold text-gray-900 text-lg">All Packages ({packages.length})</h3>
         {packages.length === 0 ? (
           <div className="card text-center py-12 text-gray-500">
             <p className="text-4xl mb-3">📦</p>
@@ -509,15 +509,15 @@ export default function AdminPackages() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-lg font-bold text-white">{pkg.name}</h3>
+                    <h3 className="text-lg font-bold text-gray-900">{pkg.name}</h3>
                     <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
                     <span className={pkg.status === "active" ? "badge-green badge" : "badge-red badge"}>{pkg.status}</span>
                   </div>
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-gray-600 text-sm">
                     {pkg.num_persons_max
                       ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
                       : `${pkg.num_persons} persons`
-                    } · {pkg.services_per_month} deliveries/month · <span className="text-white font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%
+                    } · {pkg.services_per_month} deliveries/month · <span className="text-gray-900 font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%
                   </p>
                   <p className="text-gray-500 text-xs mt-1">
                     Raw Per-service: ₹{(parseFloat(pkg.price) / pkg.services_per_month).toFixed(2)} ·
@@ -538,7 +538,7 @@ export default function AdminPackages() {
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5">Fixed Items</p>
                     <div className="flex flex-wrap gap-1.5">
                       {pkg.FixedItems.map(fi => (
-                        <span key={fi.id} className="bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded-lg border border-gray-700">
+                        <span key={fi.id} className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-lg border border-gray-300">
                           {fi.Product?.name} ({fi.default_qty_gm}g)
                         </span>
                       ))}
@@ -552,7 +552,7 @@ export default function AdminPackages() {
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {pkg.SeasonalPool.map(sp => (
-                        <span key={sp.id} className="bg-fresh-900/30 text-fresh-400 text-xs px-2 py-1 rounded-lg border border-fresh-800/50">
+                        <span key={sp.id} className="bg-fresh-100/30 text-fresh-600 text-xs px-2 py-1 rounded-lg border border-fresh-800/50">
                           {sp.Product?.name}
                         </span>
                       ))}

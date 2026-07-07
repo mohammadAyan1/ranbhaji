@@ -18,6 +18,8 @@ const User = sequelize.define('User', {
 const Product = sequelize.define('Product', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(100) },
+  hindi_name: { type: DataTypes.STRING(100), allowNull: true },
+  image_url: { type: DataTypes.STRING(255), allowNull: true },
   category: { type: DataTypes.ENUM('vegetable', 'fruit', 'water', 'exotic', 'salad') },
   sub_category: { type: DataTypes.STRING(50) },
   purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },

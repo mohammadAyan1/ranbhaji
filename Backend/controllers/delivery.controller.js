@@ -105,8 +105,22 @@ export const getTodayDeliveries = async (req, res) => {
             // Load delivery items
             let items = await DeliveryItem.findAll({
                 where: { schedule_id: sched.id },
-                include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }]
+                include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category'] }]
             });
+
+            if (items.length > 0) {
+                const uniqueMap = {};
+                const toKeep = [];
+                for (const item of items) {
+                    if (!uniqueMap[item.product_id]) {
+                        uniqueMap[item.product_id] = true;
+                        toKeep.push(item);
+                    } else {
+                        await item.destroy().catch(e => console.error(e));
+                    }
+                }
+                items = toKeep;
+            }
 
             if (items.length === 0) {
                 // Auto-fill delivery items if empty (safety fallback)
@@ -124,7 +138,7 @@ export const getTodayDeliveries = async (req, res) => {
                         // Re-fetch
                         items = await DeliveryItem.findAll({
                             where: { schedule_id: sched.id },
-                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }]
+                            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category'] }]
                         });
                     }
                 } else if (sched.WaterSubscription) {
@@ -144,7 +158,7 @@ export const getTodayDeliveries = async (req, res) => {
                         // Re-fetch
                         items = await DeliveryItem.findAll({
                             where: { schedule_id: sched.id },
-                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }]
+                            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category'] }]
                         });
                     }
                 }
@@ -154,7 +168,14 @@ export const getTodayDeliveries = async (req, res) => {
                 schedule_id: sched.id,
                 type: 'package',
                 package: package_name,
-                items: items.map(i => ({ product: i.Product?.name, qty_gm: i.qty_gm, unit: i.Product?.unit }))
+                items: items
+                    .filter(i => i.packed_qty === null || parseFloat(i.packed_qty) > 0)
+                    .map(i => ({ 
+                        product: i.Product?.name, 
+                        hindi_name: i.Product?.hindi_name,
+                        qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.qty_gm), 
+                        unit: i.Product?.unit 
+                    }))
             });
         }
 
@@ -186,7 +207,14 @@ export const getTodayDeliveries = async (req, res) => {
                 schedule_id: ro.id,
                 type: 'retail',
                 package: "Retail Order",
-                items: ro.Items.map(i => ({ product: i.Product?.name, qty_gm: i.qty_gm, unit: i.Product?.unit }))
+                items: ro.Items
+                    .filter(i => i.packed_qty === null || parseFloat(i.packed_qty) > 0)
+                    .map(i => ({ 
+                        product: i.Product?.name, 
+                        hindi_name: i.Product?.hindi_name,
+                        qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.quantity), 
+                        unit: i.Product?.unit 
+                    }))
             });
         }
 
@@ -1009,7 +1037,7 @@ export const getAllOrdersForDate = async (req, res) => {
         }
 
         const schedules = await DeliverySchedule.findAll({
-            where: { scheduled_date: dateStr },
+            where: { scheduled_date: dateStr, status: ['pending', 'ready_for_delivery'] },
             include: [
                 { model: Batch },
                 { 
@@ -1034,7 +1062,7 @@ export const getAllOrdersForDate = async (req, res) => {
         });
 
         const retailOrders = await RetailOrder.findAll({
-            where: { delivery_date: dateStr },
+            where: { delivery_date: dateStr, delivery_status: ['pending', 'ready_for_delivery'] },
             include: [
                 { model: Batch },
                 { model: User, attributes: ['id', 'name', 'phone'] },
@@ -1088,11 +1116,12 @@ export const getAllOrdersForDate = async (req, res) => {
             return usersMap[user.id];
         };
 
-        const getOrInitAddressGroup = (uMap, addrStr, batchId) => {
+        const getOrInitAddressGroup = (uMap, addrStr, batchId, status) => {
             if (!uMap.addressesMap[addrStr]) {
                 uMap.addressesMap[addrStr] = {
                     addressText: addrStr,
                     batch_id: batchId,
+                    status: status, // Add status to track if it's ready_for_delivery
                     scheduleIds: [],
                     retailOrderIds: [],
                     itemsMap: {}
@@ -1101,17 +1130,25 @@ export const getAllOrdersForDate = async (req, res) => {
             if (batchId && !uMap.addressesMap[addrStr].batch_id) {
                 uMap.addressesMap[addrStr].batch_id = batchId;
             }
+            if (status === 'ready_for_delivery') {
+                uMap.addressesMap[addrStr].status = 'ready_for_delivery';
+            }
             return uMap.addressesMap[addrStr];
         };
 
-        const addItem = (uMap, addrGrp, product, qty, source) => {
+        const addItem = (uMap, addrGrp, product, qty, source, packedQty = null) => {
             if (!product) return;
             // Add to Address Group
             if (!addrGrp.itemsMap[product.id]) {
-                addrGrp.itemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit };
+                addrGrp.itemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit, packedQty: 0, isPackedSet: false };
             }
             if (source === 'package') addrGrp.itemsMap[product.id].packageQty += qty;
             else addrGrp.itemsMap[product.id].retailQty += qty;
+
+            if (packedQty !== null && packedQty !== undefined) {
+                addrGrp.itemsMap[product.id].packedQty += packedQty;
+                addrGrp.itemsMap[product.id].isPackedSet = true;
+            }
 
             // Add to User Totals
             if (!uMap.totalItemsMap[product.id]) {
@@ -1142,15 +1179,22 @@ export const getAllOrdersForDate = async (req, res) => {
             if (!uMap.commonBatchId && s.batch_id) uMap.commonBatchId = s.batch_id;
 
             const addrStr = formatAddress(address);
-            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id);
+            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id, s.status);
             addrGrp.scheduleIds.push(s.id);
 
             const dbItems = s.DeliveryItems || [];
             if (dbItems.length > 0) {
+                const uniqueMap = {};
                 for (const item of dbItems) {
-                    if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                    if (!uniqueMap[item.product_id]) {
+                        uniqueMap[item.product_id] = true;
+                        if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', item.packed_qty !== null ? parseFloat(item.packed_qty) : null);
+                    } else {
+                        await item.destroy().catch(e => console.error(e));
+                    }
                 }
             } else {
+                const newDeliveryItems = [];
                 if (s.Subscription) {
                     const sub = s.Subscription;
                     const items = sub.Items || [];
@@ -1159,20 +1203,32 @@ export const getAllOrdersForDate = async (req, res) => {
 
                     if (selections.length > 0) {
                         for (const sel of selections) {
-                            if (sel.Product) addItem(uMap, addrGrp, sel.Product, parseFloat(sel.qty_gm || 0), 'package');
+                            if (sel.Product) {
+                                addItem(uMap, addrGrp, sel.Product, parseFloat(sel.qty_gm || 0), 'package');
+                                newDeliveryItems.push({ schedule_id: s.id, product_id: sel.product_id, qty_gm: sel.qty_gm });
+                            }
                         }
                         const selectionProductIds = selections.map(sel => sel.product_id);
                         const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
                         for (const item of missingFixed) {
-                            if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                            if (item.Product) {
+                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                                newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
+                            }
                         }
                     } else {
                         for (const item of fixedItems) {
-                            if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                            if (item.Product) {
+                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                                newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
+                            }
                         }
                         const defaultSeasonal = items.filter(item => item.is_seasonal && item.is_active);
                         for (const item of defaultSeasonal) {
-                            if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                            if (item.Product) {
+                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                                newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
+                            }
                         }
                     }
                 } else if (s.WaterSubscription) {
@@ -1184,7 +1240,12 @@ export const getAllOrdersForDate = async (req, res) => {
                     if (matchedProduct) {
                         const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
                         addItem(uMap, addrGrp, matchedProduct, qty, 'package');
+                        newDeliveryItems.push({ schedule_id: s.id, product_id: matchedProduct.id, qty_gm: qty });
                     }
+                }
+                
+                if (newDeliveryItems.length > 0) {
+                    await DeliveryItem.bulkCreate(newDeliveryItems).catch(err => console.error('Auto-create DeliveryItems error:', err));
                 }
             }
         }
@@ -1200,12 +1261,12 @@ export const getAllOrdersForDate = async (req, res) => {
             if (!uMap.commonBatchId && r.batch_id) uMap.commonBatchId = r.batch_id;
 
             const addrStr = formatAddress(address);
-            const addrGrp = getOrInitAddressGroup(uMap, addrStr, r.batch_id);
+            const addrGrp = getOrInitAddressGroup(uMap, addrStr, r.batch_id, r.delivery_status);
             addrGrp.retailOrderIds.push(r.id);
 
             const items = r.Items || [];
             for (const item of items) {
-                if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.quantity || 0), 'retail');
+                if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.quantity || 0), 'retail', item.packed_qty !== null ? parseFloat(item.packed_qty) : null);
             }
         }
 
@@ -1213,6 +1274,7 @@ export const getAllOrdersForDate = async (req, res) => {
             const totalItems = Object.values(u.totalItemsMap).map(i => ({
                 id: i.product.id,
                 name: i.product.name,
+                hindi_name: i.product.hindi_name,
                 unit: i.unit,
                 packageQty: i.packageQty,
                 retailQty: i.retailQty,
@@ -1222,15 +1284,19 @@ export const getAllOrdersForDate = async (req, res) => {
             const addresses = Object.values(u.addressesMap).map(a => ({
                 address: a.addressText,
                 batch_id: a.batch_id,
+                status: a.status,
                 scheduleIds: a.scheduleIds,
                 retailOrderIds: a.retailOrderIds,
                 items: Object.values(a.itemsMap).map(i => ({
                     id: i.product.id,
                     name: i.product.name,
+                    hindi_name: i.product.hindi_name,
                     unit: i.unit,
                     packageQty: i.packageQty,
                     retailQty: i.retailQty,
-                    totalQty: i.packageQty + i.retailQty
+                    totalQty: i.packageQty + i.retailQty,
+                    packedQty: i.isPackedSet ? i.packedQty : (i.packageQty + i.retailQty),
+                    isPackedSet: i.isPackedSet
                 }))
             }));
             
@@ -1276,14 +1342,105 @@ export const assignBatch = async (req, res) => {
 export const packOrders = async (req, res) => {
     try {
         const { scheduleIds, retailOrderIds, items } = req.body;
+        // items: [{ id: productId, packedQty: value, isChecked: boolean }]
 
-        // items: [{ type: 'package', id: DeliveryItem.id, packedQty: value }, { type: 'retail', id: RetailOrderItem.id, packedQty: value }]
-        if (items && items.length > 0) {
-            for (const item of items) {
-                if (item.type === 'package') {
-                    await DeliveryItem.update({ packed_qty: item.packedQty }, { where: { id: item.id } });
-                } else if (item.type === 'retail') {
-                    await RetailOrderItem.update({ packed_qty: item.packedQty }, { where: { id: item.id } });
+        const remainingPacked = {};
+        if (items) {
+            items.forEach(i => {
+                remainingPacked[i.id] = i.isChecked ? parseFloat(i.packedQty ?? 0) : 0;
+            });
+        }
+
+        const allItemsByProduct = {};
+        
+        if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
+            const schedules = await DeliverySchedule.findAll({
+                where: { id: scheduleIds },
+                include: [{ model: DeliveryItem, as: 'DeliveryItems' }]
+            });
+            for (const schedule of schedules) {
+                for (const dItem of schedule.DeliveryItems) {
+                    if (!allItemsByProduct[dItem.product_id]) allItemsByProduct[dItem.product_id] = [];
+                    allItemsByProduct[dItem.product_id].push({ type: 'package', item: dItem, parent: schedule });
+                }
+            }
+        }
+
+        if (Array.isArray(retailOrderIds) && retailOrderIds.length > 0) {
+            const retailOrders = await RetailOrder.findAll({
+                where: { id: retailOrderIds },
+                include: [{ model: RetailOrderItem, as: 'Items' }]
+            });
+            for (const rOrder of retailOrders) {
+                for (const rItem of rOrder.Items) {
+                    if (!allItemsByProduct[rItem.product_id]) allItemsByProduct[rItem.product_id] = [];
+                    allItemsByProduct[rItem.product_id].push({ type: 'retail', item: rItem, parent: rOrder });
+                }
+            }
+        }
+
+        for (const productIdStr of Object.keys(allItemsByProduct)) {
+            const productId = parseInt(productIdStr);
+            const productItems = allItemsByProduct[productId];
+            const payloadItem = items?.find(i => i.id === productId);
+
+            if (payloadItem) {
+                if (payloadItem.isChecked) {
+                    for (let i = 0; i < productItems.length; i++) {
+                        const { type, item } = productItems[i];
+                        const demanded = parseFloat(type === 'retail' ? (item.quantity || 0) : (item.qty_gm || 0));
+                        const rem = remainingPacked[productId] || 0;
+                        const isLast = (i === productItems.length - 1);
+                        
+                        let alloc = 0;
+                        if (isLast) {
+                            alloc = rem; // Give all remaining to the last one
+                        } else {
+                            alloc = Math.min(demanded, rem);
+                        }
+                        
+                        await item.update({ packed_qty: alloc });
+                        remainingPacked[productId] = Math.max(0, rem - alloc);
+                    }
+                } else {
+                    // Unchecked
+                    for (const { type, item, parent } of productItems) {
+                        await item.update({ packed_qty: 0 });
+                        
+                        if (type === 'package') {
+                            const schedule = parent;
+                            // Carry over logic
+                            const nextSchedule = await DeliverySchedule.findOne({
+                                where: {
+                                    subscription_id: schedule.subscription_id,
+                                    scheduled_date: { [Op.gt]: schedule.scheduled_date }
+                                },
+                                order: [['scheduled_date', 'ASC']]
+                            });
+
+                            if (nextSchedule) {
+                                const existingNextItem = await DeliveryItem.findOne({
+                                    where: { schedule_id: nextSchedule.id, product_id: item.product_id }
+                                });
+                                if (existingNextItem) {
+                                    await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + parseFloat(item.qty_gm) });
+                                } else {
+                                    await DeliveryItem.create({
+                                        schedule_id: nextSchedule.id,
+                                        product_id: item.product_id,
+                                        qty_gm: item.qty_gm,
+                                        packed_qty: null
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Default if not specified in payload
+                for (const { type, item } of productItems) {
+                    const demanded = parseFloat(type === 'retail' ? (item.quantity || 0) : (item.qty_gm || 0));
+                    await item.update({ packed_qty: demanded });
                 }
             }
         }
@@ -1291,7 +1448,6 @@ export const packOrders = async (req, res) => {
         if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
             await DeliverySchedule.update({ status: 'ready_for_delivery' }, { where: { id: scheduleIds } });
         }
-        
         if (Array.isArray(retailOrderIds) && retailOrderIds.length > 0) {
             await RetailOrder.update({ delivery_status: 'ready_for_delivery' }, { where: { id: retailOrderIds } });
         }
