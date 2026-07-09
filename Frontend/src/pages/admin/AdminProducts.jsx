@@ -37,6 +37,7 @@ export default function AdminProducts() {
   const [purchaseLogs, setPurchaseLogs] = useState([]);
   const [stockSummary, setStockSummary] = useState([]);
   const [submittingPurchase, setSubmittingPurchase] = useState(false);
+  const [selectedDemand, setSelectedDemand] = useState(null);
 
   const fetchProducts = () => {
     api.get("/products").then(r => setProducts(r.data.products || [])).finally(() => setLoading(false));
@@ -578,7 +579,13 @@ export default function AdminProducts() {
                   return (
                     <tr key={d.id} className="table-row">
                       <td className="p-3 text-gray-900 font-medium">{d.name}</td>
-                      <td className="p-3 text-right font-bold text-blue-400">{displayQty} {displayUnit}</td>
+                      <td 
+                        className="p-3 text-right font-bold text-blue-400 cursor-pointer hover:underline hover:text-blue-500 transition-colors" 
+                        title="Click to view demand breakdown"
+                        onClick={() => setSelectedDemand(d)}
+                      >
+                        {displayQty} {displayUnit}
+                      </td>
                       <td className="p-3 text-right">
                         <button 
                           onClick={() => {
@@ -609,87 +616,93 @@ export default function AdminProducts() {
           </div>
 
           {purchaseForm.product_id && (
-            <div className="bg-gray-850 border border-gray-200 rounded-xl p-5">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-gray-900 font-semibold">
-                  Log Purchase: {demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}
-                </h4>
-                <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="text-gray-600 hover:text-gray-900">✕</button>
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up border border-gray-200">
+                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                  <div>
+                    <h4 className="font-bold text-lg text-gray-900">Log Purchase</h4>
+                    <p className="text-sm text-gray-500">{demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}</p>
+                  </div>
+                  <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
+                </div>
+                <div className="p-6">
+                  <form onSubmit={handlePurchaseSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Quantity */}
+                      <div>
+                        <label className="label">
+                          Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : 'kg/L') : 'kg'})
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          placeholder="e.g. 10"
+                          className="input"
+                          value={purchaseForm.quantity}
+                          onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      {/* Total Price */}
+                      <div>
+                        <label className="label">
+                          Total Price (₹)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="e.g. 500"
+                          className="input"
+                          value={purchaseForm.total_price}
+                          onChange={e => setPurchaseForm({ ...purchaseForm, total_price: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      {/* Selling Price per Kg */}
+                      <div>
+                        <label className="label">
+                          Selling Price ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'per pc' : 'per kg/L') : 'per kg'})
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="e.g. 15"
+                          className="input"
+                          value={purchaseForm.selling_price_per_kg}
+                          onChange={e => setPurchaseForm({ ...purchaseForm, selling_price_per_kg: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Auto Calculated Per Kg Live Preview */}
+                    {parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex justify-between items-center text-sm mt-4">
+                        <span className="text-gray-600">Calculated Purchase Price:</span>
+                        <span className="text-lg font-bold text-gradient">
+                          ₹{(parseFloat(purchaseForm.total_price) / parseFloat(purchaseForm.quantity)).toFixed(2)} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-gray-200 mt-6 flex justify-end gap-3">
+                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="px-5 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">Cancel</button>
+                      <button
+                        type="submit"
+                        disabled={submittingPurchase}
+                        className="btn-primary py-2.5 px-6"
+                      >
+                        {submittingPurchase ? "Saving Entry..." : "Submit & Update stock"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-              <form onSubmit={handlePurchaseSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Quantity */}
-                  <div>
-                    <label className="label">
-                      Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : 'kg/L') : 'kg'})
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      placeholder="e.g. 10"
-                      className="input"
-                      value={purchaseForm.quantity}
-                      onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  {/* Total Price */}
-                  <div>
-                    <label className="label">
-                      Total Price (₹)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="e.g. 500"
-                      className="input"
-                      value={purchaseForm.total_price}
-                      onChange={e => setPurchaseForm({ ...purchaseForm, total_price: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  {/* Selling Price per Kg */}
-                  <div>
-                    <label className="label">
-                      Selling Price ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'per pc' : 'per kg/L') : 'per kg'})
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="e.g. 15"
-                      className="input"
-                      value={purchaseForm.selling_price_per_kg}
-                      onChange={e => setPurchaseForm({ ...purchaseForm, selling_price_per_kg: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Auto Calculated Per Kg Live Preview */}
-                {parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
-                  <div className="bg-white/50 border border-gray-200 rounded-xl p-4 flex justify-between items-center text-sm mt-4">
-                    <span className="text-gray-600">Calculated Purchase Price:</span>
-                    <span className="text-lg font-bold text-gradient">
-                      ₹{(parseFloat(purchaseForm.total_price) / parseFloat(purchaseForm.quantity)).toFixed(2)} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
-                    </span>
-                  </div>
-                )}
-
-                <div className="pt-4 border-t border-gray-200">
-                  <button
-                    type="submit"
-                    disabled={submittingPurchase}
-                    className="w-full btn-primary py-3"
-                  >
-                    {submittingPurchase ? "Saving Entry..." : "Submit & Update stock"}
-                  </button>
-                </div>
-              </form>
             </div>
           )}
         </div>
@@ -800,6 +813,104 @@ export default function AdminProducts() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Demand Breakdown Modal */}
+      {selectedDemand && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-200">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">Demand Breakdown</h3>
+                <p className="text-sm text-gray-500">{selectedDemand.name}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedDemand(null)} 
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-5 max-h-[60vh] overflow-y-auto space-y-6">
+              {/* Package Demands */}
+              {selectedDemand.package_details && selectedDemand.package_details.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-600 p-1 rounded">📦</span>
+                    Package Demands
+                  </h4>
+                  <div className="space-y-3">
+                    {selectedDemand.package_details.map((detail, idx) => {
+                      const qtyVal = parseFloat(detail.qty);
+                      const isGm = selectedDemand.unit === 'gm' || selectedDemand.unit === 'ml';
+                      const dispQty = isGm && qtyVal >= 1000 ? `${(qtyVal/1000).toFixed(1)} ${selectedDemand.unit === 'gm' ? 'kg' : 'L'}` : `${qtyVal} ${selectedDemand.unit === 'piece' ? 'pcs' : selectedDemand.unit}`;
+                      
+                      return (
+                        <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-bold text-gray-900">{dispQty}</span>
+                            <span className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-600 font-medium">Requested by {detail.count} user(s)</span>
+                          </div>
+                          {detail.orders && detail.orders.length > 0 && (
+                            <div className="mt-2 pl-2 border-l-2 border-gray-300 space-y-1">
+                              {detail.orders.map((u, i) => (
+                                <div key={i} className="text-xs text-gray-500 flex justify-between">
+                                  <span>{u.userName}</span>
+                                  <span className="text-gray-400">{u.phone}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Retail Demands */}
+              {selectedDemand.retail_details && selectedDemand.retail_details.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-2">
+                    <span className="bg-purple-100 text-purple-600 p-1 rounded">🛒</span>
+                    Retail Demands
+                  </h4>
+                  <div className="space-y-3">
+                    {selectedDemand.retail_details.map((detail, idx) => {
+                      const qtyVal = parseFloat(detail.qty);
+                      const isGm = selectedDemand.unit === 'gm' || selectedDemand.unit === 'ml';
+                      const dispQty = isGm && qtyVal >= 1000 ? `${(qtyVal/1000).toFixed(1)} ${selectedDemand.unit === 'gm' ? 'kg' : 'L'}` : `${qtyVal} ${selectedDemand.unit === 'piece' ? 'pcs' : selectedDemand.unit}`;
+                      
+                      return (
+                        <div key={idx} className="bg-purple-50 p-3 rounded-lg border border-purple-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-bold text-gray-900">{dispQty}</span>
+                            <span className="text-xs bg-purple-200 px-2 py-1 rounded text-purple-700 font-medium">Requested by {detail.count} user(s)</span>
+                          </div>
+                          {detail.orders && detail.orders.length > 0 && (
+                            <div className="mt-2 pl-2 border-l-2 border-purple-200 space-y-1">
+                              {detail.orders.map((u, i) => (
+                                <div key={i} className="text-xs text-gray-500 flex justify-between">
+                                  <span>{u.userName}</span>
+                                  <span className="text-gray-400">{u.phone}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(!selectedDemand.package_details?.length && !selectedDemand.retail_details?.length) && (
+                <div className="text-center text-gray-500 py-4">No detailed breakdown available.</div>
+              )}
+            </div>
           </div>
         </div>
       )}

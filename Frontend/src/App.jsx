@@ -36,6 +36,7 @@ import PaymentStatusPage from "./pages/user/PaymentStatusPage";
 import AdminRetailOrders from "./pages/admin/AdminRetailOrders";
 import AdminBatches from "./pages/admin/AdminBatches";
 import AdminAllOrders from "./pages/admin/AdminAllOrders";
+import AdminMissedProducts from "./pages/admin/AdminMissedProducts";
 
 
 // Delivery pages
@@ -94,6 +95,7 @@ function App() {
           <Route path="/admin/retail-orders" element={<AdminRetailOrders />} />
           <Route path="/admin/batches" element={<AdminBatches />} />
           <Route path="/admin/all-orders" element={<AdminAllOrders />} />
+          <Route path="/admin/missed-products" element={<AdminMissedProducts />} />
         </Route>
 
         {/* ─── DELIVERY Routes ─────────────────────────────────── */}

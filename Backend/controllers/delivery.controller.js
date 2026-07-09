@@ -4,7 +4,7 @@ import {
     DeliverySchedule, DeliveryItem, Subscription, SubscriptionItem, User, Product,
     WalletTransaction, Notification, WaterSubscription, Package, Address,
     ScheduleSeasonalSelection, PackageSeasonalConfig,
-    RetailOrder, RetailOrderItem, Batch
+    RetailOrder, RetailOrderItem, Batch, MissedProductLog
 } from "../models/index.js";
 import path from "path";
 
@@ -15,10 +15,10 @@ export const getTodayDeliveries = async (req, res) => {
         const deliveryBoyId = req.user.id;
 
         const schedules = await DeliverySchedule.findAll({
-            where: { 
-                scheduled_date: today, 
+            where: {
+                scheduled_date: today,
                 status: ['pending', 'ready_for_delivery'],
-                delivery_boy_id: deliveryBoyId 
+                delivery_boy_id: deliveryBoyId
             },
             include: [
                 {
@@ -170,11 +170,11 @@ export const getTodayDeliveries = async (req, res) => {
                 package: package_name,
                 items: items
                     .filter(i => i.packed_qty === null || parseFloat(i.packed_qty) > 0)
-                    .map(i => ({ 
-                        product: i.Product?.name, 
+                    .map(i => ({
+                        product: i.Product?.name,
                         hindi_name: i.Product?.hindi_name,
-                        qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.qty_gm), 
-                        unit: i.Product?.unit 
+                        qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.qty_gm),
+                        unit: i.Product?.unit
                     }))
             });
         }
@@ -209,11 +209,11 @@ export const getTodayDeliveries = async (req, res) => {
                 package: "Retail Order",
                 items: ro.Items
                     .filter(i => i.packed_qty === null || parseFloat(i.packed_qty) > 0)
-                    .map(i => ({ 
-                        product: i.Product?.name, 
+                    .map(i => ({
+                        product: i.Product?.name,
                         hindi_name: i.Product?.hindi_name,
-                        qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.quantity), 
-                        unit: i.Product?.unit 
+                        qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.quantity),
+                        unit: i.Product?.unit
                     }))
             });
         }
@@ -752,8 +752,8 @@ export const getProductDemands = async (req, res) => {
                         { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] }
                     ]
                 },
-                { 
-                    model: WaterSubscription, 
+                {
+                    model: WaterSubscription,
                     required: false,
                     include: [
                         { model: User, attributes: ['id', 'name', 'phone'] }
@@ -1040,21 +1040,21 @@ export const getAllOrdersForDate = async (req, res) => {
             where: { scheduled_date: dateStr, status: ['pending', 'ready_for_delivery'] },
             include: [
                 { model: Batch },
-                { 
-                    model: Subscription, 
+                {
+                    model: Subscription,
                     include: [
                         { model: User, attributes: ['id', 'name', 'phone'] },
                         { model: Address },
                         { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
                         { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] }
-                    ] 
+                    ]
                 },
-                { 
-                    model: WaterSubscription, 
+                {
+                    model: WaterSubscription,
                     include: [
                         { model: User, attributes: ['id', 'name', 'phone'] },
                         { model: Address }
-                    ] 
+                    ]
                 },
                 { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
                 { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] }
@@ -1243,7 +1243,7 @@ export const getAllOrdersForDate = async (req, res) => {
                         newDeliveryItems.push({ schedule_id: s.id, product_id: matchedProduct.id, qty_gm: qty });
                     }
                 }
-                
+
                 if (newDeliveryItems.length > 0) {
                     await DeliveryItem.bulkCreate(newDeliveryItems).catch(err => console.error('Auto-create DeliveryItems error:', err));
                 }
@@ -1299,7 +1299,7 @@ export const getAllOrdersForDate = async (req, res) => {
                     isPackedSet: i.isPackedSet
                 }))
             }));
-            
+
             return {
                 user: u.user,
                 hasPackage: u.hasPackage,
@@ -1323,11 +1323,11 @@ export const getAllOrdersForDate = async (req, res) => {
 export const assignBatch = async (req, res) => {
     try {
         const { scheduleIds, retailOrderIds, batch_id } = req.body;
-        
+
         if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
             await DeliverySchedule.update({ batch_id: batch_id || null }, { where: { id: scheduleIds } });
         }
-        
+
         if (Array.isArray(retailOrderIds) && retailOrderIds.length > 0) {
             await RetailOrder.update({ batch_id: batch_id || null }, { where: { id: retailOrderIds } });
         }
@@ -1352,7 +1352,7 @@ export const packOrders = async (req, res) => {
         }
 
         const allItemsByProduct = {};
-        
+
         if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
             const schedules = await DeliverySchedule.findAll({
                 where: { id: scheduleIds },
@@ -1391,14 +1391,14 @@ export const packOrders = async (req, res) => {
                         const demanded = parseFloat(type === 'retail' ? (item.quantity || 0) : (item.qty_gm || 0));
                         const rem = remainingPacked[productId] || 0;
                         const isLast = (i === productItems.length - 1);
-                        
+
                         let alloc = 0;
                         if (isLast) {
                             alloc = rem; // Give all remaining to the last one
                         } else {
                             alloc = Math.min(demanded, rem);
                         }
-                        
+
                         await item.update({ packed_qty: alloc });
                         remainingPacked[productId] = Math.max(0, rem - alloc);
                     }
@@ -1406,7 +1406,7 @@ export const packOrders = async (req, res) => {
                     // Unchecked
                     for (const { type, item, parent } of productItems) {
                         await item.update({ packed_qty: 0 });
-                        
+
                         if (type === 'package') {
                             const schedule = parent;
                             // Carry over logic
@@ -1432,6 +1432,15 @@ export const packOrders = async (req, res) => {
                                         packed_qty: null
                                     });
                                 }
+
+                                // Log the missed product carry-over
+                                await MissedProductLog.create({
+                                    user_id: schedule.subscription_id ? (await Subscription.findByPk(schedule.subscription_id)).user_id : null,
+                                    product_id: item.product_id,
+                                    missed_date: schedule.scheduled_date,
+                                    missed_qty: item.qty_gm,
+                                    next_schedule_date: nextSchedule.scheduled_date
+                                });
                             }
                         }
                     }
@@ -1517,6 +1526,21 @@ export const acceptOrder = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Order accepted successfully" });
     } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};// GET /api/admin/missed-products
+export const getMissedProducts = async (req, res) => {
+    try {
+        const missedLogs = await MissedProductLog.findAll({
+            include: [
+                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: Product, attributes: ['id', 'name', 'unit'] }
+            ],
+            order: [['created_at', 'DESC']]
+        });
+        res.status(200).json({ success: true, missedLogs });
+    } catch (error) {
+        console.error(error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

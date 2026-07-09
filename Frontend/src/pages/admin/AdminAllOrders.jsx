@@ -90,7 +90,8 @@ export default function AdminAllOrders() {
       // Build items array to send to backend
       const itemsPayload = itemsList.map(item => {
         const isUnchecked = uncheckedItems[`${userId}-${addressIdx}-${item.id}`];
-        const packedQty = packedQuantities[`${userId}-${addressIdx}-${item.id}`] ?? item.packedQty;
+        // Ensure default is 0 if empty
+        const packedQty = packedQuantities[`${userId}-${addressIdx}-${item.id}`] ?? item.packedQty ?? 0;
         return {
           id: item.id, // product id
           packedQty: packedQty,
@@ -98,10 +99,17 @@ export default function AdminAllOrders() {
         };
       });
 
-      await api.put('/admin/orders/pack', { 
-        scheduleIds, 
-        retailOrderIds, 
-        items: itemsPayload 
+      // Validation: Check if any checked item has 0 packed quantity
+      const hasInvalidItem = itemsPayload.some(item => item.isChecked && parseFloat(item.packedQty || 0) === 0);
+      if (hasInvalidItem) {
+        alert("Please enter a Packed Quantity for checked items, or uncheck the product.");
+        return;
+      }
+
+      await api.put('/admin/orders/pack', {
+        scheduleIds,
+        retailOrderIds,
+        items: itemsPayload
       });
       alert('Orders marked as Ready for Delivery');
       fetchOrders();
@@ -202,14 +210,14 @@ export default function AdminAllOrders() {
                     <tr className="bg-white/50">
                       <td colSpan="5" className="p-0 border-l-2 border-fresh-500">
                         <div className="p-6 bg-gray-100/30">
-                          
+
                           {/* Address-wise breakdown */}
                           <div className="mb-6 space-y-4">
                             <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center">
                               <span className="bg-fresh-500/20 text-fresh-600 p-1.5 rounded mr-2">📍</span>
                               Deliveries by Address
                             </h4>
-                            
+
                             <div className="grid grid-cols-1 gap-4">
                               {u.addresses.map((addrGrp, idx) => (
                                 <div key={idx} className="bg-gray-100 rounded-lg p-4 border border-gray-300">
@@ -245,7 +253,7 @@ export default function AdminAllOrders() {
                                       )}
                                     </div>
                                   </div>
-                                  
+
                                   {addrGrp.items.length > 0 && (
                                     <div className="overflow-x-auto rounded border border-gray-300/50">
                                       <table className="w-full text-sm text-left">
@@ -263,8 +271,8 @@ export default function AdminAllOrders() {
                                           {addrGrp.items.map((item, i) => (
                                             <tr key={i} className={`hover:bg-gray-700/20 text-gray-700 ${uncheckedItems[`${u.user.id}-${idx}-${item.id}`] ? 'opacity-50 line-through' : ''}`}>
                                               <td className="p-2 pl-4">
-                                                <input 
-                                                  type="checkbox" 
+                                                <input
+                                                  type="checkbox"
                                                   className="w-4 h-4 text-fresh-500 bg-gray-100 border-gray-600 rounded focus:ring-fresh-500 cursor-pointer"
                                                   checked={!uncheckedItems[`${u.user.id}-${idx}-${item.id}`]}
                                                   onChange={(e) => handleCheckChange(u.user.id, idx, item.id, e.target.checked)}
@@ -282,13 +290,20 @@ export default function AdminAllOrders() {
                                               <td className="p-2 text-right font-medium">
                                                 {formatQuantity(item.totalQty, item.unit)}
                                               </td>
-                                              <td className="p-2 pl-4">
-                                                <input 
-                                                  type="number" 
+                                              <td className="p-2 pl-4 flex items-center gap-1">
+                                                <input
+                                                  type="number"
                                                   className="input-field py-1 px-2 text-xs w-20"
-                                                  value={packedQuantities[`${u.user.id}-${idx}-${item.id}`] ?? item.packedQty}
+                                                  value={packedQuantities[`${u.user.id}-${idx}-${item.id}`] ?? (item.packedQty || 0)}
                                                   onChange={(e) => handlePackedQtyChange(u.user.id, idx, item.id, e.target.value)}
                                                 />
+                                                <button
+                                                  title="Auto-fill total required"
+                                                  onClick={() => handlePackedQtyChange(u.user.id, idx, item.id, item.totalQty)}
+                                                  className="bg-blue-100 hover:bg-blue-200 text-blue-600 rounded px-1.5 py-1 text-[10px] transition-colors border border-blue-200"
+                                                >
+                                                  Fill
+                                                </button>
                                               </td>
                                             </tr>
                                           ))}
@@ -298,7 +313,7 @@ export default function AdminAllOrders() {
                                   )}
 
                                   <div className="mt-4 flex justify-end">
-                                    <button 
+                                    <button
                                       onClick={() => handleMarkReady(u.user.id, idx, addrGrp.items, addrGrp.scheduleIds, addrGrp.retailOrderIds)}
                                       className="btn-primary py-1.5 px-4 text-sm font-semibold"
                                     >
@@ -338,7 +353,7 @@ export default function AdminAllOrders() {
                               <p className="text-gray-600 text-sm italic">No items found.</p>
                             )}
                           </div>
-                          
+
                         </div>
                       </td>
                     </tr>

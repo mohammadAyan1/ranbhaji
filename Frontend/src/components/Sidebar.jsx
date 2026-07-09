@@ -22,6 +22,7 @@ const adminLinks = [
   { to: "/admin/retail-orders", label: "Retail Orders", icon: <ShoppingCart size={20} /> },
   { to: "/admin/batches", label: "Batches", icon: <Layers size={20} /> },
   { to: "/admin/all-orders", label: "All Orders", icon: <ListOrdered size={20} /> },
+  { to: "/admin/missed-products", label: "Missed Products", icon: <Undo2 size={20} /> },
 ];
 
 const userLinks = [

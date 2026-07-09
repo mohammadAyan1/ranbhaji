@@ -367,6 +367,19 @@ Batch.hasMany(DeliverySchedule, { foreignKey: 'batch_id' });
 RetailOrder.belongsTo(Batch, { foreignKey: 'batch_id' });
 Batch.hasMany(RetailOrder, { foreignKey: 'batch_id' });
 
+// 24. MISSED_PRODUCT_LOG
+const MissedProductLog = sequelize.define('MissedProductLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  missed_date: { type: DataTypes.DATEONLY, allowNull: false },
+  missed_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  next_schedule_date: { type: DataTypes.DATEONLY, allowNull: true }
+}, { tableName: 'missed_product_logs', timestamps: true, createdAt: 'created_at', updatedAt: false });
+
+MissedProductLog.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(MissedProductLog, { foreignKey: 'user_id' });
+MissedProductLog.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(MissedProductLog, { foreignKey: 'product_id' });
+
 export {
   sequelize,
   User,
@@ -392,6 +405,7 @@ export {
   PurchaseLog,
   RetailOrder,
   RetailOrderItem,
-  Batch
+  Batch,
+  MissedProductLog
 };
 

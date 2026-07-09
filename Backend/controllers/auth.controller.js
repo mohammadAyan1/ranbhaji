@@ -21,7 +21,7 @@ export const register = async (req, res) => {
         }
         const allowedRoles = ["user", "delivery", "admin"];
         const userRole = role && allowedRoles.includes(role) ? role : "user";
-
+// `select * from where phone = ${phone}`
         const existing = await User.findOne({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, message: "Phone number already registered" });
 
