@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import api from "../../api/axios";
 
 export default function AdminCalculator() {
@@ -60,8 +61,10 @@ export default function AdminCalculator() {
   };
 
   const clearCalculator = () => {
-    setFixedItems(Array.from({length: fixedCount}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
-    setSeasonalItems(Array.from({length: seasonalCount}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
+    setFixedCount(2);
+    setSeasonalCount(3);
+    setFixedItems(Array.from({length: 2}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
+    setSeasonalItems(Array.from({length: 3}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
     setDraftName("");
     setNumPersonsMax("");
     setPersonRangeModeCalc(false);
@@ -274,16 +277,24 @@ export default function AdminCalculator() {
             className="input text-sm"
             value={fixedCount}
             onChange={(e) => {
-              const count = parseInt(e.target.value) || 0;
-              setFixedCount(count);
+              const newCount = parseInt(e.target.value) || 0;
+              if (newCount < fixedCount) {
+                 const removedItems = fixedItems.slice(newCount);
+                 const hasProductSelected = removedItems.some(item => item.product_id);
+                 if (hasProductSelected) {
+                    const confirmRemove = window.confirm("You have selected products in the rows being removed. Are you sure you want to remove them?");
+                    if (!confirmRemove) return;
+                 }
+              }
+              setFixedCount(newCount);
               const newItems = [...fixedItems];
-              if (count > newItems.length) {
-                for (let i = newItems.length; i < count; i++) {
+              if (newCount > newItems.length) {
+                for (let i = newItems.length; i < newCount; i++) {
                    const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
                    newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
                 }
-              } else if (count < newItems.length) {
-                newItems.splice(count);
+              } else if (newCount < newItems.length) {
+                newItems.splice(newCount);
               }
               setFixedItems(newItems);
             }}
@@ -297,16 +308,24 @@ export default function AdminCalculator() {
             className="input text-sm"
             value={seasonalCount}
             onChange={(e) => {
-              const count = parseInt(e.target.value) || 0;
-              setSeasonalCount(count);
+              const newCount = parseInt(e.target.value) || 0;
+              if (newCount < seasonalCount) {
+                 const removedItems = seasonalItems.slice(newCount);
+                 const hasProductSelected = removedItems.some(item => item.product_id);
+                 if (hasProductSelected) {
+                    const confirmRemove = window.confirm("You have selected products in the rows being removed. Are you sure you want to remove them?");
+                    if (!confirmRemove) return;
+                 }
+              }
+              setSeasonalCount(newCount);
               const newItems = [...seasonalItems];
-              if (count > newItems.length) {
-                for (let i = newItems.length; i < count; i++) {
+              if (newCount > newItems.length) {
+                for (let i = newItems.length; i < newCount; i++) {
                    const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
                    newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
                 }
-              } else if (count < newItems.length) {
-                newItems.splice(count);
+              } else if (newCount < newItems.length) {
+                newItems.splice(newCount);
               }
               setSeasonalItems(newItems);
             }}
@@ -441,6 +460,25 @@ export default function AdminCalculator() {
                     </div>
                   </div>
                 )}
+                
+                {/* Remove Row Button */}
+                <div className="ml-auto md:ml-0 flex items-center justify-end">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (item.product_id) {
+                        const confirmRemove = window.confirm("Are you sure you want to remove this row?");
+                        if (!confirmRemove) return;
+                      }
+                      setFixedItems(prev => prev.filter(p => p.id !== item.id));
+                      setFixedCount(prev => Math.max(0, prev - 1));
+                    }}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remove Row"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -543,6 +581,25 @@ export default function AdminCalculator() {
                     </div>
                   </div>
                 )}
+
+                {/* Remove Row Button */}
+                <div className="ml-auto md:ml-0 flex items-center justify-end">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (item.product_id) {
+                        const confirmRemove = window.confirm("Are you sure you want to remove this row?");
+                        if (!confirmRemove) return;
+                      }
+                      setSeasonalItems(prev => prev.filter(p => p.id !== item.id));
+                      setSeasonalCount(prev => Math.max(0, prev - 1));
+                    }}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remove Row"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             );
           })}
