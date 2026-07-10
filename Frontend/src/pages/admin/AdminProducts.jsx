@@ -270,7 +270,7 @@ export default function AdminProducts() {
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-300 w-fit">
+        <div className="flex overflow-x-auto bg-gray-100 p-1 rounded-xl border border-gray-300 w-full md:w-fit whitespace-nowrap">
           {[
             { id: "catalog", label: "Product Catalog", icon: "🥦" },
             { id: "purchase", label: "Log Purchase", icon: "➕" },
@@ -360,12 +360,12 @@ export default function AdminProducts() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
                   <label className="label mb-0">
                     {isWater ? "Avg Cost Price per Bottle (₹)" : isPiece ? "Avg Cost Price per Piece (₹)" : `Avg Cost ${priceLabel}`}
                   </label>
                   {showKgToggle(form.category, form.unit) && (
-                    <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-300">
+                    <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-300 w-fit">
                       <button
                         type="button"
                         onClick={() => {
@@ -617,15 +617,15 @@ export default function AdminProducts() {
 
           {purchaseForm.product_id && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up border border-gray-200">
-                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
+                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
                   <div>
                     <h4 className="font-bold text-lg text-gray-900">Log Purchase</h4>
                     <p className="text-sm text-gray-500">{demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}</p>
                   </div>
                   <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
                 </div>
-                <div className="p-6">
+                <div className="p-6 overflow-y-auto">
                   <form onSubmit={handlePurchaseSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* Quantity */}
@@ -682,7 +682,7 @@ export default function AdminProducts() {
 
                     {/* Auto Calculated Per Kg Live Preview */}
                     {parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex justify-between items-center text-sm mt-4">
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-sm mt-4">
                         <span className="text-gray-600">Calculated Purchase Price:</span>
                         <span className="text-lg font-bold text-gradient">
                           ₹{(parseFloat(purchaseForm.total_price) / parseFloat(purchaseForm.quantity)).toFixed(2)} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
@@ -690,12 +690,12 @@ export default function AdminProducts() {
                       </div>
                     )}
 
-                    <div className="pt-4 border-t border-gray-200 mt-6 flex justify-end gap-3">
-                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="px-5 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">Cancel</button>
+                    <div className="pt-4 border-t border-gray-200 mt-6 flex flex-col sm:flex-row justify-end gap-3">
+                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="px-5 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors w-full sm:w-auto">Cancel</button>
                       <button
                         type="submit"
                         disabled={submittingPurchase}
-                        className="btn-primary py-2.5 px-6"
+                        className="btn-primary py-2.5 px-6 w-full sm:w-auto"
                       >
                         {submittingPurchase ? "Saving Entry..." : "Submit & Update stock"}
                       </button>
@@ -820,8 +820,8 @@ export default function AdminProducts() {
       {/* Demand Breakdown Modal */}
       {selectedDemand && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-200">
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
               <div>
                 <h3 className="font-bold text-lg text-gray-900">Demand Breakdown</h3>
                 <p className="text-sm text-gray-500">{selectedDemand.name}</p>

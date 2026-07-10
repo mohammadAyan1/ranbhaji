@@ -8,18 +8,28 @@ const useAuthStore = create((set) => ({
 
   login: async (phone, password) => {
     set({ isLoading: true });
-    const { data } = await api.post("/auth/login", { phone, password });
-    localStorage.setItem("token", data.token);
-    set({ user: data.user, token: data.token, isLoading: false });
-    return data.user;
+    try {
+      const { data } = await api.post("/auth/login", { phone, password });
+      localStorage.setItem("token", data.token);
+      set({ user: data.user, token: data.token, isLoading: false });
+      return data.user;
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
   },
 
   register: async (formData) => {
     set({ isLoading: true });
-    const { data } = await api.post("/auth/register", formData);
-    localStorage.setItem("token", data.token);
-    set({ user: data.user, token: data.token, isLoading: false });
-    return data.user;
+    try {
+      const { data } = await api.post("/auth/register", formData);
+      localStorage.setItem("token", data.token);
+      set({ user: data.user, token: data.token, isLoading: false });
+      return data.user;
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
   },
 
   fetchMe: async () => {

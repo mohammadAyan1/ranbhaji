@@ -37,7 +37,7 @@ export default function AdminMissedProducts() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Missed Products Log</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Missed Products Log</h2>
         <p className="text-gray-600 text-sm">Products that were unchecked during packing and carried over to the next schedule</p>
       </div>
 
@@ -51,8 +51,9 @@ export default function AdminMissedProducts() {
         <div className="text-center text-gray-600 py-10">Loading missed products...</div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-100 text-gray-600">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[600px]">
+              <thead className="bg-gray-100 text-gray-600">
               <tr>
                 <th className="p-4 font-medium">Missed Date</th>
                 <th className="p-4 font-medium">User Details</th>
@@ -105,6 +106,7 @@ export default function AdminMissedProducts() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

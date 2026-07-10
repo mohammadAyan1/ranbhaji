@@ -43,7 +43,10 @@ export default function RegisterPage() {
             </div>
             <div>
               <label className="label">Phone Number</label>
-              <input id="reg-phone" type="tel" className="input" placeholder="9876543210" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required />
+              <input id="reg-phone" type="tel" className="input" placeholder="9876543210" value={form.phone} onChange={e => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                setForm({...form, phone: val});
+              }} maxLength={10} required />
             </div>
             <div>
               <label className="label">Email (optional)</label>

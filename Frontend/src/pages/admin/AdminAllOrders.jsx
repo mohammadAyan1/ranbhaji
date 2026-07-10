@@ -135,17 +135,17 @@ export default function AdminAllOrders() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">All Orders (Address-wise)</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Orders (Address-wise)</h2>
           <p className="text-gray-600 text-sm">Grouped orders by user and their specific addresses</p>
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="input-field"
+            className="input-field w-full sm:w-auto"
           />
         </div>
       </div>
@@ -154,8 +154,9 @@ export default function AdminAllOrders() {
         <div className="text-center text-gray-600 py-10">Loading users...</div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-left">
-            <thead className="bg-gray-100 text-gray-600">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[700px]">
+              <thead className="bg-gray-100 text-gray-600">
               <tr>
                 <th className="p-4 w-12 font-medium"></th>
                 <th className="p-4 font-medium">User</th>
@@ -221,10 +222,10 @@ export default function AdminAllOrders() {
                             <div className="grid grid-cols-1 gap-4">
                               {u.addresses.map((addrGrp, idx) => (
                                 <div key={idx} className="bg-gray-100 rounded-lg p-4 border border-gray-300">
-                                  <div className="flex justify-between items-start mb-4">
+                                  <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-3">
                                     <div className="pr-4">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <p className="text-sm text-gray-600 uppercase tracking-wide text-xs">Delivery Address</p>
+                                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                                        <p className="text-gray-600 uppercase tracking-wide text-xs">Delivery Address</p>
                                         {addrGrp.status === 'ready_for_delivery' && (
                                           <span className="bg-green-500/20 text-green-400 text-[10px] px-2 py-0.5 rounded-full border border-green-500/30">
                                             Ready for Delivery
@@ -233,7 +234,7 @@ export default function AdminAllOrders() {
                                       </div>
                                       <p className="font-medium text-gray-900">{addrGrp.address}</p>
                                     </div>
-                                    <div className="flex flex-col items-end">
+                                    <div className="flex flex-col items-start sm:items-end w-full sm:w-auto">
                                       <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Batch</p>
                                       {currentUser?.role === 'admin' ? (
                                         <select
@@ -256,7 +257,7 @@ export default function AdminAllOrders() {
 
                                   {addrGrp.items.length > 0 && (
                                     <div className="overflow-x-auto rounded border border-gray-300/50">
-                                      <table className="w-full text-sm text-left">
+                                      <table className="w-full text-sm text-left min-w-[500px]">
                                         <thead className="bg-white/50 text-gray-600 text-xs">
                                           <tr>
                                             <th className="p-2 pl-4 w-8"></th>
@@ -329,8 +330,8 @@ export default function AdminAllOrders() {
                           <div className="mt-8 border-t border-gray-300 pt-6">
                             <h4 className="text-sm font-bold text-gray-600 mb-3 uppercase tracking-wider">Overall Total for User</h4>
                             {u.totalItems.length > 0 ? (
-                              <div className="overflow-hidden rounded-lg border border-gray-300/50">
-                                <table className="w-full text-sm text-left opacity-75">
+                              <div className="overflow-x-auto rounded-lg border border-gray-300/50">
+                                <table className="w-full text-sm text-left opacity-75 min-w-[300px]">
                                   <thead className="bg-white text-gray-500">
                                     <tr>
                                       <th className="p-2 pl-4">Item Name</th>
@@ -367,6 +368,7 @@ export default function AdminAllOrders() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

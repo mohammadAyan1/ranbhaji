@@ -55,7 +55,11 @@ export default function LoginPage() {
                 className="input"
                 placeholder="9000000001"
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  setForm({ ...form, phone: val });
+                }}
+                maxLength={10}
                 required
               />
             </div>
