@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { Product, PurchaseLog, sequelize } from "../models/index.js";
+import { Op } from "sequelize";
+import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, sequelize } from "../models/index.js";
 
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
@@ -170,6 +171,105 @@ export const getStockSummary = async (req, res) => {
         });
         res.status(200).json({ success: true, products });
     } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/products/sales (admin)
+export const getProductSales = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) {
+            return res.status(400).json({ success: false, message: "startDate and endDate are required" });
+        }
+
+        // Fetch all products
+        const products = await Product.findAll({
+            attributes: ['id', 'name', 'unit', 'category']
+        });
+
+        const productSalesMap = {};
+        products.forEach(p => {
+            productSalesMap[p.id] = {
+                id: p.id,
+                name: p.name,
+                unit: p.unit,
+                category: p.category,
+                totalQty: 0,
+                retailQty: 0,
+                packageQty: 0
+            };
+        });
+
+        // 1. Retail Orders
+        const retailItems = await RetailOrderItem.findAll({
+            include: [{
+                model: RetailOrder,
+                where: { delivery_date: { [Op.between]: [startDate, endDate] } },
+                attributes: []
+            }],
+            attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQty']],
+            group: ['product_id']
+        });
+
+        retailItems.forEach(item => {
+            const pid = item.product_id;
+            const qty = parseFloat(item.dataValues.totalQty || 0);
+            if (productSalesMap[pid]) {
+                productSalesMap[pid].retailQty += qty;
+                productSalesMap[pid].totalQty += qty;
+            }
+        });
+
+        // 2. Package Deliveries (DeliveryItem)
+        const deliveryItems = await DeliveryItem.findAll({
+            include: [{
+                model: DeliverySchedule,
+                where: { scheduled_date: { [Op.between]: [startDate, endDate] } },
+                attributes: []
+            }],
+            attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('qty_gm')), 'totalQty']],
+            group: ['product_id']
+        });
+
+        deliveryItems.forEach(item => {
+            const pid = item.product_id;
+            const qty = parseFloat(item.dataValues.totalQty || 0);
+            if (productSalesMap[pid]) {
+                productSalesMap[pid].packageQty += qty;
+                productSalesMap[pid].totalQty += qty;
+            }
+        });
+
+        // 3. Package Deliveries (Seasonal Selections)
+        const seasonalItems = await ScheduleSeasonalSelection.findAll({
+            include: [{
+                model: DeliverySchedule,
+                where: { scheduled_date: { [Op.between]: [startDate, endDate] } },
+                attributes: []
+            }],
+            attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('qty_gm')), 'totalQty']],
+            group: ['product_id']
+        });
+
+        seasonalItems.forEach(item => {
+            const pid = item.product_id;
+            const qty = parseFloat(item.dataValues.totalQty || 0);
+            if (productSalesMap[pid]) {
+                productSalesMap[pid].packageQty += qty;
+                productSalesMap[pid].totalQty += qty;
+            }
+        });
+
+        // Convert map to array and filter out products with 0 total qty (optional)
+        // Let's filter out products with 0 qty to make it cleaner
+        const salesData = Object.values(productSalesMap)
+            .filter(p => p.totalQty > 0)
+            .sort((a, b) => b.totalQty - a.totalQty);
+
+        res.status(200).json({ success: true, data: salesData });
+    } catch (error) {
+        console.error("Error in getProductSales:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

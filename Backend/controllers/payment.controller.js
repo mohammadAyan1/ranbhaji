@@ -271,7 +271,60 @@ export const getPhonePeStatus = async (req, res) => {
                 }
 
                 const user = await User.findByPk(paymentTxn.user_id, { transaction: t });
-                let newBalance = parseFloat(user.wallet_balance) + amount;
+
+                // --- NEW LOGIC: Renewal Chain & Locked Price ---
+                const oldSub = await Subscription.findOne({
+                    where: { user_id: user.id, package_id },
+                    order: [['created_at', 'DESC']],
+                    transaction: t
+                });
+                
+                let renewal_count = 1;
+                let locked_price = amount;
+                
+                if (oldSub) {
+                    let isEligible = false;
+                    if (oldSub.status === 'active' || oldSub.status === 'paused') {
+                        isEligible = true;
+                    } else if (oldSub.status === 'completed' && oldSub.end_date) {
+                        const endDate = new Date(oldSub.end_date);
+                        const sevenDaysAgo = new Date();
+                        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                        if (endDate >= sevenDaysAgo) {
+                            isEligible = true;
+                        }
+                    }
+                    if (isEligible) {
+                        renewal_count = oldSub.renewal_count + 1;
+                        locked_price = parseFloat(oldSub.locked_price || oldSub.Package?.price || pkg.price);
+                        if (renewal_count >= 3) {
+                            if (type === 'yearly') {
+                                 amount = locked_price * 12 * 0.75;
+                                 yearly_amount_paid = amount;
+                            } else {
+                                 amount = locked_price;
+                            }
+                        }
+                    }
+                }
+                // ------------------------------------------
+
+                let newBalance = parseFloat(user.wallet_balance) + parseFloat(paymentTxn.amount);
+
+                // --- NEW LOGIC: Post-paid Debt Recovery ---
+                if (parseFloat(user.postpaid_debt) > 0) {
+                    const debt = parseFloat(user.postpaid_debt);
+                    newBalance -= debt;
+                    await user.update({ postpaid_debt: 0 }, { transaction: t });
+                    await WalletTransaction.create({
+                        user_id: user.id,
+                        amount: debt,
+                        type: 'debit',
+                        reason: 'Recovery for previous post-paid serving'
+                    }, { transaction: t });
+                }
+                // ------------------------------------------
+
                 await user.update({ wallet_balance: newBalance }, { transaction: t });
 
                 await WalletTransaction.create({
@@ -288,7 +341,9 @@ export const getPhonePeStatus = async (req, res) => {
                     status: 'active',
                     yearly_amount_paid,
                     total_services,
-                    address_id
+                    address_id,
+                    renewal_count,
+                    locked_price
                 }, { transaction: t });
 
                 const fixedItemRows = pkg.FixedItems.map(fi => ({

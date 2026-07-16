@@ -7,6 +7,8 @@ import Layout from "./components/Layout";
 // Auth pages
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import VerifyOTPPage from "./pages/VerifyOTPPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 
 // User pages
 import UserDashboard from "./pages/user/UserDashboard";
@@ -37,6 +39,9 @@ import AdminRetailOrders from "./pages/admin/AdminRetailOrders";
 import AdminBatches from "./pages/admin/AdminBatches";
 import AdminAllOrders from "./pages/admin/AdminAllOrders";
 import AdminMissedProducts from "./pages/admin/AdminMissedProducts";
+import AdminProductSales from "./pages/admin/AdminProductSales";
+import AdminUserHistory from "./pages/admin/AdminUserHistory";
+import AdminReverseCalculator from "./pages/admin/AdminReverseCalculator";
 
 
 // Delivery pages
@@ -55,6 +60,8 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/verify-otp" element={<PublicRoute><VerifyOTPPage /></PublicRoute>} />
+        <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
         <Route path="/unauthorized" element={
           <div className="min-h-screen flex items-center justify-center text-gray-400 flex-col gap-4 bg-gray-950">
             <p className="text-5xl">🚫</p>
@@ -85,6 +92,7 @@ function App() {
           <Route path="/admin/packages" element={<AdminPackages />} />
           <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
           <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/user-history" element={<AdminUserHistory />} />
           <Route path="/admin/user-addresses" element={<AdminUserAddresses />} />
           <Route path="/admin/returns" element={<AdminReturns />} />
           <Route path="/admin/deliveries" element={<AdminDeliveries />} />
@@ -92,10 +100,12 @@ function App() {
           <Route path="/admin/seasonal-selections" element={<AdminSeasonalSelections />} />
           <Route path="/admin/summary" element={<AdminDashboard />} />
           <Route path="/admin/calculator" element={<AdminCalculator />} />
+          <Route path="/admin/reverse-calculator" element={<AdminReverseCalculator />} />
           <Route path="/admin/retail-orders" element={<AdminRetailOrders />} />
           <Route path="/admin/batches" element={<AdminBatches />} />
           <Route path="/admin/all-orders" element={<AdminAllOrders />} />
           <Route path="/admin/missed-products" element={<AdminMissedProducts />} />
+          <Route path="/admin/product-sales" element={<AdminProductSales />} />
         </Route>
 
         {/* ─── DELIVERY Routes ─────────────────────────────────── */}

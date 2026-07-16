@@ -23,9 +23,60 @@ const useAuthStore = create((set) => ({
     set({ isLoading: true });
     try {
       const { data } = await api.post("/auth/register", formData);
+      set({ isLoading: false });
+      return data;
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
+  verifyRegistrationOTP: async (phone, otp) => {
+    set({ isLoading: true });
+    try {
+      const { data } = await api.post("/auth/verify-registration-otp", { phone, otp });
       localStorage.setItem("token", data.token);
       set({ user: data.user, token: data.token, isLoading: false });
-      return data.user;
+      return data;
+    } catch (error) {
+      set({ isLoading: false });
+      throw error;
+    }
+  },
+
+  resendOTP: async (phone) => {
+    try {
+      const { data } = await api.post("/auth/resend-otp", { phone });
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  forgotPassword: async (phone) => {
+    try {
+      const { data } = await api.post("/auth/forgot-password", { phone });
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  verifyForgotPasswordOTP: async (phone, otp) => {
+    try {
+      const { data } = await api.post("/auth/verify-forgot-password-otp", { phone, otp });
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  resetPassword: async (payload) => {
+    set({ isLoading: true });
+    try {
+      const { data } = await api.post("/auth/reset-password", payload);
+      set({ isLoading: false });
+      return data;
     } catch (error) {
       set({ isLoading: false });
       throw error;

@@ -12,8 +12,8 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
     try {
-      const user = await register(form);
-      navigate("/dashboard");
+      await register(form);
+      navigate("/verify-otp", { state: { phone: form.phone } });
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed");
     }

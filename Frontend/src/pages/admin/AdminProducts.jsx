@@ -22,7 +22,10 @@ export default function AdminProducts() {
   const [priceUnit, setPriceUnit] = useState("kg");
 
   // Tabs: "catalog" | "purchase" | "stock" | "logs"
-  const [activeTab, setActiveTab] = useState("catalog");
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") || "catalog";
+  });
 
   // Purchase Entry Form State
   const [demands, setDemands] = useState([]);

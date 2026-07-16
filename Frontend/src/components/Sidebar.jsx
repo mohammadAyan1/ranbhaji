@@ -3,7 +3,7 @@ import useAuthStore from "../store/authStore";
 import { 
   LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin, 
   Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator, 
-  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck
 } from "lucide-react";
 
 const adminLinks = [
@@ -12,13 +12,16 @@ const adminLinks = [
   { to: "/admin/packages", label: "Packages", icon: <Package size={20} /> },
   { to: "/admin/subscriptions", label: "Subscriptions", icon: <RefreshCw size={20} /> },
   { to: "/admin/users", label: "Users", icon: <Users size={20} /> },
+  { to: "/admin/user-history", label: "User History", icon: <UserCheck size={20} /> },
   { to: "/admin/user-addresses", label: "User Addresses", icon: <MapPin size={20} /> },
   { to: "/admin/deliveries", label: "Delivered Orders", icon: <Truck size={20} /> },
   { to: "/admin/demands", label: "Stock Demands", icon: <BarChart3 size={20} /> },
+  { to: "/admin/product-sales", label: "Product Sales", icon: <TrendingUp size={20} /> },
   { to: "/admin/seasonal-selections", label: "Seasonal Picks", icon: <Leaf size={20} /> },
   { to: "/admin/returns", label: "Returns", icon: <Undo2 size={20} /> },
   { to: "/admin/summary", label: "Daily Summary", icon: <ClipboardList size={20} /> },
   { to: "/admin/calculator", label: "Price Calculator", icon: <Calculator size={20} /> },
+  { to: "/admin/reverse-calculator", label: "Reverse Calculator", icon: <Calculator size={20} /> },
   { to: "/admin/retail-orders", label: "Retail Orders", icon: <ShoppingCart size={20} /> },
   { to: "/admin/batches", label: "Batches", icon: <Layers size={20} /> },
   { to: "/admin/all-orders", label: "All Orders", icon: <ListOrdered size={20} /> },

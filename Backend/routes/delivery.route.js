@@ -3,7 +3,8 @@ import {
     getTodayDeliveries, markDelivered, requestReturn, reviewReturn,
     getDeliveryHistory, getCompletedDeliveries, getReturns, getProductDemands,
     getAdminSeasonalSelections, getAllOrdersForDate, assignBatch,
-    packOrders, getAvailableOrders, acceptOrder, getMissedProducts
+    packOrders, getAvailableOrders, acceptOrder, getMissedProducts,
+    assignDeliveryBoy
 } from "../controllers/delivery.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
@@ -21,6 +22,7 @@ router.get("/admin/demands", requireAuth, requireRole(["admin"]), getProductDema
 router.get("/admin/seasonal-selections", requireAuth, requireRole(["admin"]), getAdminSeasonalSelections);
 router.get("/admin/orders", requireAuth, requireRole(["admin"]), getAllOrdersForDate);
 router.put("/admin/orders/assign-batch", requireAuth, requireRole(["admin"]), assignBatch);
+router.put("/admin/orders/assign-delivery-boy", requireAuth, requireRole(["admin"]), assignDeliveryBoy);
 router.put("/admin/orders/pack", requireAuth, requireRole(["admin"]), packOrders);
 router.get("/admin/missed-products", requireAuth, requireRole(["admin"]), getMissedProducts);
 

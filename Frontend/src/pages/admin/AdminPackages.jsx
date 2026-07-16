@@ -15,7 +15,7 @@ export default function AdminPackages() {
 
   // Form state
   const [form, setForm] = useState({
-    name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", margin_percent: 0,
+    name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", target_mobile_number: "", margin_percent: 0,
   });
   const [personRangeMode, setPersonRangeMode] = useState(false); // toggle: single vs range
   const [fixedItems, setFixedItems] = useState([]); // [{ product_id, default_qty_gm }]
@@ -57,6 +57,7 @@ export default function AdminPackages() {
       price: draft.calculated_price,
       type: "standard",
       target_user_id: "",
+      target_mobile_number: "",
       margin_percent: draft.margin_percent,
     });
 
@@ -95,7 +96,7 @@ export default function AdminPackages() {
   }, [fixedItems, form.price, form.services_per_month, products]);
 
   const resetForm = () => {
-    setForm({ name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", margin_percent: 0 });
+    setForm({ name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", target_mobile_number: "", margin_percent: 0 });
     setPersonRangeMode(false);
     setFixedItems([]);
     setSeasonalPool([]);
@@ -107,7 +108,7 @@ export default function AdminPackages() {
 
   const startEdit = (pkg) => {
     setEditing(pkg.id);
-    setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0 });
+    setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", target_mobile_number: pkg.target_mobile_number || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0 });
     setPersonRangeMode(!!pkg.num_persons_max); // enable range mode if max was set
     setFixedItems(pkg.FixedItems?.map(fi => ({ product_id: fi.product_id, default_qty_gm: fi.default_qty_gm })) || []);
     setSeasonalPool(pkg.SeasonalPool?.map(sp => sp.product_id) || []);
@@ -131,7 +132,8 @@ export default function AdminPackages() {
       services_per_month: parseInt(form.services_per_month),
       price: parseFloat(form.price),
       margin_percent: parseFloat(form.margin_percent || 0),
-      target_user_id: form.type === "custom" ? parseInt(form.target_user_id) : null,
+      target_user_id: form.type === "custom" && form.target_user_id ? parseInt(form.target_user_id) : null,
+      target_mobile_number: form.type === "custom" ? form.target_mobile_number : null,
       fixed_items: fixedItems.filter(fi => fi.product_id && fi.default_qty_gm).map(fi => ({
         product_id: parseInt(fi.product_id),
         default_qty_gm: parseFloat(fi.default_qty_gm),
@@ -308,11 +310,11 @@ export default function AdminPackages() {
             </div>
             <div>
               <label className="label">Monthly Price (₹) *</label>
-              <input type="number" min="1" step="0.01" className="input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} required />
+              <input type="number" min="1" step="any" className="input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} required />
             </div>
             <div>
               <label className="label">Margin Percentage (%) *</label>
-              <input type="number" min="0" max="100" step="0.01" className="input" value={form.margin_percent} onChange={e => setForm({ ...form, margin_percent: e.target.value })} required />
+              <input type="number" min="0" step="any" className="input" value={form.margin_percent} onChange={e => setForm({ ...form, margin_percent: e.target.value })} required />
             </div>
             <div>
               <label className="label">Package Type *</label>
@@ -321,13 +323,19 @@ export default function AdminPackages() {
               </select>
             </div>
             {form.type === "custom" && (
-              <div>
-                <label className="label">Target Customer *</label>
-                <select className="input" value={form.target_user_id} onChange={e => setForm({ ...form, target_user_id: e.target.value })} required>
-                  <option value="">Select customer...</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.phone})</option>)}
-                </select>
-              </div>
+              <>
+                <div>
+                  <label className="label">Target Customer</label>
+                  <select className="input" value={form.target_user_id || ""} onChange={e => setForm({ ...form, target_user_id: e.target.value })}>
+                    <option value="">Select customer (optional)</option>
+                    {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.phone})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Target Mobile Number</label>
+                  <input type="text" className="input" placeholder="e.g. 9876543210" value={form.target_mobile_number || ""} onChange={e => setForm({ ...form, target_mobile_number: e.target.value })} />
+                </div>
+              </>
             )}
           </div>
 
@@ -406,7 +414,7 @@ export default function AdminPackages() {
                         })}
                       </select>
                       <input
-                        type="number" min="1" step="1"
+                        type="number" min="1" step="any"
                         placeholder="Qty (gm)"
                         value={fi.default_qty_gm}
                         onChange={e => updateFixedItem(idx, "default_qty_gm", e.target.value)}

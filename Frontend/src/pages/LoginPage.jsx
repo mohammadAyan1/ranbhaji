@@ -17,7 +17,13 @@ export default function LoginPage() {
       else if (user.role === "delivery") navigate("/delivery");
       else navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
+      const msg = err.response?.data?.message || "Login failed";
+      if (msg === "Please verify your phone number first") {
+        // navigate("/verify-otp", { state: { phone: form.phone } });
+        setError(msg);
+      } else {
+        setError(msg);
+      }
     }
   };
 
@@ -81,10 +87,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-gray-600 text-sm mt-5">
-            Don't have an account?{" "}
-            <Link to="/register" className="text-fresh-600 hover:text-fresh-700 font-medium">Register</Link>
-          </p>
+          <div className="flex justify-between mt-5 text-sm">
+            <Link to="/forgot-password" className="text-fresh-600 hover:text-fresh-700 font-medium">Forgot Password?</Link>
+            <p className="text-gray-600">
+              New here?{" "}
+              <Link to="/register" className="text-fresh-600 hover:text-fresh-700 font-medium">Register</Link>
+            </p>
+          </div>
 
           {/* Demo credentials */}
           <div className="mt-5 p-3 bg-white rounded-xl border border-gray-300/50 text-xs text-gray-500 space-y-1">

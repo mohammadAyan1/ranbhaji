@@ -445,6 +445,35 @@ export const markDelivered = async (req, res) => {
 
         await sub.update({ services_completed: sub.services_completed + 1 }, { transaction: t });
 
+        // --- NEW LOGIC: Post-paid Serving Generation ---
+        if (schedule.Subscription && (sub.services_completed + 1) === sub.total_services && sub.renewal_count >= 3 && !sub.postpaid_serving_given) {
+            const lastSchedule = await DeliverySchedule.findOne({
+                where: { subscription_id: sub.id },
+                order: [['scheduled_date', 'DESC']],
+                transaction: t
+            });
+            let nextDateStr = new Date().toISOString().split('T')[0];
+            if (lastSchedule) {
+                 const gap_days = 30 / sub.Package.services_per_month;
+                 const d = new Date(lastSchedule.scheduled_date);
+                 d.setDate(d.getDate() + Math.round(gap_days));
+                 if (d.getDay() === 0) d.setDate(d.getDate() - 1);
+                 nextDateStr = d.toISOString().split('T')[0];
+            }
+            await DeliverySchedule.create({
+                subscription_id: sub.id,
+                scheduled_date: nextDateStr,
+                status: 'pending'
+            }, { transaction: t });
+            
+            await sub.update({ postpaid_serving_given: true, end_date: nextDateStr }, { transaction: t });
+            
+            const cost = parseFloat(sub.locked_price || sub.Package.price) / sub.Package.services_per_month;
+            const userForDebt = await User.findByPk(sub.user_id, { transaction: t });
+            await userForDebt.update({ postpaid_debt: parseFloat(userForDebt.postpaid_debt) + cost }, { transaction: t });
+        }
+        // ------------------------------------------
+
         // Stock deduction logic
         let itemsForStockDeduction = [];
         if (schedule.Subscription) {
@@ -610,7 +639,14 @@ export const reviewReturn = async (req, res) => {
 
         if (status === 'approved') {
             const product = await Product.findByPk(item.product_id);
-            const refund = parseFloat(item.return_qty || item.qty_gm) * parseFloat(product.purchase_price_per_gm);
+            const returnQty = parseFloat(item.return_qty || item.qty_gm);
+            const refund = returnQty * parseFloat(product.purchase_price_per_gm);
+
+            // Add returned quantity back to stock and reduce total sold qty
+            await product.update({
+                current_stock: parseFloat(product.current_stock || 0) + returnQty,
+                total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - returnQty)
+            }, { transaction: t });
 
             await user.update({ wallet_balance: parseFloat(user.wallet_balance) + refund }, { transaction: t });
             await WalletTransaction.create({
@@ -716,7 +752,7 @@ export const getReturns = async (req, res) => {
                 {
                     model: DeliverySchedule,
                     include: [
-                        { model: Subscription, required: false, include: [{ model: User, attributes: ['id', 'name', 'phone'] }] },
+                        { model: Subscription, required: false, include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Package, attributes: ['id', 'name'] }] },
                         { model: WaterSubscription, required: false, include: [{ model: User, attributes: ['id', 'name', 'phone'] }] }
                     ]
                 }
@@ -1338,6 +1374,25 @@ export const assignBatch = async (req, res) => {
     }
 };
 
+// PUT /api/admin/orders/assign-delivery-boy
+export const assignDeliveryBoy = async (req, res) => {
+    try {
+        const { scheduleIds, retailOrderIds, delivery_boy_id } = req.body;
+
+        if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
+            await DeliverySchedule.update({ delivery_boy_id: delivery_boy_id || null }, { where: { id: scheduleIds } });
+        }
+
+        if (Array.isArray(retailOrderIds) && retailOrderIds.length > 0) {
+            await RetailOrder.update({ delivery_boy_id: delivery_boy_id || null }, { where: { id: retailOrderIds } });
+        }
+
+        res.status(200).json({ success: true, message: "Delivery boy assigned successfully" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // PUT /api/admin/orders/pack
 export const packOrders = async (req, res) => {
     try {
@@ -1454,11 +1509,71 @@ export const packOrders = async (req, res) => {
             }
         }
 
+        const autoAssignDelivery = async (scheduleOrOrderId, isRetail) => {
+            let addressId = null;
+            let targetObj = null;
+
+            if (isRetail) {
+                targetObj = await RetailOrder.findByPk(scheduleOrOrderId);
+                if (targetObj && !targetObj.delivery_boy_id) addressId = targetObj.address_id;
+            } else {
+                targetObj = await DeliverySchedule.findByPk(scheduleOrOrderId, {
+                    include: [
+                        { model: Subscription },
+                        { model: WaterSubscription }
+                    ]
+                });
+                if (targetObj && !targetObj.delivery_boy_id) {
+                    if (targetObj.Subscription) addressId = targetObj.Subscription.address_id;
+                    else if (targetObj.WaterSubscription) addressId = targetObj.WaterSubscription.address_id;
+                }
+            }
+
+            if (addressId) {
+                const address = await Address.findByPk(addressId);
+                if (address && address.zone) {
+                    let deliveryBoys = await User.findAll({
+                        where: { role: 'delivery', status: 'active' }
+                    });
+                    
+                    // Sort manually by last_assigned_at ASC, treating null as very old date
+                    deliveryBoys.sort((a, b) => {
+                        const aTime = a.last_assigned_at ? new Date(a.last_assigned_at).getTime() : 0;
+                        const bTime = b.last_assigned_at ? new Date(b.last_assigned_at).getTime() : 0;
+                        return aTime - bTime;
+                    });
+                    
+                    const matchedBoy = deliveryBoys.find(boy => {
+                        try {
+                            const zones = typeof boy.delivery_zones === 'string' ? JSON.parse(boy.delivery_zones) : boy.delivery_zones;
+                            return Array.isArray(zones) && zones.includes(address.zone);
+                        } catch (e) { return false; }
+                    });
+
+                    if (matchedBoy) {
+                        await matchedBoy.update({ last_assigned_at: new Date() });
+                        return matchedBoy.id;
+                    }
+                }
+            }
+            return null;
+        };
+
         if (Array.isArray(scheduleIds) && scheduleIds.length > 0) {
-            await DeliverySchedule.update({ status: 'ready_for_delivery' }, { where: { id: scheduleIds } });
+            for (const sid of scheduleIds) {
+                const boyId = await autoAssignDelivery(sid, false);
+                const updates = { status: 'ready_for_delivery' };
+                if (boyId) updates.delivery_boy_id = boyId;
+                await DeliverySchedule.update(updates, { where: { id: sid } });
+            }
         }
         if (Array.isArray(retailOrderIds) && retailOrderIds.length > 0) {
-            await RetailOrder.update({ delivery_status: 'ready_for_delivery' }, { where: { id: retailOrderIds } });
+            for (const rid of retailOrderIds) {
+                const boyId = await autoAssignDelivery(rid, true);
+                const updates = { delivery_status: 'ready_for_delivery' };
+                if (boyId) updates.delivery_boy_id = boyId;
+                await RetailOrder.update(updates, { where: { id: rid } });
+            }
         }
 
         res.status(200).json({ success: true, message: "Orders packed and marked ready for delivery" });

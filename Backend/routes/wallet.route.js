@@ -1,5 +1,5 @@
 import express from "express";
-import { getWallet, addFunds, getTransactions, getTomorrowSummary, getUserSubscriptions, getAllUsers, overrideCredit, updateUserStatus } from "../controllers/wallet.controller.js";
+import { getWallet, addFunds, getTransactions, getTomorrowSummary, getUserSubscriptions, getAllUsers, createUser, overrideCredit, updateUserStatus, assignDeliveryZones } from "../controllers/wallet.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
@@ -12,8 +12,10 @@ router.get("/wallet/transactions", requireAuth, getTransactions);
 // Admin
 router.get("/admin/tomorrow-summary", requireAuth, requireRole(["admin"]), getTomorrowSummary);
 router.get("/admin/users", requireAuth, requireRole(["admin"]), getAllUsers);
+router.post("/admin/users", requireAuth, requireRole(["admin"]), createUser);
 router.get("/admin/user/:id/all-subscriptions", requireAuth, requireRole(["admin"]), getUserSubscriptions);
 router.patch("/admin/credit/:id/override", requireAuth, requireRole(["admin"]), overrideCredit);
 router.patch("/admin/users/:id/status", requireAuth, requireRole(["admin"]), updateUserStatus);
+router.patch("/admin/users/:id/delivery-zones", requireAuth, requireRole(["admin"]), assignDeliveryZones);
 
 export default router;

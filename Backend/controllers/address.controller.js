@@ -157,3 +157,29 @@ export const updateLocation = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// GET /api/addresses/admin/unassigned
+export const getUnassignedAddresses = async (req, res) => {
+    try {
+        const addresses = await Address.findAll({
+            where: { zone: null }
+        });
+        res.status(200).json({ success: true, addresses });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PATCH /api/addresses/admin/:id/zone
+export const assignZone = async (req, res) => {
+    try {
+        const { zone } = req.body;
+        const address = await Address.findByPk(req.params.id);
+        if (!address) return res.status(404).json({ success: false, message: "Address not found" });
+
+        await address.update({ zone });
+        res.status(200).json({ success: true, message: "Zone assigned successfully", address });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

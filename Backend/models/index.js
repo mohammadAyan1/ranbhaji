@@ -11,7 +11,13 @@ const User = sequelize.define('User', {
   role: { type: DataTypes.ENUM('admin', 'user', 'delivery'), defaultValue: 'user' },
   wallet_balance: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   due_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
-  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+  postpaid_debt: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  otp: { type: DataTypes.STRING(6), allowNull: true },
+  otp_expiry: { type: DataTypes.DATE, allowNull: true },
+  is_verified: { type: DataTypes.BOOLEAN, defaultValue: false },
+  delivery_zones: { type: DataTypes.JSON, allowNull: true },
+  last_assigned_at: { type: DataTypes.DATE, allowNull: true }
 }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 2. PRODUCTS
@@ -41,6 +47,7 @@ const Package = sequelize.define('Package', {
   price: { type: DataTypes.DECIMAL(10, 2) },
   type: { type: DataTypes.ENUM('standard', 'custom', 'yearly') },
   target_user_id: { type: DataTypes.INTEGER, allowNull: true },
+  target_mobile_number: { type: DataTypes.STRING(15), allowNull: true },
   margin_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
 }, { tableName: 'packages', timestamps: true, createdAt: 'created_at', updatedAt: false });
@@ -73,7 +80,10 @@ const Subscription = sequelize.define('Subscription', {
   yearly_amount_paid: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   services_completed: { type: DataTypes.INTEGER, defaultValue: 0 },
   total_services: { type: DataTypes.INTEGER },
-  address_id: { type: DataTypes.INTEGER, allowNull: true }
+  address_id: { type: DataTypes.INTEGER, allowNull: true },
+  renewal_count: { type: DataTypes.INTEGER, defaultValue: 1 },
+  locked_price: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+  postpaid_serving_given: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, { tableName: 'subscriptions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 8. SUBSCRIPTION_ITEMS
@@ -184,7 +194,8 @@ const Address = sequelize.define('Address', {
   landmark: { type: DataTypes.STRING(100) },
   latitude: { type: DataTypes.DECIMAL(10, 8), allowNull: true },
   longitude: { type: DataTypes.DECIMAL(11, 8), allowNull: true },
-  is_default: { type: DataTypes.BOOLEAN, defaultValue: true }
+  is_default: { type: DataTypes.BOOLEAN, defaultValue: true },
+  zone: { type: DataTypes.STRING(100), allowNull: true }
 }, { tableName: 'addresses', timestamps: false });
 
 // 17. PAYMENT_TRANSACTIONS

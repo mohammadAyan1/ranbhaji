@@ -9,9 +9,15 @@ export default function AdminAllOrders() {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("date") === "today") return new Date().toISOString().split('T')[0];
+    return params.get("date") || new Date().toISOString().split('T')[0];
   });
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("status") || "all";
+  });
+
   const [expandedId, setExpandedId] = useState(null);
   const [packedQuantities, setPackedQuantities] = useState({});
   const [uncheckedItems, setUncheckedItems] = useState({}); // { `${userId}-${addrIdx}-${itemId}`: boolean }
@@ -140,7 +146,16 @@ export default function AdminAllOrders() {
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900">All Orders (Address-wise)</h2>
           <p className="text-gray-600 text-sm">Grouped orders by user and their specific addresses</p>
         </div>
-        <div className="w-full sm:w-auto">
+        <div className="w-full sm:w-auto flex gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="input-field w-full sm:w-auto min-w-[150px]"
+          >
+            <option value="all">All Statuses</option>
+            <option value="pending">Not Ready (Pending)</option>
+            <option value="ready">Ready (Unassigned)</option>
+          </select>
           <input
             type="date"
             value={date}
@@ -166,7 +181,13 @@ export default function AdminAllOrders() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800 text-gray-700">
-              {users.map((u) => (
+              {users.filter(u => {
+                  if (statusFilter === 'all') return true;
+                  // status is nested in addresses
+                  if (statusFilter === 'pending') return u.addresses.some(a => a.status === 'pending');
+                  if (statusFilter === 'ready') return u.addresses.some(a => a.status === 'ready' || a.status === 'ready_for_delivery');
+                  return true;
+              }).map((u) => (
                 <React.Fragment key={u.user.id}>
                   <tr className="hover:bg-white transition-colors">
                     <td className="p-4 text-gray-500 cursor-pointer" onClick={() => toggleRow(u.user.id)}>

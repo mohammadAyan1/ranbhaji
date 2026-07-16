@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
+import { Plus, X } from "lucide-react";
 import api from "../../api/axios";
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({ name: "", phone: "", email: "", password: "", role: "user" });
+  const [creating, setCreating] = useState(false);
 
   const fetchUsers = () => {
     api.get("/admin/users").then(r => setUsers(r.data.users || [])).finally(() => setLoading(false));
@@ -20,13 +25,35 @@ export default function AdminUsers() {
     } catch (err) { setMsg(`❌ ${err.response?.data?.message}`); }
   };
 
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setCreating(true);
+    setMsg("");
+    try {
+      await api.post("/admin/users", formData);
+      setMsg(`✅ User ${formData.name} created successfully.`);
+      setIsModalOpen(false);
+      setFormData({ name: "", phone: "", email: "", password: "", role: "user" });
+      fetchUsers();
+    } catch (err) {
+      setMsg(`❌ Failed to create user: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="page-header">User Management 👥</h1>
-        <p className="page-sub">View and manage all platform users</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="page-header">User Management 👥</h1>
+          <p className="page-sub">View and manage all platform users</p>
+        </div>
+        <button onClick={() => setIsModalOpen(true)} className="btn-primary text-sm flex items-center gap-2">
+          <Plus size={16} /> Add User
+        </button>
       </div>
 
       {msg && (
@@ -76,6 +103,51 @@ export default function AdminUsers() {
           </table>
         </div>
       </div>
+
+      {/* Add User Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Add New User</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="label">Name</label>
+                <input type="text" className="input" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Phone</label>
+                <input type="text" className="input" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Email (Optional)</label>
+                <input type="email" className="input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Password</label>
+                <input type="text" className="input" required value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Role</label>
+                <select className="input" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                  <option value="user">User</option>
+                  <option value="delivery">Delivery</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              
+              <button type="submit" disabled={creating} className="btn-primary w-full mt-2">
+                {creating ? "Creating..." : "Create Verified User"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

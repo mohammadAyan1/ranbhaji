@@ -189,7 +189,7 @@ export default function MySubscriptions() {
 
     const fixed = fixedItems.map(fi => ({
       product_id: fi.product_id,
-      qty_gm: parseFloat(fi.qty_gm) || 50
+      qty_gm: isNaN(parseFloat(fi.qty_gm)) ? 0 : parseFloat(fi.qty_gm)
     }));
 
     try {
@@ -265,9 +265,9 @@ export default function MySubscriptions() {
     const fixedItemsList = Object.entries(editingScheduleFixedItems)
       .map(([product_id, qty_gm]) => ({ product_id: parseInt(product_id), qty_gm: parseFloat(qty_gm) }));
 
-    const invalidFixed = fixedItemsList.find(fi => fi.qty_gm <= 0);
+    const invalidFixed = fixedItemsList.find(fi => isNaN(fi.qty_gm) || fi.qty_gm < 0);
     if (invalidFixed) {
-      setScheduleSelectionMsg("❌ Fixed item quantity must be greater than 0");
+      setScheduleSelectionMsg("❌ Fixed item quantity cannot be negative");
       setSavingScheduleSelection(false);
       return;
     }
@@ -312,8 +312,12 @@ export default function MySubscriptions() {
   const activeRemainingBudget = activeActualLimit - activeTotalCost;
   const isActiveOverBudget = activeTotalCost > activeActualLimit;
   const activeSelectedCount = Object.values(selectedScheduleItems).filter(v => parseFloat(v) > 0).length;
+  const activeRemovedFixedCount = Object.values(editingScheduleFixedItems).filter(qty => parseFloat(qty || 0) === 0).length;
+  const effectiveSchedulesMaxCount = schedulesMaxCount + activeRemovedFixedCount;
 
   const selectedCount = Object.values(selectedItems).filter(v => parseFloat(v) > 0).length;
+  const removedFixedCount = fixedItems.filter(fi => parseFloat(fi.qty_gm || 0) === 0).length;
+  const effectiveMaxSelectCount = maxSelectCount + removedFixedCount;
 
   const fixedCost = fixedItems.reduce((sum, item) => {
     const qty = parseFloat(item.qty_gm || 0);
@@ -420,7 +424,7 @@ export default function MySubscriptions() {
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
-                              min="50"
+                              min="0"
                               step="50"
                               value={qty}
                               onChange={e => updateFixedQty(fi.product_id, e.target.value)}
@@ -453,7 +457,7 @@ export default function MySubscriptions() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">2. Seasonal Items</h4>
-                <span className="text-gray-600 text-xs">Selected: {selectedCount} / {maxSelectCount}</span>
+                <span className="text-gray-600 text-xs">Selected: {selectedCount} / {effectiveMaxSelectCount}</span>
               </div>
               <div className="space-y-2">
                 {seasonalPool.map(sp => {
@@ -473,7 +477,7 @@ export default function MySubscriptions() {
                             if (!e.target.checked) {
                               const updated = { ...selectedItems }; delete updated[pid]; setSelectedItems(updated);
                             } else {
-                              if (selectedCount >= maxSelectCount) { setSeasonalMsg(`❌ Max ${maxSelectCount} items allowed`); return; }
+                              if (selectedCount >= effectiveMaxSelectCount) { setSeasonalMsg(`❌ Max ${effectiveMaxSelectCount} items allowed`); return; }
                               setSeasonalMsg("");
                               setSelectedItems({ ...selectedItems, [pid]: 100 });
                             }
@@ -837,7 +841,7 @@ export default function MySubscriptions() {
                                             <div className="flex items-center gap-1">
                                               <input
                                                 type="number"
-                                                min="50"
+                                                min="0"
                                                 step="50"
                                                 value={qty}
                                                 onChange={e => updateScheduleFixedQty(fi.product_id, e.target.value)}
@@ -870,7 +874,7 @@ export default function MySubscriptions() {
                               <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                   <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">2. Seasonal Items</p>
-                                  <span className="text-gray-600 text-xs">Chosen: {activeSelectedCount}/{schedulesMaxCount}</span>
+                                  <span className="text-gray-600 text-xs">Chosen: {activeSelectedCount}/{effectiveSchedulesMaxCount}</span>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                   {schedulesPool.map(sp => {
@@ -888,8 +892,8 @@ export default function MySubscriptions() {
                                                 const newItems = { ...selectedScheduleItems };
                                                 if (e.target.checked) {
                                                   // Respect max select count limit
-                                                  if (schedulesMaxCount && activeSelectedCount >= schedulesMaxCount) {
-                                                    alert(`Maximum of ${schedulesMaxCount} items allowed.`);
+                                                  if (schedulesMaxCount && activeSelectedCount >= effectiveSchedulesMaxCount) {
+                                                    alert(`Maximum of ${effectiveSchedulesMaxCount} items allowed.`);
                                                     return;
                                                   }
                                                   newItems[sp.product_id] = 250; // default to 250g
@@ -951,7 +955,7 @@ export default function MySubscriptions() {
                               <div className="flex gap-2 justify-end pt-2">
                                 <button
                                   onClick={() => handleSaveScheduleSelection(schedule.id)}
-                                  disabled={savingScheduleSelection || (schedulesMaxCount && activeSelectedCount > schedulesMaxCount)}
+                                  disabled={savingScheduleSelection || (schedulesMaxCount && activeSelectedCount > effectiveSchedulesMaxCount)}
                                   className="btn-primary text-xs py-1.5 px-4"
                                 >
                                   {savingScheduleSelection ? "Saving..." : "💾 Save Date Picks"}

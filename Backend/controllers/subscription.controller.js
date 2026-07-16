@@ -65,6 +65,55 @@ export const subscribe = async (req, res) => {
         const user = await User.findByPk(user_id, { transaction: t });
         let newBalance = parseFloat(user.wallet_balance);
 
+        // --- NEW LOGIC: Post-paid Debt Recovery ---
+        if (parseFloat(user.postpaid_debt) > 0) {
+            const debt = parseFloat(user.postpaid_debt);
+            newBalance -= debt;
+            await user.update({ postpaid_debt: 0 }, { transaction: t });
+            await WalletTransaction.create({
+                user_id, amount: debt, type: 'debit',
+                reason: 'Recovery for previous post-paid serving'
+            }, { transaction: t });
+        }
+        // ------------------------------------------
+
+        // --- NEW LOGIC: Renewal Chain & Locked Price ---
+        const oldSub = await Subscription.findOne({
+            where: { user_id, package_id },
+            order: [['created_at', 'DESC']],
+            transaction: t
+        });
+        
+        let renewal_count = 1;
+        let locked_price = amount;
+        
+        if (oldSub) {
+            let isEligible = false;
+            if (oldSub.status === 'active' || oldSub.status === 'paused') {
+                isEligible = true;
+            } else if (oldSub.status === 'completed' && oldSub.end_date) {
+                const endDate = new Date(oldSub.end_date);
+                const sevenDaysAgo = new Date();
+                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                if (endDate >= sevenDaysAgo) {
+                    isEligible = true;
+                }
+            }
+            if (isEligible) {
+                renewal_count = oldSub.renewal_count + 1;
+                locked_price = parseFloat(oldSub.locked_price || oldSub.Package?.price || pkg.price);
+                if (renewal_count >= 3) {
+                    if (type === 'yearly') {
+                         amount = locked_price * 12 * 0.75;
+                         yearly_amount_paid = amount;
+                    } else {
+                         amount = locked_price;
+                    }
+                }
+            }
+        }
+        // ------------------------------------------
+
         if (payment_method === 'wallet') {
             if (newBalance < amount) {
                 await t.rollback();
@@ -105,7 +154,9 @@ export const subscribe = async (req, res) => {
             status: 'active',
             yearly_amount_paid,
             total_services,
-            address_id: finalAddressId
+            address_id: finalAddressId,
+            renewal_count,
+            locked_price
         }, { transaction: t });
 
         // Create subscription items (fixed)
@@ -674,11 +725,11 @@ export const selectSeasonalItems = async (req, res) => {
 
         for (const fiId of pkgFixedItemIds) {
             const found = inputFixedItems.find(i => parseInt(i.product_id) === fiId);
-            if (!found || parseFloat(found.qty_gm) <= 0) {
+            if (!found || parseFloat(found.qty_gm) < 0) {
                 await t.rollback();
                 return res.status(400).json({
                     success: false,
-                    message: "You cannot remove fixed products. You can only reduce their quantity."
+                    message: "Fixed product quantity cannot be negative."
                 });
             }
         }
@@ -782,7 +833,7 @@ export const selectSeasonalItems = async (req, res) => {
 
             // Add fixed selections
             scheduleSelections.push(...inputFixedItems
-                .filter(item => parseFloat(item.qty_gm) > 0)
+                .filter(item => parseFloat(item.qty_gm) >= 0)
                 .map(i => ({
                     schedule_id: earliestSchedule.id,
                     product_id: i.product_id,
@@ -987,11 +1038,11 @@ export const saveScheduleSeasonal = async (req, res) => {
 
         for (const fiId of pkgFixedItemIds) {
             const found = inputFixedItems.find(i => parseInt(i.product_id) === fiId);
-            if (!found || parseFloat(found.qty_gm) <= 0) {
+            if (!found || parseFloat(found.qty_gm) < 0) {
                 await t.rollback();
                 return res.status(400).json({
                     success: false,
-                    message: "You cannot remove fixed products. You can only reduce/increase their quantity."
+                    message: "Fixed product quantity cannot be negative."
                 });
             }
         }
@@ -1013,9 +1064,12 @@ export const saveScheduleSeasonal = async (req, res) => {
         // Max item count check for seasonal items
         const maxCount = pkg.SeasonalConfig?.max_select_count;
         const activeSelectionsCount = inputSeasonalItems.filter(item => parseFloat(item.qty_gm) > 0).length;
-        if (maxCount && activeSelectionsCount > maxCount) {
+        const removedFixedCount = inputFixedItems.filter(item => parseFloat(item.qty_gm) === 0).length;
+        const effectiveMaxCount = maxCount ? maxCount + removedFixedCount : undefined;
+        
+        if (effectiveMaxCount && activeSelectionsCount > effectiveMaxCount) {
             await t.rollback();
-            return res.status(400).json({ success: false, message: `You can select a maximum of ${maxCount} seasonal items.` });
+            return res.status(400).json({ success: false, message: `You can select a maximum of ${effectiveMaxCount} seasonal items.` });
         }
 
         for (const item of inputSeasonalItems) {

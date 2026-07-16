@@ -1,6 +1,7 @@
 import { sequelize } from "../confiq/db.js";
 import { User, WalletTransaction, CreditLog, Subscription, DeliverySchedule, Package, WaterSubscription, Address } from "../models/index.js";
 import { Op } from "sequelize";
+import bcrypt from "bcryptjs";
 
 // GET /api/wallet
 export const getWallet = async (req, res) => {
@@ -138,6 +139,38 @@ export const getAllUsers = async (req, res) => {
     }
 };
 
+// POST /api/admin/users
+export const createUser = async (req, res) => {
+    try {
+        const { name, phone, email, password, role } = req.body;
+        
+        if (!name || !phone || !password) {
+            return res.status(400).json({ success: false, message: "Name, phone, and password are required" });
+        }
+
+        const existingUser = await User.findOne({ where: { phone } });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: "User with this phone already exists" });
+        }
+
+        const password_hash = await bcrypt.hash(password, 10);
+
+        const newUser = await User.create({
+            name,
+            phone,
+            email: email || null,
+            password_hash,
+            role: role || 'user',
+            is_verified: true, // Already verified if admin creates
+            status: 'active'
+        });
+
+        res.status(201).json({ success: true, message: "User created successfully", user: newUser });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // PATCH /api/admin/credit/:id/override
 export const overrideCredit = async (req, res) => {
     try {
@@ -163,6 +196,20 @@ export const updateUserStatus = async (req, res) => {
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
         await user.update({ status });
         res.status(200).json({ success: true, message: `User ${status}` });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PATCH /api/admin/users/:id/delivery-zones
+export const assignDeliveryZones = async (req, res) => {
+    try {
+        const { zones } = req.body;
+        const user = await User.findByPk(req.params.id);
+        if (!user || user.role !== 'delivery') return res.status(404).json({ success: false, message: "Delivery boy not found" });
+
+        await user.update({ delivery_zones: zones });
+        res.status(200).json({ success: true, message: "Delivery zones updated successfully", user });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

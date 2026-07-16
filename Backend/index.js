@@ -25,6 +25,9 @@ import calculatorRoutes from "./routes/calculator.route.js";
 import paymentRoutes from "./routes/payment.route.js";
 import retailRoutes from "./routes/retail.route.js";
 import batchRoutes from "./routes/batch.route.js";
+import userAnalyticsRoutes from "./routes/userAnalytics.route.js";
+import dashboardRoutes from "./routes/dashboard.route.js";
+
 
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
@@ -79,6 +82,9 @@ app.use("/api/calculator", calculatorRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/retail", retailRoutes);
 app.use("/api", batchRoutes);
+app.use("/api/admin/user-analytics", userAnalyticsRoutes);
+app.use("/api/admin", dashboardRoutes);
+
 
 // 404 fallback
 app.use((req, res) => {
