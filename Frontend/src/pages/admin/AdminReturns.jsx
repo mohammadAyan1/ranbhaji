@@ -208,6 +208,11 @@ export default function AdminReturns() {
                                         Return: <span className="text-yellow-400 font-medium">{parseFloat(r.return_qty).toFixed(0)}{r.Product?.unit || 'g'}</span>
                                         </p>
                                         <p className="text-gray-600 text-[10px]">Delivered: {parseFloat(r.qty_gm).toFixed(0)}{r.Product?.unit || 'g'}</p>
+                                        {r.next_schedule_date && (
+                                            <p className="mt-1 text-xs text-fresh-500 font-medium">
+                                                Next Delivery: {new Date(r.next_schedule_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
+                                            </p>
+                                        )}
                                     </td>
                                     <td className="p-3 text-gray-700 italic max-w-[200px] break-words">
                                         "{r.return_reason || "No reason specified"}"

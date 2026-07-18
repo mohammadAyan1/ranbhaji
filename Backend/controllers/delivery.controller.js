@@ -797,7 +797,38 @@ export const getCompletedDeliveries = async (req, res) => {
             order: [['actual_delivery_date', 'DESC'], ['id', 'DESC']]
         });
 
-        res.status(200).json({ success: true, deliveries });
+        const deliveriesData = deliveries.map(d => d.toJSON());
+
+        // Enrich with MissedProductLogs
+        const userIds = deliveriesData.map(d => d.subscription_id ? d.Subscription?.user_id : null).filter(Boolean);
+        const dates = deliveriesData.map(d => d.scheduled_date);
+        
+        if (userIds.length > 0 && dates.length > 0) {
+            const missedLogs = await MissedProductLog.findAll({
+                where: {
+                    user_id: { [Op.in]: userIds },
+                    next_schedule_date: { [Op.in]: dates }
+                }
+            });
+
+            if (missedLogs.length > 0) {
+                for (const delivery of deliveriesData) {
+                    const userId = delivery.Subscription?.user_id;
+                    const date = delivery.scheduled_date;
+                    if (!userId) continue;
+
+                    const relevantLogs = missedLogs.filter(log => log.user_id === userId && log.next_schedule_date === date);
+                    for (const item of delivery.DeliveryItems) {
+                        const log = relevantLogs.find(l => l.product_id === item.product_id);
+                        if (log) {
+                            item.carried_over_qty = log.missed_qty;
+                        }
+                    }
+                }
+            }
+        }
+
+        res.status(200).json({ success: true, deliveries: deliveriesData });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -809,16 +840,23 @@ export const getReturns = async (req, res) => {
         const { from_date, to_date, order_id, user_id, delivery_boy_id, all_time } = req.query;
         let scheduleWhere = {};
 
+        let itemWhere = { return_status: { [Op.ne]: 'none' } };
+
         if (order_id) {
             scheduleWhere.id = order_id;
         } else if (all_time === 'true') {
             // no date filter
         } else if (from_date && to_date) {
-            scheduleWhere.actual_delivery_date = { [Op.between]: [from_date, to_date] };
+            itemWhere.updatedAt = { 
+                [Op.between]: [`${from_date} 00:00:00`, `${to_date} 23:59:59`] 
+            };
         } else {
-            const today = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
-            const [m, d, y] = today.split('/');
-            scheduleWhere.actual_delivery_date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+            const todayStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
+            const [m, d, y] = todayStr.split('/');
+            const todayFormatted = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+            itemWhere.updatedAt = {
+                [Op.between]: [`${todayFormatted} 00:00:00`, `${todayFormatted} 23:59:59`]
+            };
         }
 
         if (delivery_boy_id) {
@@ -828,7 +866,7 @@ export const getReturns = async (req, res) => {
         const subWhere = user_id ? { user_id } : undefined;
 
         const returns = await DeliveryItem.findAll({
-            where: { return_status: { [Op.ne]: 'none' } },
+            where: itemWhere,
             include: [
                 { model: Product },
                 {
@@ -843,7 +881,35 @@ export const getReturns = async (req, res) => {
             ],
             order: [['id', 'DESC']]
         });
-        res.status(200).json({ success: true, returns });
+        const returnsData = returns.map(r => r.toJSON());
+
+        // Enrich with next_schedule_date
+        const userIds = returnsData.map(r => r.DeliverySchedule?.Subscription?.user_id).filter(Boolean);
+        const dates = returnsData.map(r => r.DeliverySchedule?.scheduled_date).filter(Boolean);
+        
+        if (userIds.length > 0 && dates.length > 0) {
+            const missedLogs = await MissedProductLog.findAll({
+                where: {
+                    user_id: { [Op.in]: userIds },
+                    missed_date: { [Op.in]: dates }
+                }
+            });
+
+            if (missedLogs.length > 0) {
+                for (const item of returnsData) {
+                    const userId = item.DeliverySchedule?.Subscription?.user_id;
+                    const date = item.DeliverySchedule?.scheduled_date;
+                    if (userId && date) {
+                        const log = missedLogs.find(l => l.user_id === userId && l.missed_date === date && l.product_id === item.product_id);
+                        if (log) {
+                            item.next_schedule_date = log.next_schedule_date;
+                        }
+                    }
+                }
+            }
+        }
+
+        res.status(200).json({ success: true, returns: returnsData });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1837,7 +1903,38 @@ export const getDeliveryBoyHistory = async (req, res) => {
             order: [['actual_delivery_date', 'DESC']]
         });
 
-        res.status(200).json({ success: true, schedules, retailOrders });
+        const schedulesData = schedules.map(s => s.toJSON());
+
+        // Enrich with MissedProductLogs
+        const userIds = schedulesData.map(s => s.subscription_id ? s.Subscription?.user_id : null).filter(Boolean);
+        const dates = schedulesData.map(s => s.scheduled_date);
+        
+        if (userIds.length > 0 && dates.length > 0) {
+            const missedLogs = await MissedProductLog.findAll({
+                where: {
+                    user_id: { [Op.in]: userIds },
+                    next_schedule_date: { [Op.in]: dates }
+                }
+            });
+
+            if (missedLogs.length > 0) {
+                for (const schedule of schedulesData) {
+                    const userId = schedule.Subscription?.user_id;
+                    const date = schedule.scheduled_date;
+                    if (!userId) continue;
+
+                    const relevantLogs = missedLogs.filter(log => log.user_id === userId && log.next_schedule_date === date);
+                    for (const item of schedule.DeliveryItems) {
+                        const log = relevantLogs.find(l => l.product_id === item.product_id);
+                        if (log) {
+                            item.carried_over_qty = log.missed_qty;
+                        }
+                    }
+                }
+            }
+        }
+
+        res.status(200).json({ success: true, schedules: schedulesData, retailOrders });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1871,6 +1968,14 @@ export const adminReturnItem = async (req, res) => {
         }
 
         const requestedQty = parseFloat(return_qty);
+
+        // --- NEW LOGIC: Check if this is the ONLY item in the order ---
+        const allItems = await DeliveryItem.findAll({ where: { schedule_id: item.schedule_id }, transaction: t });
+        if (allItems.length === 1 && requestedQty === parseFloat(item.qty_gm)) {
+            await t.rollback(); // Rollback current transaction as we delegate to returnOrder
+            req.body.schedule_id = item.schedule_id;
+            return adminReturnOrder(req, res);
+        }
         if (isNaN(requestedQty) || requestedQty <= 0 || requestedQty > parseFloat(item.qty_gm)) {
             await t.rollback();
             return res.status(400).json({ success: false, message: `Invalid return quantity` });
@@ -1999,6 +2104,15 @@ export const boyReturnItem = async (req, res) => {
         }
 
         const requestedQty = parseFloat(return_qty);
+
+        // --- NEW LOGIC: Check if this is the ONLY item in the order ---
+        const allItems = await DeliveryItem.findAll({ where: { schedule_id: item.schedule_id }, transaction: t });
+        if (allItems.length === 1 && requestedQty === parseFloat(item.qty_gm)) {
+            await t.rollback(); // Rollback current transaction as we delegate to returnOrder
+            req.body.schedule_id = item.schedule_id;
+            return boyReturnOrder(req, res);
+        }
+
         if (isNaN(requestedQty) || requestedQty <= 0 || requestedQty > parseFloat(item.qty_gm)) {
             await t.rollback();
             return res.status(400).json({ success: false, message: `Invalid return quantity` });

@@ -921,9 +921,23 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: ScheduleSeasonalSelection,
                     as: 'SeasonalSelections',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }]
+                },
+                {
+                    model: DeliveryItem,
+                    as: 'DeliveryItems',
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }]
                 }
             ]
+        });
+
+        // Also fetch missed logs to know exactly how much was carried over
+        const scheduleDates = schedules.map(s => s.scheduled_date);
+        const missedLogs = await MissedProductLog.findAll({
+            where: {
+                user_id: req.user.id,
+                next_schedule_date: { [Op.in]: scheduleDates }
+            }
         });
 
         const now = new Date();
@@ -935,8 +949,33 @@ export const getUpcomingSelections = async (req, res) => {
             cutoffTime.setDate(cutoffTime.getDate() - 1);
             cutoffTime.setHours(20, 0, 0, 0); // 8:00 PM the day before
 
-
             const isWindowOpen = now < cutoffTime;
+            
+            // Merge selections and delivery items (carry overs)
+            let finalSelections = (s.SeasonalSelections || []).map(sel => sel.toJSON());
+            
+            // Add or update from MissedLogs (carry overs)
+            const myLogs = missedLogs.filter(l => l.next_schedule_date === s.scheduled_date);
+            myLogs.forEach(log => {
+                const existing = finalSelections.find(sel => sel.product_id === log.product_id);
+                if (existing) {
+                    existing.carried_over_qty = (parseFloat(existing.carried_over_qty || 0) + parseFloat(log.missed_qty)).toFixed(2);
+                    existing.qty_gm = (parseFloat(existing.qty_gm) + parseFloat(log.missed_qty)).toFixed(2);
+                } else {
+                    // Try to find the product info from DeliveryItems
+                    const dItem = (s.DeliveryItems || []).find(di => di.product_id === log.product_id);
+                    if (dItem) {
+                        finalSelections.push({
+                            id: 'carry_' + log.id,
+                            schedule_id: s.id,
+                            product_id: log.product_id,
+                            qty_gm: log.missed_qty,
+                            carried_over_qty: log.missed_qty,
+                            Product: dItem.Product
+                        });
+                    }
+                }
+            });
 
             return {
                 id: s.id,
@@ -944,7 +983,7 @@ export const getUpcomingSelections = async (req, res) => {
                 is_locked: s.is_locked,
                 is_window_open: isWindowOpen,
                 cutoff_time: cutoffTime,
-                selections: s.SeasonalSelections || []
+                selections: finalSelections
             };
         });
 

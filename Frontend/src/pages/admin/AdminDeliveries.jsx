@@ -239,19 +239,23 @@ export default function AdminDeliveries() {
                                   {isMissed ? (
                                     <>
                                       <span className="text-red-600 font-bold">Missed</span>
-                                      <span className="opacity-70 text-[10px]">Demanded: {demanded.toFixed(0)}{item.Product?.unit || 'g'}</span>
+                                      <span className="opacity-70 text-[10px]">
+                                        Demanded: {item.carried_over_qty ? `${(demanded - item.carried_over_qty).toFixed(0)} + ${parseFloat(item.carried_over_qty).toFixed(0)} (Carry)` : demanded.toFixed(0)}{item.Product?.unit || 'g'}
+                                      </span>
                                     </>
                                   ) : (
                                     <>
                                       <span className="text-fresh-600 font-medium">Delivered: {delivered.toFixed(0)}{item.Product?.unit || 'g'}</span>
-                                      <span className="text-gray-500 text-[10px]">Req: {demanded.toFixed(0)}{item.Product?.unit || 'g'}</span>
+                                      <span className="text-gray-500 text-[10px]">
+                                        Req: {item.carried_over_qty ? `${(demanded - item.carried_over_qty).toFixed(0)} + ${parseFloat(item.carried_over_qty).toFixed(0)} (Carry)` : demanded.toFixed(0)}{item.Product?.unit || 'g'}
+                                      </span>
                                     </>
                                   )}
                                 </div>
                                 {item.return_status && item.return_status !== 'none' && (
-                                    <p className="text-orange-600 text-xs font-semibold mt-1">
-                                        Return: <span className="uppercase">{item.return_status}</span> 
-                                        {item.returned_by && ` (by ${item.returned_by})`}
+                                    <p className="text-orange-600 text-xs font-semibold mt-1 bg-orange-100/50 px-1.5 py-0.5 rounded inline-block">
+                                        Returned {item.return_qty ? `${parseFloat(item.return_qty).toFixed(0)}${item.Product?.unit || 'g'}` : ''} <span className="uppercase text-[10px]">({item.return_status})</span> 
+                                        {item.returned_by && <span className="text-[10px]"> by {item.returned_by.replace('_', ' ')}</span>}
                                     </p>
                                 )}
                                 {canReturn && (
