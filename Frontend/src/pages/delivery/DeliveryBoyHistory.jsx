@@ -15,7 +15,7 @@ export default function DeliveryBoyHistory() {
 
   const fetchHistory = () => {
     setLoading(true);
-    api.get("/delivery/boy-history")
+    api.get("/boy-history")
       .then(r => setDeliveries(r.data.deliveredItems || []))
       .catch(err => setMsg(`❌ Failed to fetch history: ${err.response?.data?.message || err.message}`))
       .finally(() => setLoading(false));
@@ -42,7 +42,7 @@ export default function DeliveryBoyHistory() {
     if (returnRemark) formData.append("return_reason", returnRemark);
 
     try {
-      await api.post("/delivery/boy-return-item", formData, {
+      await api.post("/boy-return-item", formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       setMsg("✅ Item returned successfully. User has been refunded.");
