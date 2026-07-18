@@ -34,7 +34,8 @@ const Product = sequelize.define('Product', {
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
   total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-  current_stock: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 }
+  current_stock: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
+  preparation_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true } // time in minutes (decimals for seconds)
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 3. PACKAGES

@@ -1604,6 +1604,26 @@ export const getAvailableOrders = async (req, res) => {
             ]
         });
 
+        // Group schedules by user to avoid duplicates on the frontend
+        const groupedSchedulesMap = {};
+        for (const schedule of schedules) {
+            const userId = schedule.Subscription?.User?.id;
+            if (!userId) continue;
+            
+            if (!groupedSchedulesMap[userId]) {
+                groupedSchedulesMap[userId] = schedule.toJSON();
+                // Ensure DeliveryItems is an array we can push to
+                groupedSchedulesMap[userId].DeliveryItems = [...(groupedSchedulesMap[userId].DeliveryItems || [])];
+            } else {
+                // Combine DeliveryItems
+                if (schedule.DeliveryItems && schedule.DeliveryItems.length > 0) {
+                    groupedSchedulesMap[userId].DeliveryItems.push(...schedule.toJSON().DeliveryItems);
+                }
+            }
+        }
+        
+        const groupedSchedules = Object.values(groupedSchedulesMap);
+
         // Fetch retail orders ready for delivery without a delivery boy
         const retailOrders = await RetailOrder.findAll({
             where: {
@@ -1619,7 +1639,7 @@ export const getAvailableOrders = async (req, res) => {
             ]
         });
 
-        res.status(200).json({ success: true, schedules, retailOrders });
+        res.status(200).json({ success: true, schedules: groupedSchedules, retailOrders });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1632,9 +1652,33 @@ export const acceptOrder = async (req, res) => {
         const deliveryBoyId = req.user.id;
 
         if (type === 'package') {
-            await DeliverySchedule.update({ delivery_boy_id: deliveryBoyId }, { where: { id } });
+            const schedule = await DeliverySchedule.findByPk(id, { include: [Subscription] });
+            if (schedule && schedule.Subscription) {
+                // Find all schedules for this user today that are ready for delivery to accept them together
+                const userSchedules = await DeliverySchedule.findAll({
+                    where: { scheduled_date: schedule.scheduled_date, status: 'ready_for_delivery', delivery_boy_id: null },
+                    include: [{ model: Subscription, where: { user_id: schedule.Subscription.user_id } }]
+                });
+                const scheduleIds = userSchedules.map(s => s.id);
+                if (scheduleIds.length > 0) {
+                    await DeliverySchedule.update({ delivery_boy_id: deliveryBoyId }, { where: { id: scheduleIds } });
+                }
+            } else {
+                await DeliverySchedule.update({ delivery_boy_id: deliveryBoyId }, { where: { id } });
+            }
         } else if (type === 'retail') {
-            await RetailOrder.update({ delivery_boy_id: deliveryBoyId }, { where: { id } });
+            const retail = await RetailOrder.findByPk(id);
+            if (retail) {
+                const userRetails = await RetailOrder.findAll({
+                    where: { delivery_date: retail.delivery_date, delivery_status: 'ready_for_delivery', delivery_boy_id: null, user_id: retail.user_id }
+                });
+                const retailIds = userRetails.map(r => r.id);
+                if (retailIds.length > 0) {
+                    await RetailOrder.update({ delivery_boy_id: deliveryBoyId }, { where: { id: retailIds } });
+                }
+            } else {
+                await RetailOrder.update({ delivery_boy_id: deliveryBoyId }, { where: { id } });
+            }
         } else {
             return res.status(400).json({ success: false, message: "Invalid type" });
         }
@@ -1656,6 +1700,116 @@ export const getMissedProducts = async (req, res) => {
         res.status(200).json({ success: true, missedLogs });
     } catch (error) {
         console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/delivery/boy-history
+export const getDeliveryBoyHistory = async (req, res) => {
+    try {
+        const deliveryBoyId = req.user.id;
+
+        const schedules = await DeliverySchedule.findAll({
+            where: { delivery_boy_id: deliveryBoyId, status: 'delivered' },
+            include: [
+                {
+                    model: Subscription,
+                    include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Address }]
+                },
+                { model: DeliveryItem, as: 'DeliveryItems', include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] }] }
+            ],
+            order: [['actual_delivery_date', 'DESC']]
+        });
+
+        const retailOrders = await RetailOrder.findAll({
+            where: { delivery_boy_id: deliveryBoyId, delivery_status: 'delivered' },
+            include: [
+                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: Address },
+                { model: RetailOrderItem, as: 'Items', include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] }] }
+            ],
+            order: [['actual_delivery_date', 'DESC']]
+        });
+
+        res.status(200).json({ success: true, schedules, retailOrders });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/admin/return-item
+export const adminReturnItem = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { delivery_item_id, return_qty, return_reason } = req.body;
+        
+        const item = await DeliveryItem.findByPk(delivery_item_id, {
+            include: [{
+                model: DeliverySchedule,
+                include: [
+                    { model: Subscription, include: [{ model: User }] },
+                    { model: WaterSubscription, include: [{ model: User }] }
+                ]
+            }],
+            transaction: t
+        });
+
+        if (!item || item.DeliverySchedule?.status !== 'delivered') {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Item not found or schedule not delivered" });
+        }
+
+        if (item.return_status !== 'none' && item.return_status !== 'rejected') {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: `Return already processed for this item` });
+        }
+
+        const requestedQty = parseFloat(return_qty);
+        if (isNaN(requestedQty) || requestedQty <= 0 || requestedQty > parseFloat(item.qty_gm)) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: `Invalid return quantity` });
+        }
+
+        const user = item.DeliverySchedule?.Subscription?.User || item.DeliverySchedule?.WaterSubscription?.User;
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "User associated with delivery not found" });
+        }
+
+        const product = await Product.findByPk(item.product_id, { transaction: t });
+        const refund = requestedQty * parseFloat(product.purchase_price_per_gm);
+
+        // Add returned quantity back to stock and reduce total sold qty
+        await product.update({
+            current_stock: parseFloat(product.current_stock || 0) + requestedQty,
+            total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - requestedQty)
+        }, { transaction: t });
+
+        await user.update({ wallet_balance: parseFloat(user.wallet_balance) + refund }, { transaction: t });
+        await WalletTransaction.create({
+            user_id: user.id, amount: refund, type: 'credit',
+            reason: `Return processed by Admin for ${product.name}`,
+            reference_id: item.id
+        }, { transaction: t });
+
+        await Notification.create({
+            user_id: user.id,
+            title: 'Return Processed',
+            message: `Admin has processed a return for ${product.name}. ₹${refund.toFixed(2)} credited to wallet.`,
+            type: 'alert',
+            scheduled_at: new Date()
+        }, { transaction: t });
+
+        await item.update({ 
+            return_status: 'approved',
+            return_qty: requestedQty,
+            return_reason: return_reason || "Admin initiated return"
+        }, { transaction: t });
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Return processed successfully by Admin" });
+    } catch (error) {
+        await t.rollback();
         res.status(500).json({ success: false, message: error.message });
     }
 };

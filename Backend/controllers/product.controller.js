@@ -6,7 +6,7 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, D
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, time } = req.body;
         if (!name || !category || !purchase_price_per_gm || !selling_price_per_gm || !unit) {
             return res.status(400).json({ success: false, message: "name, category, purchase_price_per_gm, selling_price_per_gm and unit are required" });
         }
@@ -17,7 +17,7 @@ export const createProduct = async (req, res) => {
         }
 
         const product = await Product.create({ 
-            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit 
+            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, preparation_time: time 
         });
         res.status(201).json({ success: true, product });
     } catch (error) {
@@ -60,6 +60,10 @@ export const updateProduct = async (req, res) => {
 
         const updateData = { ...req.body };
         
+        if (updateData.time !== undefined) {
+            updateData.preparation_time = updateData.time;
+            delete updateData.time;
+        }
         if (req.file) {
             // New image uploaded, set new image url
             updateData.image_url = `/uploads/${req.file.filename}`;
