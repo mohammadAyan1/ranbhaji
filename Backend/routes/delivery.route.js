@@ -4,7 +4,7 @@ import {
     getDeliveryHistory, getCompletedDeliveries, getReturns, getProductDemands,
     getAdminSeasonalSelections, getAllOrdersForDate, assignBatch,
     packOrders, getAvailableOrders, acceptOrder, getMissedProducts,
-    assignDeliveryBoy, getDeliveryBoyHistory, adminReturnItem
+    assignDeliveryBoy, getDeliveryBoyHistory, adminReturnItem, boyReturnItem
 } from "../controllers/delivery.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
@@ -30,5 +30,6 @@ router.get("/admin/missed-products", requireAuth, requireRole(["admin"]), getMis
 router.get("/available-orders", requireAuth, requireRole(["delivery"]), getAvailableOrders);
 router.put("/accept-order", requireAuth, requireRole(["delivery"]), acceptOrder);
 router.get("/boy-history", requireAuth, requireRole(["delivery"]), getDeliveryBoyHistory);
+router.post("/boy-return-item", requireAuth, requireRole(["delivery"]), upload.single("photo"), boyReturnItem);
 
 export default router;

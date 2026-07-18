@@ -600,7 +600,8 @@ export const requestReturn = async (req, res) => {
                 return_status: 'requested',
                 return_qty: requestedQty,
                 return_reason: return_reason || "No reason specified",
-                return_photo_url
+                return_photo_url,
+                returned_by: 'user'
             }, { transaction: t });
         }
 
@@ -1803,11 +1804,102 @@ export const adminReturnItem = async (req, res) => {
         await item.update({ 
             return_status: 'approved',
             return_qty: requestedQty,
-            return_reason: return_reason || "Admin initiated return"
+            return_reason: return_reason || "Admin initiated return",
+            returned_by: 'admin'
         }, { transaction: t });
 
         await t.commit();
         res.status(200).json({ success: true, message: "Return processed successfully by Admin" });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/delivery/boy-return-item
+export const boyReturnItem = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { delivery_item_id, return_qty, return_reason } = req.body;
+        const return_photo_url = req.file ? `/uploads/${req.file.filename}` : null;
+
+        if (!return_photo_url) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Image is required for return" });
+        }
+        
+        const item = await DeliveryItem.findByPk(delivery_item_id, {
+            include: [{
+                model: DeliverySchedule,
+                include: [
+                    { model: Subscription, include: [{ model: User }] },
+                    { model: WaterSubscription, include: [{ model: User }] }
+                ]
+            }],
+            transaction: t
+        });
+
+        if (!item || item.DeliverySchedule?.status !== 'delivered') {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Item not found or schedule not delivered" });
+        }
+
+        if (item.DeliverySchedule.delivery_boy_id !== req.user.id) {
+            await t.rollback();
+            return res.status(403).json({ success: false, message: "You are not authorized to return this item" });
+        }
+
+        if (item.return_status !== 'none' && item.return_status !== 'rejected') {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: `Return already processed for this item` });
+        }
+
+        const requestedQty = parseFloat(return_qty);
+        if (isNaN(requestedQty) || requestedQty <= 0 || requestedQty > parseFloat(item.qty_gm)) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: `Invalid return quantity` });
+        }
+
+        const user = item.DeliverySchedule?.Subscription?.User || item.DeliverySchedule?.WaterSubscription?.User;
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "User associated with delivery not found" });
+        }
+
+        const product = await Product.findByPk(item.product_id, { transaction: t });
+        const refund = requestedQty * parseFloat(product.purchase_price_per_gm);
+
+        // Add returned quantity back to stock and reduce total sold qty
+        await product.update({
+            current_stock: parseFloat(product.current_stock || 0) + requestedQty,
+            total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - requestedQty)
+        }, { transaction: t });
+
+        await user.update({ wallet_balance: parseFloat(user.wallet_balance) + refund }, { transaction: t });
+        await WalletTransaction.create({
+            user_id: user.id, amount: refund, type: 'credit',
+            reason: `Return processed by Delivery Boy for ${product.name}`,
+            reference_id: item.id
+        }, { transaction: t });
+
+        await Notification.create({
+            user_id: user.id,
+            title: 'Return Processed',
+            message: `Delivery Boy has processed a return for ${product.name}. ₹${refund.toFixed(2)} credited to wallet.`,
+            type: 'alert',
+            scheduled_at: new Date()
+        }, { transaction: t });
+
+        await item.update({ 
+            return_status: 'approved',
+            return_qty: requestedQty,
+            return_reason: return_reason || "Delivery Boy initiated return",
+            return_photo_url,
+            returned_by: 'delivery_boy'
+        }, { transaction: t });
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Return processed successfully by Delivery Boy" });
     } catch (error) {
         await t.rollback();
         res.status(500).json({ success: false, message: error.message });

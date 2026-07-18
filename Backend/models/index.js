@@ -118,6 +118,7 @@ const DeliveryItem = sequelize.define('DeliveryItem', {
   return_reason: { type: DataTypes.STRING(255), allowNull: true },
   return_photo_url: { type: DataTypes.STRING(255), allowNull: true },
   return_status: { type: DataTypes.ENUM('none', 'requested', 'approved', 'rejected'), defaultValue: 'none' },
+  returned_by: { type: DataTypes.ENUM('user', 'admin', 'delivery_boy'), defaultValue: 'user' },
   packed_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true }
 }, { tableName: 'delivery_items', timestamps: false });
 
