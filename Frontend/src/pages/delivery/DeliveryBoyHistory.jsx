@@ -2,37 +2,43 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios";
 
 export default function DeliveryBoyHistory() {
-  const [deliveries, setDeliveries] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [retailOrders, setRetailOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
 
-  // Return Modal State
+  // Filters
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [orderId, setOrderId] = useState("");
+  const [allTime, setAllTime] = useState(false);
+
+  // Return Modal State (Item)
   const [returningItem, setReturningItem] = useState(null);
   const [returnQty, setReturnQty] = useState("");
   const [returnPhoto, setReturnPhoto] = useState(null);
   const [returnRemark, setReturnRemark] = useState("");
   const [submittingReturn, setSubmittingReturn] = useState(false);
 
+  // Return Modal State (Order)
+  const [returningOrder, setReturningOrder] = useState(null);
+  const [orderReturnPhoto, setOrderReturnPhoto] = useState(null);
+  const [orderReturnRemark, setOrderReturnRemark] = useState("");
+
   const fetchHistory = () => {
     setLoading(true);
-    api.get("/boy-history")
+    let params = {};
+    if (orderId) params.order_id = orderId;
+    if (fromDate && toDate) {
+        params.from_date = fromDate;
+        params.to_date = toDate;
+    }
+    if (allTime) params.all_time = true;
+
+    api.get("/boy-history", { params })
       .then(r => {
-        const items = [];
-        if (r.data.schedules) {
-          r.data.schedules.forEach(schedule => {
-            if (schedule.DeliveryItems) {
-              schedule.DeliveryItems.forEach(item => {
-                items.push({
-                  ...item,
-                  delivery_status: schedule.status,
-                  updatedAt: schedule.actual_delivery_date || schedule.updatedAt,
-                  scheduleInfo: schedule
-                });
-              });
-            }
-          });
-        }
-        setDeliveries(items);
+        setSchedules(r.data.schedules || []);
+        setRetailOrders(r.data.retailOrders || []);
       })
       .catch(err => setMsg(`❌ Failed to fetch history: ${err.response?.data?.message || err.message}`))
       .finally(() => setLoading(false));
@@ -40,9 +46,9 @@ export default function DeliveryBoyHistory() {
 
   useEffect(() => {
     fetchHistory();
-  }, []);
+  }, []); // Initial load
 
-  const handleReturnSubmit = async (e) => {
+  const handleReturnItemSubmit = async (e) => {
     e.preventDefault();
     if (!returnPhoto) {
       setMsg("❌ Return proof photo is required.");
@@ -62,12 +68,43 @@ export default function DeliveryBoyHistory() {
       await api.post("/boy-return-item", formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
-      setMsg("✅ Item returned successfully. User has been refunded.");
+      setMsg("✅ Item returned successfully.");
       setReturningItem(null);
       setReturnQty("");
       setReturnPhoto(null);
       setReturnRemark("");
-      fetchHistory(); // Refresh to show updated return qty if backend provides it
+      fetchHistory(); 
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || "Return failed"}`);
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
+
+  const handleReturnOrderSubmit = async (e) => {
+    e.preventDefault();
+    if (!orderReturnPhoto) {
+      setMsg("❌ Return proof photo is required.");
+      return;
+    }
+
+    setSubmittingReturn(true);
+    setMsg("");
+    
+    const formData = new FormData();
+    formData.append("schedule_id", returningOrder.id);
+    formData.append("photo", orderReturnPhoto);
+    if (orderReturnRemark) formData.append("return_reason", orderReturnRemark);
+
+    try {
+      await api.post("/boy-return-order", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setMsg("✅ Full order returned successfully and pushed to next schedule.");
+      setReturningOrder(null);
+      setOrderReturnPhoto(null);
+      setOrderReturnRemark("");
+      fetchHistory(); 
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || "Return failed"}`);
     } finally {
@@ -82,13 +119,42 @@ export default function DeliveryBoyHistory() {
     return 'text-gray-600 bg-gray-100 border-gray-200';
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading your delivery history...</div>;
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="page-header">My Delivery History 🚚</h1>
-        <p className="page-sub">View all the items you have successfully delivered.</p>
+        <p className="page-sub">View and filter your delivered orders.</p>
+      </div>
+
+      <div className="card p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+                <label className="label">Order ID</label>
+                <input type="text" className="input" placeholder="e.g. 102" value={orderId} onChange={e => setOrderId(e.target.value)} />
+            </div>
+            <div>
+                <label className="label">From Date</label>
+                <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={allTime || orderId} />
+            </div>
+            <div>
+                <label className="label">To Date</label>
+                <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
+            </div>
+            <div className="flex gap-2">
+                <button className="btn-primary flex-1" onClick={fetchHistory}>Filter</button>
+                <button 
+                    className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`} 
+                    onClick={() => {
+                        setAllTime(!allTime);
+                        setOrderId("");
+                        setFromDate("");
+                        setToDate("");
+                    }}
+                >
+                    {allTime ? "All Time: ON" : "All Time"}
+                </button>
+            </div>
+        </div>
       </div>
 
       {msg && (
@@ -97,62 +163,88 @@ export default function DeliveryBoyHistory() {
         </div>
       )}
 
-      {deliveries.length === 0 ? (
+      {loading ? (
+          <div className="flex items-center justify-center h-64 text-gray-600">Loading your delivery history...</div>
+      ) : schedules.length === 0 && retailOrders.length === 0 ? (
         <div className="card text-center py-12">
-          <p className="text-gray-500 mb-2 text-xl">No delivered items found.</p>
-          <p className="text-sm text-gray-400">Complete your active deliveries to see them here.</p>
+          <p className="text-gray-500 mb-2 text-xl">No delivered orders found.</p>
+          <p className="text-sm text-gray-400">Try adjusting your filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {deliveries.map(item => {
-            const product = item.Product || {};
-            const unit = product.unit || 'g';
-            
-            const canReturn = item.delivery_status === 'delivered' && item.return_status !== 'approved';
+        <div className="space-y-6">
+          {schedules.map(schedule => {
+            const user = schedule.Subscription?.User || {};
+            const items = schedule.DeliveryItems || [];
+            const hasUnreturnedItems = items.some(i => i.return_status === 'none');
 
             return (
-              <div key={item.id} className="card p-4 flex flex-col justify-between border border-gray-200 hover:border-fresh-300 transition-colors">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-gray-900">{product.name}</h3>
-                    <span className={`px-2 py-1 text-[10px] font-bold uppercase rounded-md border ${getStatusColor(item.delivery_status)}`}>
-                      {item.delivery_status}
-                    </span>
+              <div key={schedule.id} className="card p-5 border border-gray-200">
+                <div className="flex justify-between items-start mb-4 border-b pb-4">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg">Order #{schedule.id} (Subscription)</h3>
+                    <p className="text-sm text-gray-500">Delivered on: {schedule.actual_delivery_date}</p>
+                    <p className="text-sm font-medium text-gray-700 mt-1">{user.name} • {user.phone}</p>
                   </div>
-                  
-                  <div className="text-sm text-gray-600 space-y-1 mb-4">
-                    <p>Delivered Quantity: <span className="font-medium text-gray-900">{parseFloat(item.qty_gm).toFixed(1)}{unit}</span></p>
-                    <p className="text-xs text-gray-500">Delivered on: {new Date(item.updatedAt).toLocaleString()}</p>
-                    
-                    {item.return_status && item.return_status !== 'none' && (
-                      <p className="text-orange-600 text-xs font-semibold mt-2">
-                        Return Status: <span className="uppercase">{item.return_status}</span> 
-                        {item.returned_by && ` (by ${item.returned_by})`}
-                      </p>
-                    )}
-                  </div>
+                  {hasUnreturnedItems && (
+                      <button 
+                          onClick={() => {
+                              setReturningOrder(schedule);
+                              setOrderReturnPhoto(null);
+                              setOrderReturnRemark("");
+                          }}
+                          className="px-4 py-2 bg-red-50 text-red-600 font-medium text-sm rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
+                      >
+                          Return Entire Order
+                      </button>
+                  )}
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {items.map(item => {
+                        const product = item.Product || {};
+                        const unit = product.unit || 'g';
+                        const canReturn = item.return_status === 'none';
 
-                {canReturn && (
-                  <button 
-                    onClick={() => {
-                      setReturningItem(item);
-                      setReturnQty(parseFloat(item.qty_gm));
-                      setReturnPhoto(null);
-                      setReturnRemark("");
-                    }}
-                    className="w-full py-2 bg-orange-50 text-orange-600 font-medium text-sm rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors"
-                  >
-                    Initiate Return
-                  </button>
-                )}
+                        return (
+                            <div key={item.id} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h4 className="font-bold text-gray-800">{product.name}</h4>
+                                </div>
+                                <p className="text-sm text-gray-600">Qty: {parseFloat(item.qty_gm).toFixed(1)}{unit}</p>
+                                
+                                {item.return_status !== 'none' && (
+                                    <p className="text-orange-600 text-xs font-semibold mt-2">
+                                        Return: <span className="uppercase">{item.return_status}</span> 
+                                        {item.returned_by && ` (by ${item.returned_by})`}
+                                    </p>
+                                )}
+
+                                {canReturn && (
+                                    <button 
+                                        onClick={() => {
+                                            setReturningItem(item);
+                                            setReturnQty(parseFloat(item.qty_gm));
+                                            setReturnPhoto(null);
+                                            setReturnRemark("");
+                                        }}
+                                        className="mt-3 w-full py-1.5 bg-orange-50 text-orange-600 font-medium text-xs rounded-lg border border-orange-200 hover:bg-orange-100 transition-colors"
+                                    >
+                                        Return Item
+                                    </button>
+                                )}
+                            </div>
+                        )
+                    })}
+                </div>
               </div>
             );
           })}
+
+          {/* Retail Orders Map here if needed... */}
         </div>
       )}
 
-      {/* Return Modal */}
+      {/* Item Return Modal */}
       {returningItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
@@ -161,7 +253,7 @@ export default function DeliveryBoyHistory() {
               <button onClick={() => setReturningItem(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             
-            <form onSubmit={handleReturnSubmit} className="p-4 space-y-4">
+            <form onSubmit={handleReturnItemSubmit} className="p-4 space-y-4">
               <div>
                 <label className="label text-xs">Delivered Quantity ({returningItem.Product?.unit || 'g'})</label>
                 <input 
@@ -188,38 +280,51 @@ export default function DeliveryBoyHistory() {
 
               <div>
                 <label className="label text-xs">Proof Photo (Required)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  required
-                  className="block w-full text-sm text-gray-600
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-md file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-gray-100 file:text-gray-900
-                    hover:file:bg-gray-200
-                    cursor-pointer bg-white border border-gray-300 rounded-lg p-1.5 focus:border-fresh-500 focus:outline-none transition-colors"
-                  onChange={e => setReturnPhoto(e.target.files[0])}
-                />
-                <p className="text-[10px] text-gray-500 mt-1">Please upload a clear photo showing the item.</p>
+                <input type="file" accept="image/*" required className="input p-1.5" onChange={e => setReturnPhoto(e.target.files[0])} />
               </div>
 
               <div>
                 <label className="label text-xs">Remark / Reason (Optional)</label>
-                <textarea
-                  className="input min-h-[80px]"
-                  placeholder="e.g. Item was damaged..."
-                  value={returnRemark}
-                  onChange={e => setReturnRemark(e.target.value)}
-                ></textarea>
+                <textarea className="input min-h-[80px]" value={returnRemark} onChange={e => setReturnRemark(e.target.value)}></textarea>
               </div>
 
               <div className="pt-2 flex gap-3">
-                <button type="button" onClick={() => setReturningItem(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium transition-colors">
-                  Cancel
-                </button>
-                <button type="submit" disabled={submittingReturn} className="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-medium shadow-md shadow-orange-600/20 disabled:opacity-50 transition-all">
+                <button type="button" onClick={() => setReturningItem(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium transition-colors">Cancel</button>
+                <button type="submit" disabled={submittingReturn} className="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-medium">
                   {submittingReturn ? "Processing..." : "Process Return"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Full Order Return Modal */}
+      {returningOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-100 bg-red-50 flex justify-between items-center">
+              <h3 className="font-bold text-red-900">Return Entire Order #{returningOrder.id}</h3>
+              <button onClick={() => setReturningOrder(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            
+            <form onSubmit={handleReturnOrderSubmit} className="p-4 space-y-4">
+              <p className="text-sm text-gray-600">This will mark all items in this order as returned and schedule a new delivery.</p>
+
+              <div>
+                <label className="label text-xs">Proof Photo (Required)</label>
+                <input type="file" accept="image/*" required className="input p-1.5" onChange={e => setOrderReturnPhoto(e.target.files[0])} />
+              </div>
+
+              <div>
+                <label className="label text-xs">Remark / Reason (Optional)</label>
+                <textarea className="input min-h-[80px]" value={orderReturnRemark} onChange={e => setOrderReturnRemark(e.target.value)}></textarea>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setReturningOrder(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium transition-colors">Cancel</button>
+                <button type="submit" disabled={submittingReturn} className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium">
+                  {submittingReturn ? "Processing..." : "Process Full Return"}
                 </button>
               </div>
             </form>

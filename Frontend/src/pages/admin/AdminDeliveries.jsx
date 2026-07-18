@@ -4,9 +4,14 @@ import api from "../../api/axios";
 export default function AdminDeliveries() {
   const [deliveries, setDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState(null); // for zoom view modal
   
+  // Filters
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [orderId, setOrderId] = useState("");
+  const [allTime, setAllTime] = useState(false);
+
   // Admin Return State
   const [msg, setMsg] = useState("");
   const [returningItem, setReturningItem] = useState(null);
@@ -14,10 +19,28 @@ export default function AdminDeliveries() {
   const [returnRemark, setReturnRemark] = useState("");
   const [submittingReturn, setSubmittingReturn] = useState(false);
 
-  useEffect(() => {
-    api.get("/admin/deliveries")
+  // Return Modal State (Order)
+  const [returningOrder, setReturningOrder] = useState(null);
+  const [orderReturnRemark, setOrderReturnRemark] = useState("");
+
+  const fetchDeliveries = () => {
+    setLoading(true);
+    let params = {};
+    if (orderId) params.order_id = orderId;
+    if (fromDate && toDate) {
+        params.from_date = fromDate;
+        params.to_date = toDate;
+    }
+    if (allTime) params.all_time = true;
+
+    api.get("/admin/deliveries", { params })
       .then(r => setDeliveries(r.data.deliveries || []))
+      .catch(err => setMsg(`❌ Failed to fetch deliveries: ${err.message}`))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchDeliveries();
   }, []);
 
   useEffect(() => {
@@ -28,12 +51,6 @@ export default function AdminDeliveries() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedPhoto]);
-
-  const fetchDeliveries = () => {
-    api.get("/admin/deliveries")
-      .then(r => setDeliveries(r.data.deliveries || []))
-      .finally(() => setLoading(false));
-  };
 
   const handleAdminReturn = async (e) => {
     e.preventDefault();
@@ -57,21 +74,26 @@ export default function AdminDeliveries() {
     }
   };
 
-
-  const filtered = deliveries.filter(d => {
-    const term = search.toLowerCase();
-    if (term === "") return true;
-
-    const customerName = d.Subscription?.User?.name || d.WaterSubscription?.User?.name || "";
-    const deliveryBoyName = d.DeliveryBoy?.name || "";
-    const packageName = d.Subscription?.Package?.name || "Water Plan";
-
-    return (
-      customerName.toLowerCase().includes(term) ||
-      deliveryBoyName.toLowerCase().includes(term) ||
-      packageName.toLowerCase().includes(term)
-    );
-  });
+  const handleReturnOrderSubmit = async (e) => {
+    e.preventDefault();
+    setSubmittingReturn(true);
+    setMsg("");
+    
+    try {
+      await api.post("/admin/return-order", {
+        schedule_id: returningOrder.id,
+        return_reason: orderReturnRemark
+      });
+      setMsg("✅ Full order returned successfully and pushed to next schedule.");
+      setReturningOrder(null);
+      setOrderReturnRemark("");
+      fetchDeliveries(); 
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || "Return failed"}`);
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading delivery logs...</div>;
 
@@ -82,14 +104,35 @@ export default function AdminDeliveries() {
         <p className="page-sub">View confirmation details for all completed deliveries</p>
       </div>
 
-      <div className="flex gap-3 max-w-md">
-        <input
-          type="text"
-          placeholder="Search by customer, delivery boy or package name..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="input text-sm"
-        />
+      <div className="card p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+                <label className="label">Order ID</label>
+                <input type="text" className="input" placeholder="e.g. 102" value={orderId} onChange={e => setOrderId(e.target.value)} />
+            </div>
+            <div>
+                <label className="label">From Date</label>
+                <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={allTime || orderId} />
+            </div>
+            <div>
+                <label className="label">To Date</label>
+                <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
+            </div>
+            <div className="flex gap-2">
+                <button className="btn-primary flex-1" onClick={fetchDeliveries}>Filter</button>
+                <button 
+                    className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`} 
+                    onClick={() => {
+                        setAllTime(!allTime);
+                        setOrderId("");
+                        setFromDate("");
+                        setToDate("");
+                    }}
+                >
+                    {allTime ? "All Time: ON" : "All Time"}
+                </button>
+            </div>
+        </div>
       </div>
 
       {msg && (
@@ -128,7 +171,7 @@ export default function AdminDeliveries() {
 
       {/* Table */}
       <div className="card">
-        {filtered.length === 0 ? (
+        {deliveries.length === 0 ? (
           <p className="text-center text-gray-500 py-12">No completed deliveries found.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -141,11 +184,11 @@ export default function AdminDeliveries() {
                   <th className="text-left p-3">Package / Plan</th>
                   <th className="text-left p-3">Items Details</th>
                   <th className="text-left p-3">Photo & Remark</th>
-                  <th className="text-right p-3 rounded-tr-xl">Schedule ID</th>
+                  <th className="text-right p-3 rounded-tr-xl">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(d => {
+                {deliveries.map(d => {
                   const customer = d.Subscription?.User || d.WaterSubscription?.User || {};
                   const packageName = d.Subscription?.Package?.name || 
                     (d.WaterSubscription ? `${d.WaterSubscription.water_type} Water (${d.WaterSubscription.container})` : "Water Plan");
@@ -153,6 +196,9 @@ export default function AdminDeliveries() {
                   const formattedDate = d.actual_delivery_date 
                     ? new Date(d.actual_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
                     : "No date";
+                  
+                  const items = d.DeliveryItems || [];
+                  const hasUnreturnedItems = items.some(i => i.return_status === 'none' && parseFloat(i.packed_qty ?? i.delivered_qty ?? i.qty_gm) > 0);
 
                   return (
                     <tr key={d.id} className="table-row">
@@ -178,10 +224,11 @@ export default function AdminDeliveries() {
                       </td>
                       <td className="p-3">
                         <div className="flex flex-col gap-2 max-w-[280px]">
-                          {d.DeliveryItems?.map((item, idx) => {
+                          {items.map((item, idx) => {
                             const demanded = parseFloat(item.qty_gm) || 0;
                             const delivered = parseFloat(item.packed_qty ?? item.delivered_qty ?? item.qty_gm) || 0;
                             const isMissed = delivered === 0 && demanded > 0;
+                            const canReturn = !isMissed && delivered > 0 && item.return_status !== 'approved';
 
                             return (
                               <div key={idx} className={`text-[11px] px-2 py-1.5 rounded border flex flex-col ${isMissed ? 'bg-red-900/20 border-red-800/50 text-red-300' : 'bg-gray-100/80 border-gray-300 text-gray-700'}`}>
@@ -201,7 +248,13 @@ export default function AdminDeliveries() {
                                     </>
                                   )}
                                 </div>
-                                {!isMissed && delivered > 0 && item.return_status !== 'approved' && (
+                                {item.return_status && item.return_status !== 'none' && (
+                                    <p className="text-orange-600 text-xs font-semibold mt-1">
+                                        Return: <span className="uppercase">{item.return_status}</span> 
+                                        {item.returned_by && ` (by ${item.returned_by})`}
+                                    </p>
+                                )}
+                                {canReturn && (
                                   <button
                                     onClick={() => {
                                       setReturningItem(item);
@@ -210,7 +263,7 @@ export default function AdminDeliveries() {
                                     }}
                                     className="mt-2 text-[10px] text-orange-600 border border-orange-300 bg-orange-50 hover:bg-orange-100 py-1 px-2 rounded font-medium transition-colors"
                                   >
-                                    Initiate Return
+                                    Return Item
                                   </button>
                                 )}
                               </div>
@@ -240,12 +293,25 @@ export default function AdminDeliveries() {
                               </div>
                             </button>
                           ) : (
-                            <span className="text-gray-600 text-xs italic">No photo uploaded</span>
+                            <span className="text-gray-600 text-xs italic">No photo</span>
                           )}
                         </div>
                       </td>
                       <td className="p-3 text-right text-gray-500">
-                        #{d.id}
+                        <div className="flex flex-col items-end gap-2">
+                            <span>#{d.id}</span>
+                            {hasUnreturnedItems && (
+                                <button 
+                                    onClick={() => {
+                                        setReturningOrder(d);
+                                        setOrderReturnRemark("");
+                                    }}
+                                    className="px-3 py-1.5 bg-red-50 text-red-600 font-medium text-xs rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
+                                >
+                                    Return Order
+                                </button>
+                            )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -256,7 +322,7 @@ export default function AdminDeliveries() {
         )}
       </div>
 
-      {/* Admin Return Modal */}
+      {/* Admin Item Return Modal */}
       {returningItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
@@ -296,6 +362,42 @@ export default function AdminDeliveries() {
                 </button>
                 <button type="submit" disabled={submittingReturn} className="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-medium shadow-md shadow-orange-600/20 disabled:opacity-50 transition-all">
                   {submittingReturn ? "Processing..." : "Process Return"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Order Return Modal */}
+      {returningOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-100 bg-red-50 flex justify-between items-center">
+              <h3 className="font-bold text-red-900">Return Entire Order #{returningOrder.id}</h3>
+              <button onClick={() => setReturningOrder(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            
+            <form onSubmit={handleReturnOrderSubmit} className="p-4 space-y-4">
+              <p className="text-sm text-gray-600">This will mark all unreturned items in this order as returned by Admin, and schedule a new delivery.</p>
+
+              <div>
+                <label className="label text-xs">Remark / Reason (Required for Admin)</label>
+                <textarea
+                  required
+                  className="input min-h-[80px]"
+                  placeholder="e.g. Full order returned due to customer complaint..."
+                  value={orderReturnRemark}
+                  onChange={e => setOrderReturnRemark(e.target.value)}
+                ></textarea>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setReturningOrder(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={submittingReturn} className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium shadow-md shadow-red-600/20 disabled:opacity-50 transition-all">
+                  {submittingReturn ? "Processing..." : "Process Full Return"}
                 </button>
               </div>
             </form>

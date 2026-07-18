@@ -435,6 +435,43 @@ export const markDelivered = async (req, res) => {
             }
         }
 
+        // --- NEW LOGIC: Deduct for Carried-over Items ---
+        const carriedOverLogs = await MissedProductLog.findAll({
+            where: { user_id: user.id, next_schedule_date: schedule.scheduled_date },
+            transaction: t
+        });
+
+        if (carriedOverLogs.length > 0) {
+            let carryOverDebit = 0;
+            for (const log of carriedOverLogs) {
+                const p = await Product.findByPk(log.product_id, { transaction: t });
+                if (p) {
+                    carryOverDebit += parseFloat(log.missed_qty) * parseFloat(p.purchase_price_per_gm);
+                }
+            }
+
+            if (carryOverDebit > 0) {
+                let currentBalance = newBalance;
+                let currentDue = newDue;
+
+                currentBalance -= carryOverDebit;
+                if (currentBalance < 0) {
+                    currentDue += Math.abs(currentBalance);
+                    currentBalance = 0;
+                }
+
+                newBalance = currentBalance;
+                newDue = currentDue;
+
+                await user.update({ wallet_balance: newBalance, due_amount: newDue }, { transaction: t });
+                await WalletTransaction.create({
+                    user_id: user.id, amount: carryOverDebit, type: 'debit',
+                    reason: `Deduction for returned/missed items delivered on ${schedule.scheduled_date}`,
+                    reference_id: schedule.id
+                }, { transaction: t });
+            }
+        }
+
         await schedule.update({
             status: 'delivered',
             actual_delivery_date: new Date().toISOString().split('T')[0],
@@ -707,11 +744,34 @@ export const getDeliveryHistory = async (req, res) => {
 // GET /api/admin/deliveries (admin)
 export const getCompletedDeliveries = async (req, res) => {
     try {
+        const { from_date, to_date, order_id, user_id, delivery_boy_id, all_time } = req.query;
+        let whereClause = { status: 'delivered' };
+
+        if (order_id) {
+            whereClause.id = order_id;
+        } else if (all_time === 'true') {
+            // no date filter
+        } else if (from_date && to_date) {
+            whereClause.actual_delivery_date = { [Op.between]: [from_date, to_date] };
+        } else {
+            const today = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
+            const [m, d, y] = today.split('/');
+            whereClause.actual_delivery_date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+
+        if (delivery_boy_id) {
+            whereClause.delivery_boy_id = delivery_boy_id;
+        }
+
+        const includeSubscriptionWhere = user_id ? { user_id } : undefined;
+
         const deliveries = await DeliverySchedule.findAll({
-            where: { status: 'delivered' },
+            where: whereClause,
             include: [
                 {
                     model: Subscription,
+                    where: includeSubscriptionWhere,
+                    required: !!user_id,
                     include: [
                         { model: User, attributes: ['id', 'name', 'phone'] },
                         { model: Package, attributes: ['id', 'name'] }
@@ -746,14 +806,37 @@ export const getCompletedDeliveries = async (req, res) => {
 // GET /api/admin/returns (admin)
 export const getReturns = async (req, res) => {
     try {
+        const { from_date, to_date, order_id, user_id, delivery_boy_id, all_time } = req.query;
+        let scheduleWhere = {};
+
+        if (order_id) {
+            scheduleWhere.id = order_id;
+        } else if (all_time === 'true') {
+            // no date filter
+        } else if (from_date && to_date) {
+            scheduleWhere.actual_delivery_date = { [Op.between]: [from_date, to_date] };
+        } else {
+            const today = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
+            const [m, d, y] = today.split('/');
+            scheduleWhere.actual_delivery_date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+
+        if (delivery_boy_id) {
+            scheduleWhere.delivery_boy_id = delivery_boy_id;
+        }
+
+        const subWhere = user_id ? { user_id } : undefined;
+
         const returns = await DeliveryItem.findAll({
             where: { return_status: { [Op.ne]: 'none' } },
             include: [
                 { model: Product },
                 {
                     model: DeliverySchedule,
+                    where: Object.keys(scheduleWhere).length ? scheduleWhere : undefined,
+                    required: true,
                     include: [
-                        { model: Subscription, required: false, include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Package, attributes: ['id', 'name'] }] },
+                        { model: Subscription, required: !!user_id, where: subWhere, include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Package, attributes: ['id', 'name'] }] },
                         { model: WaterSubscription, required: false, include: [{ model: User, attributes: ['id', 'name', 'phone'] }] }
                     ]
                 }
@@ -1709,9 +1792,31 @@ export const getMissedProducts = async (req, res) => {
 export const getDeliveryBoyHistory = async (req, res) => {
     try {
         const deliveryBoyId = req.user.id;
+        const { from_date, to_date, order_id, all_time } = req.query;
+
+        let whereClause = { delivery_boy_id: deliveryBoyId, status: 'delivered' };
+        let retailWhereClause = { delivery_boy_id: deliveryBoyId, delivery_status: 'delivered' };
+
+        if (order_id) {
+            whereClause.id = order_id;
+            retailWhereClause.id = order_id;
+        } else if (all_time === 'true') {
+            // no date filter
+        } else if (from_date && to_date) {
+            whereClause.actual_delivery_date = { [Op.between]: [from_date, to_date] };
+            retailWhereClause.actual_delivery_date = { [Op.between]: [from_date, to_date] };
+        } else {
+            // Default to today
+            const today = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
+            const [m, d, y] = today.split('/');
+            const dateStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+            
+            whereClause.actual_delivery_date = dateStr;
+            retailWhereClause.actual_delivery_date = dateStr;
+        }
 
         const schedules = await DeliverySchedule.findAll({
-            where: { delivery_boy_id: deliveryBoyId, status: 'delivered' },
+            where: whereClause,
             include: [
                 {
                     model: Subscription,
@@ -1723,7 +1828,7 @@ export const getDeliveryBoyHistory = async (req, res) => {
         });
 
         const retailOrders = await RetailOrder.findAll({
-            where: { delivery_boy_id: deliveryBoyId, delivery_status: 'delivered' },
+            where: retailWhereClause,
             include: [
                 { model: User, attributes: ['id', 'name', 'phone'] },
                 { model: Address },
@@ -1807,6 +1912,45 @@ export const adminReturnItem = async (req, res) => {
             return_reason: return_reason || "Admin initiated return",
             returned_by: 'admin'
         }, { transaction: t });
+
+        // Carry-over logic
+        if (item.DeliverySchedule?.Subscription) {
+            const schedule = item.DeliverySchedule;
+            const nextSchedule = await DeliverySchedule.findOne({
+                where: {
+                    subscription_id: schedule.subscription_id,
+                    scheduled_date: { [Op.gt]: schedule.scheduled_date },
+                    status: ['pending', 'ready_for_delivery']
+                },
+                order: [['scheduled_date', 'ASC']],
+                transaction: t
+            });
+
+            if (nextSchedule) {
+                const existingNextItem = await DeliveryItem.findOne({
+                    where: { schedule_id: nextSchedule.id, product_id: item.product_id },
+                    transaction: t
+                });
+                if (existingNextItem) {
+                    await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + requestedQty }, { transaction: t });
+                } else {
+                    await DeliveryItem.create({
+                        schedule_id: nextSchedule.id,
+                        product_id: item.product_id,
+                        qty_gm: requestedQty,
+                        packed_qty: null
+                    }, { transaction: t });
+                }
+
+                await MissedProductLog.create({
+                    user_id: user.id,
+                    product_id: item.product_id,
+                    missed_date: schedule.scheduled_date,
+                    missed_qty: requestedQty,
+                    next_schedule_date: nextSchedule.scheduled_date
+                }, { transaction: t });
+            }
+        }
 
         await t.commit();
         res.status(200).json({ success: true, message: "Return processed successfully by Admin" });
@@ -1898,8 +2042,253 @@ export const boyReturnItem = async (req, res) => {
             returned_by: 'delivery_boy'
         }, { transaction: t });
 
+        // Carry-over logic
+        if (item.DeliverySchedule?.Subscription) {
+            const schedule = item.DeliverySchedule;
+            const nextSchedule = await DeliverySchedule.findOne({
+                where: {
+                    subscription_id: schedule.subscription_id,
+                    scheduled_date: { [Op.gt]: schedule.scheduled_date },
+                    status: ['pending', 'ready_for_delivery']
+                },
+                order: [['scheduled_date', 'ASC']],
+                transaction: t
+            });
+
+            if (nextSchedule) {
+                const existingNextItem = await DeliveryItem.findOne({
+                    where: { schedule_id: nextSchedule.id, product_id: item.product_id },
+                    transaction: t
+                });
+                if (existingNextItem) {
+                    await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + requestedQty }, { transaction: t });
+                } else {
+                    await DeliveryItem.create({
+                        schedule_id: nextSchedule.id,
+                        product_id: item.product_id,
+                        qty_gm: requestedQty,
+                        packed_qty: null
+                    }, { transaction: t });
+                }
+
+                await MissedProductLog.create({
+                    user_id: user.id,
+                    product_id: item.product_id,
+                    missed_date: schedule.scheduled_date,
+                    missed_qty: requestedQty,
+                    next_schedule_date: nextSchedule.scheduled_date
+                }, { transaction: t });
+            }
+        }
+
         await t.commit();
         res.status(200).json({ success: true, message: "Return processed successfully by Delivery Boy" });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const adminReturnOrder = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { schedule_id, return_reason } = req.body;
+        const schedule = await DeliverySchedule.findByPk(schedule_id, {
+            include: [
+                { model: Subscription, include: [{ model: User }, { model: Package }] },
+                { model: DeliveryItem, as: 'DeliveryItems' }
+            ],
+            transaction: t
+        });
+
+        if (!schedule || schedule.status !== 'delivered') {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: 'Schedule not found or not delivered' });
+        }
+
+        const user = schedule.Subscription?.User;
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: 'User not found or retail order (not supported)' });
+        }
+
+        let totalRefund = 0;
+        for (const item of schedule.DeliveryItems) {
+            if (item.return_status === 'none') {
+                const product = await Product.findByPk(item.product_id, { transaction: t });
+                const refund = parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
+                totalRefund += refund;
+                
+                await product.update({
+                    current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
+                    total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
+                }, { transaction: t });
+
+                await item.update({ 
+                    return_status: 'approved',
+                    return_qty: item.qty_gm,
+                    return_reason: return_reason || 'Admin returned entire order',
+                    returned_by: 'admin'
+                }, { transaction: t });
+            }
+        }
+
+        if (totalRefund > 0) {
+            await user.update({ wallet_balance: parseFloat(user.wallet_balance) + totalRefund }, { transaction: t });
+            await WalletTransaction.create({
+                user_id: user.id, amount: totalRefund, type: 'credit',
+                reason: 'Full order return processed by Admin',
+                reference_id: schedule.id
+            }, { transaction: t });
+        }
+
+        // Add a new schedule at the end of the subscription
+        const lastSchedule = await DeliverySchedule.findOne({
+            where: { subscription_id: schedule.subscription_id },
+            order: [['scheduled_date', 'DESC']],
+            transaction: t
+        });
+
+        if (lastSchedule && schedule.Subscription.Package) {
+            const gap_days = Math.round(30 / schedule.Subscription.Package.services_per_month);
+            let nextDate = new Date(lastSchedule.scheduled_date);
+            nextDate.setDate(nextDate.getDate() + gap_days);
+            if (nextDate.getUTCDay() === 0) nextDate.setUTCDate(nextDate.getUTCDate() - 1); // skip sunday
+
+            const newSchedule = await DeliverySchedule.create({
+                subscription_id: schedule.subscription_id,
+                scheduled_date: nextDate.toISOString().split('T')[0],
+                status: 'pending'
+            }, { transaction: t });
+
+            // Copy all items to new schedule and log
+            for (const item of schedule.DeliveryItems) {
+                await DeliveryItem.create({
+                    schedule_id: newSchedule.id,
+                    product_id: item.product_id,
+                    qty_gm: item.qty_gm,
+                    packed_qty: null
+                }, { transaction: t });
+
+                await MissedProductLog.create({
+                    user_id: user.id,
+                    product_id: item.product_id,
+                    missed_date: schedule.scheduled_date,
+                    missed_qty: item.qty_gm,
+                    next_schedule_date: newSchedule.scheduled_date
+                }, { transaction: t });
+            }
+        }
+
+        await t.commit();
+        res.status(200).json({ success: true, message: 'Order returned successfully and pushed to next schedule' });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const boyReturnOrder = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { schedule_id, return_reason } = req.body;
+        const return_photo_url = req.file ? `/uploads/${req.file.filename}` : null;
+
+        if (!return_photo_url) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: 'Image is required for full order return' });
+        }
+
+        const schedule = await DeliverySchedule.findByPk(schedule_id, {
+            include: [
+                { model: Subscription, include: [{ model: User }, { model: Package }] },
+                { model: DeliveryItem, as: 'DeliveryItems' }
+            ],
+            transaction: t
+        });
+
+        if (!schedule || schedule.status !== 'delivered' || schedule.delivery_boy_id !== req.user.id) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: 'Schedule not found, not delivered, or unauthorized' });
+        }
+
+        const user = schedule.Subscription?.User;
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: 'User not found or retail order (not supported)' });
+        }
+
+        let totalRefund = 0;
+        for (const item of schedule.DeliveryItems) {
+            if (item.return_status === 'none') {
+                const product = await Product.findByPk(item.product_id, { transaction: t });
+                const refund = parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
+                totalRefund += refund;
+                
+                await product.update({
+                    current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
+                    total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
+                }, { transaction: t });
+
+                await item.update({ 
+                    return_status: 'approved',
+                    return_qty: item.qty_gm,
+                    return_reason: return_reason || 'Delivery Boy returned entire order',
+                    return_photo_url,
+                    returned_by: 'delivery_boy'
+                }, { transaction: t });
+            }
+        }
+
+        if (totalRefund > 0) {
+            await user.update({ wallet_balance: parseFloat(user.wallet_balance) + totalRefund }, { transaction: t });
+            await WalletTransaction.create({
+                user_id: user.id, amount: totalRefund, type: 'credit',
+                reason: 'Full order return processed by Delivery Boy',
+                reference_id: schedule.id
+            }, { transaction: t });
+        }
+
+        // Add a new schedule at the end of the subscription
+        const lastSchedule = await DeliverySchedule.findOne({
+            where: { subscription_id: schedule.subscription_id },
+            order: [['scheduled_date', 'DESC']],
+            transaction: t
+        });
+
+        if (lastSchedule && schedule.Subscription.Package) {
+            const gap_days = Math.round(30 / schedule.Subscription.Package.services_per_month);
+            let nextDate = new Date(lastSchedule.scheduled_date);
+            nextDate.setDate(nextDate.getDate() + gap_days);
+            if (nextDate.getUTCDay() === 0) nextDate.setUTCDate(nextDate.getUTCDate() - 1); // skip sunday
+
+            const newSchedule = await DeliverySchedule.create({
+                subscription_id: schedule.subscription_id,
+                scheduled_date: nextDate.toISOString().split('T')[0],
+                status: 'pending'
+            }, { transaction: t });
+
+            // Copy all items to new schedule and log
+            for (const item of schedule.DeliveryItems) {
+                await DeliveryItem.create({
+                    schedule_id: newSchedule.id,
+                    product_id: item.product_id,
+                    qty_gm: item.qty_gm,
+                    packed_qty: null
+                }, { transaction: t });
+
+                await MissedProductLog.create({
+                    user_id: user.id,
+                    product_id: item.product_id,
+                    missed_date: schedule.scheduled_date,
+                    missed_qty: item.qty_gm,
+                    next_schedule_date: newSchedule.scheduled_date
+                }, { transaction: t });
+            }
+        }
+
+        await t.commit();
+        res.status(200).json({ success: true, message: 'Order returned successfully and pushed to next schedule' });
     } catch (error) {
         await t.rollback();
         res.status(500).json({ success: false, message: error.message });
