@@ -161,6 +161,11 @@ export default function AdminReturns() {
                       </td>
                       <td className="p-3">
                         {getStatusBadge(r.return_status)}
+                        {r.returned_by && (
+                          <div className="mt-2 text-[10px] text-gray-500 font-medium uppercase">
+                            By: {r.returned_by.replace('_', ' ')}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3 text-right">
                         {r.return_status === "requested" ? (

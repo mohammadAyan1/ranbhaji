@@ -46,6 +46,7 @@ import AdminReverseCalculator from "./pages/admin/AdminReverseCalculator";
 
 // Delivery pages
 import DeliveryHome from "./pages/delivery/DeliveryHome";
+import DeliveryBoyHistory from "./pages/delivery/DeliveryBoyHistory";
 
 function App() {
   const { fetchMe, token } = useAuthStore();
@@ -108,9 +109,10 @@ function App() {
           <Route path="/admin/product-sales" element={<AdminProductSales />} />
         </Route>
 
-        {/* ─── DELIVERY Routes ─────────────────────────────────── */}
+        {/* 🚚 DELIVERY Routes 🚚 */}
         <Route element={<ProtectedRoute roles={["delivery"]}><Layout /></ProtectedRoute>}>
           <Route path="/delivery" element={<DeliveryHome />} />
+          <Route path="/delivery/history" element={<DeliveryBoyHistory />} />
         </Route>
 
         {/* Fallback */}

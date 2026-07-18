@@ -6,6 +6,13 @@ export default function AdminDeliveries() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState(null); // for zoom view modal
+  
+  // Admin Return State
+  const [msg, setMsg] = useState("");
+  const [returningItem, setReturningItem] = useState(null);
+  const [returnQty, setReturnQty] = useState("");
+  const [returnRemark, setReturnRemark] = useState("");
+  const [submittingReturn, setSubmittingReturn] = useState(false);
 
   useEffect(() => {
     api.get("/admin/deliveries")
@@ -21,6 +28,34 @@ export default function AdminDeliveries() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedPhoto]);
+
+  const fetchDeliveries = () => {
+    api.get("/admin/deliveries")
+      .then(r => setDeliveries(r.data.deliveries || []))
+      .finally(() => setLoading(false));
+  };
+
+  const handleAdminReturn = async (e) => {
+    e.preventDefault();
+    setSubmittingReturn(true);
+    setMsg("");
+    try {
+      await api.post("/admin/return-item", {
+        delivery_item_id: returningItem.id,
+        return_qty: returnQty,
+        return_reason: returnRemark
+      });
+      setMsg("✅ Return initiated successfully.");
+      setReturningItem(null);
+      setReturnQty("");
+      setReturnRemark("");
+      fetchDeliveries();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || "Return failed"}`);
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
 
 
   const filtered = deliveries.filter(d => {
@@ -47,7 +82,6 @@ export default function AdminDeliveries() {
         <p className="page-sub">View confirmation details for all completed deliveries</p>
       </div>
 
-      {/* Search Filter */}
       <div className="flex gap-3 max-w-md">
         <input
           type="text"
@@ -57,6 +91,12 @@ export default function AdminDeliveries() {
           className="input text-sm"
         />
       </div>
+
+      {msg && (
+        <div className={`rounded-xl px-4 py-3 text-sm font-medium ${msg.startsWith('✅') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {msg}
+        </div>
+      )}
 
       {/* Zoom Photo Modal */}
       {selectedPhoto && (
@@ -161,6 +201,18 @@ export default function AdminDeliveries() {
                                     </>
                                   )}
                                 </div>
+                                {!isMissed && delivered > 0 && item.return_status !== 'approved' && (
+                                  <button
+                                    onClick={() => {
+                                      setReturningItem(item);
+                                      setReturnQty(delivered);
+                                      setReturnRemark("");
+                                    }}
+                                    className="mt-2 text-[10px] text-orange-600 border border-orange-300 bg-orange-50 hover:bg-orange-100 py-1 px-2 rounded font-medium transition-colors"
+                                  >
+                                    Initiate Return
+                                  </button>
+                                )}
                               </div>
                             );
                           })}
@@ -203,6 +255,53 @@ export default function AdminDeliveries() {
           </div>
         )}
       </div>
+
+      {/* Admin Return Modal */}
+      {returningItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900">Admin Return: {returningItem.Product?.name}</h3>
+              <button onClick={() => setReturningItem(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            
+            <form onSubmit={handleAdminReturn} className="p-4 space-y-4">
+              <div>
+                <label className="label text-xs">Return Quantity ({returningItem.Product?.unit || 'g'})</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  required
+                  className="input"
+                  value={returnQty}
+                  onChange={e => setReturnQty(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="label text-xs">Remark / Reason (Required for Admin)</label>
+                <textarea
+                  required
+                  className="input min-h-[80px]"
+                  placeholder="e.g. Returned manually by Admin..."
+                  value={returnRemark}
+                  onChange={e => setReturnRemark(e.target.value)}
+                ></textarea>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button type="button" onClick={() => setReturningItem(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={submittingReturn} className="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-medium shadow-md shadow-orange-600/20 disabled:opacity-50 transition-all">
+                  {submittingReturn ? "Processing..." : "Process Return"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

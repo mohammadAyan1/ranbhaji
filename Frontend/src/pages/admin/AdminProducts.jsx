@@ -6,7 +6,7 @@ const UNITS = ["gm", "ml", "piece"];
 
 const emptyForm = {
   name: "", hindi_name: "", category: "vegetable", sub_category: "",
-  purchase_price_input: "", selling_price_input: "", unit: "gm", image: null
+  purchase_price_input: "", selling_price_input: "", unit: "gm", time: "", image: null
 };
 
 const showKgToggle = (category, unit) =>
@@ -110,6 +110,7 @@ export default function AdminProducts() {
     payload.append("purchase_price_per_gm", purchase_price_per_gm);
     payload.append("selling_price_per_gm", selling_price_per_gm);
     payload.append("unit", form.unit);
+    payload.append("time", form.time || "");
     if (form.image) {
       payload.append("image", form.image);
     }
@@ -164,6 +165,7 @@ export default function AdminProducts() {
         ? (parseFloat(p.selling_price_per_gm) * 1000).toFixed(2)
         : p.selling_price_per_gm,
       unit: unt,
+      time: p.preparation_time || "",
       image: null
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -436,6 +438,19 @@ export default function AdminProducts() {
                 <select className="input" value={form.unit} onChange={e => handleFormChange("unit", e.target.value)}>
                   {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
+              </div>
+
+              <div>
+                <label className="label">Time (min) (e.g. 0.9 = 54s)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  className="input"
+                  placeholder="e.g. 75 or 0.9"
+                  value={form.time}
+                  onChange={e => handleFormChange("time", e.target.value)}
+                />
               </div>
 
               <div className="md:col-span-2 lg:col-span-3 flex flex-wrap items-center gap-4 pt-3">
