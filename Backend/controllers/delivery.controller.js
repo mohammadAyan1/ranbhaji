@@ -847,16 +847,14 @@ export const getReturns = async (req, res) => {
         } else if (all_time === 'true') {
             // no date filter
         } else if (from_date && to_date) {
-            itemWhere.updatedAt = { 
-                [Op.between]: [`${from_date} 00:00:00`, `${to_date} 23:59:59`] 
+            scheduleWhere.actual_delivery_date = { 
+                [Op.between]: [`${from_date}`, `${to_date}`] 
             };
         } else {
             const todayStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
             const [m, d, y] = todayStr.split('/');
             const todayFormatted = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-            itemWhere.updatedAt = {
-                [Op.between]: [`${todayFormatted} 00:00:00`, `${todayFormatted} 23:59:59`]
-            };
+            scheduleWhere.actual_delivery_date = todayFormatted;
         }
 
         if (delivery_boy_id) {
