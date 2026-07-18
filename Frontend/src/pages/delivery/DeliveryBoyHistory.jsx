@@ -16,7 +16,24 @@ export default function DeliveryBoyHistory() {
   const fetchHistory = () => {
     setLoading(true);
     api.get("/boy-history")
-      .then(r => setDeliveries(r.data.deliveredItems || []))
+      .then(r => {
+        const items = [];
+        if (r.data.schedules) {
+          r.data.schedules.forEach(schedule => {
+            if (schedule.DeliveryItems) {
+              schedule.DeliveryItems.forEach(item => {
+                items.push({
+                  ...item,
+                  delivery_status: schedule.status,
+                  updatedAt: schedule.actual_delivery_date || schedule.updatedAt,
+                  scheduleInfo: schedule
+                });
+              });
+            }
+          });
+        }
+        setDeliveries(items);
+      })
       .catch(err => setMsg(`❌ Failed to fetch history: ${err.response?.data?.message || err.message}`))
       .finally(() => setLoading(false));
   };
