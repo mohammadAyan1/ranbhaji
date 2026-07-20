@@ -1,5 +1,5 @@
-import { 
-    sequelize, PaymentTransaction, Product, Package, Subscription, 
+import {
+    sequelize, PaymentTransaction, Product, Package, Subscription,
     SubscriptionItem, User, Address, RetailOrder, RetailOrderItem, WalletTransaction, PackageFixedItem
 } from "../models/index.js";
 import crypto from "crypto";
@@ -15,7 +15,7 @@ const PHONEPE_STATUS_URL = process.env.PHONEPE_STATUS_URL || "https://api-prepro
 export const initiatePhonePePayment = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { type, package_id, billing_type, address_id, items } = req.body;
+        const { type, package_id, billing_type, address_id, items, redirectUrl } = req.body;
         const user_id = req.user.id;
 
         if (!type || (type !== 'package' && type !== 'retail')) {
@@ -135,15 +135,24 @@ export const initiatePhonePePayment = async (req, res) => {
         }
 
         const amountInPaise = Math.round(amount * 100);
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const callbackUrl = `${req.protocol}://${req.get('host')}/api/payment/phonepe/callback`;
+        
+        let finalRedirectUrl;
+        if (redirectUrl) {
+            // App ya custom website dwara bheja gaya redirectUrl use karein
+            finalRedirectUrl = `${redirectUrl}?txnId=${customTxnId}&type=${type}`;
+        } else {
+            // Default website fallback
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            finalRedirectUrl = `${frontendUrl}/payment-status?txnId=${customTxnId}&type=${type}`;
+        }
 
         const phonepePayload = {
             merchantId: PHONEPE_MERCHANT_ID,
             merchantTransactionId: customTxnId,
             merchantUserId: `USER_${user_id}`,
             amount: amountInPaise,
-            redirectUrl: `${frontendUrl}/payment-status?txnId=${customTxnId}&type=${type}`,
+            redirectUrl: finalRedirectUrl,
             redirectMode: "REDIRECT",
             callbackUrl: callbackUrl,
             mobileNumber: req.user.phone ? req.user.phone.replace(/[^0-9]/g, "").slice(-10) : "9999999999",
@@ -157,7 +166,7 @@ export const initiatePhonePePayment = async (req, res) => {
 
         await t.commit();
 
-        let redirectUrl = `${frontendUrl}/payment-status?txnId=${customTxnId}&type=${type}&simulated=true`;
+        let simulatedUrl = `${finalRedirectUrl}&simulated=true`;
         try {
             const response = await axios.post(PHONEPE_PAY_URL, {
                 request: base64Payload
@@ -211,7 +220,7 @@ export const getPhonePeStatus = async (req, res) => {
         }
 
         let paymentSuccess = false;
-        
+
         if (txnId.includes("_simulated") || req.query.simulated === 'true') {
             paymentSuccess = true;
         } else {
@@ -249,7 +258,7 @@ export const getPhonePeStatus = async (req, res) => {
             if (txnId.startsWith('PKG_')) {
                 const parts = txnId.split('_');
                 const package_id = parseInt(parts[1]);
-                const type = parts[2]; 
+                const type = parts[2];
                 const address_id = parseInt(parts[3]);
 
                 const pkg = await Package.findByPk(package_id, {
@@ -278,10 +287,10 @@ export const getPhonePeStatus = async (req, res) => {
                     order: [['created_at', 'DESC']],
                     transaction: t
                 });
-                
+
                 let renewal_count = 1;
                 let locked_price = amount;
-                
+
                 if (oldSub) {
                     let isEligible = false;
                     if (oldSub.status === 'active' || oldSub.status === 'paused') {
@@ -299,10 +308,10 @@ export const getPhonePeStatus = async (req, res) => {
                         locked_price = parseFloat(oldSub.locked_price || oldSub.Package?.price || pkg.price);
                         if (renewal_count >= 3) {
                             if (type === 'yearly') {
-                                 amount = locked_price * 12 * 0.75;
-                                 yearly_amount_paid = amount;
+                                amount = locked_price * 12 * 0.75;
+                                yearly_amount_paid = amount;
                             } else {
-                                 amount = locked_price;
+                                amount = locked_price;
                             }
                         }
                     }
