@@ -4,7 +4,7 @@ import {
     DeliverySchedule, DeliveryItem, Subscription, SubscriptionItem, User, Product,
     WalletTransaction, Notification, WaterSubscription, Package, Address,
     ScheduleSeasonalSelection, PackageSeasonalConfig,
-    RetailOrder, RetailOrderItem, Batch, MissedProductLog
+    RetailOrder, RetailOrderItem, Batch, MissedProductLog, ReturnedProductLog
 } from "../models/index.js";
 import path from "path";
 
