@@ -3,7 +3,8 @@ import {
     subscribe, getMySubscriptions, getAvailableDates, confirmStartDate,
     pauseSubscription, restartSubscription, cancelSubscription,
     getSeasonalOptions, selectSeasonalItems,
-    getUpcomingSelections, saveScheduleSeasonal
+    getUpcomingSelections, saveScheduleSeasonal,
+    assignPackageByAdmin, renewPackageByAdmin
 } from "../controllers/subscription.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 
@@ -22,5 +23,9 @@ router.patch("/update-seasonal", requireAuth, requireRole(["user"]), selectSeaso
 
 router.get("/subscriptions/:id/upcoming-selections", requireAuth, requireRole(["user"]), getUpcomingSelections);
 router.post("/subscriptions/:id/schedule-seasonal", requireAuth, requireRole(["user"]), saveScheduleSeasonal);
+
+// Admin routes
+router.post("/admin/assign", requireAuth, requireRole(["admin"]), assignPackageByAdmin);
+router.post("/admin/renew", requireAuth, requireRole(["admin"]), renewPackageByAdmin);
 
 export default router;

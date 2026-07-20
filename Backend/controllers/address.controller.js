@@ -183,3 +183,38 @@ export const assignZone = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// POST /api/addresses/admin/create
+export const createAddressForUser = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { user_id, address_line, city, pincode, landmark, zone, latitude, longitude } = req.body;
+
+        if (!user_id || !address_line || !city || !pincode) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "user_id, address_line, city, and pincode are required" });
+        }
+
+        // Check if user has any existing addresses
+        const count = await Address.count({ where: { user_id } }, { transaction: t });
+        const shouldBeDefault = count === 0;
+
+        const address = await Address.create({
+            address_line,
+            city,
+            pincode,
+            landmark: landmark || null,
+            is_default: shouldBeDefault,
+            zone: zone || null,
+            latitude: latitude || null,
+            longitude: longitude || null,
+            user_id
+        }, { transaction: t });
+
+        await t.commit();
+        res.status(201).json({ success: true, message: "Address created successfully for user", address });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

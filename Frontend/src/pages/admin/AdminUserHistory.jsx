@@ -3,22 +3,39 @@ import api from "../../api/axios";
 
 export default function AdminUserHistory() {
   const [users, setUsers] = useState([]);
+  const [packages, setPackages] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // Fetch all users on mount
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [actionMsg, setActionMsg] = useState("");
+
+  const [formData, setFormData] = useState({
+    package_id: "",
+    type: "monthly",
+    start_date: "",
+    address_id: ""
+  });
+
+  // Fetch all users & packages on mount
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get("/admin/user-analytics/users");
-        setUsers(res.data.users || []);
+        const [usersRes, pkgRes] = await Promise.all([
+          api.get("/admin/users"),
+          api.get("/packages")
+        ]);
+        setUsers(usersRes.data.users || []);
+        setPackages(pkgRes.data.packages || []);
       } catch (err) {
-        setMsg(`❌ Failed to load users: ${err.response?.data?.message || err.message}`);
+        setMsg(`❌ Failed to load data: ${err.response?.data?.message || err.message}`);
       }
     };
-    fetchUsers();
+    fetchData();
   }, []);
 
   // Fetch specific user analytics when a user is selected
@@ -64,6 +81,36 @@ export default function AdminUserHistory() {
     }[category] || "📦";
   };
 
+  const selectedUser = users.find(u => u.id === parseInt(selectedUserId) || u.id === selectedUserId);
+
+  const handleAction = async (e, action) => {
+    e.preventDefault();
+    setSaving(true);
+    setActionMsg("");
+    try {
+      const endpoint = action === 'assign' ? '/subscriptions/admin/assign' : '/subscriptions/admin/renew';
+      await api.post(endpoint, {
+        user_id: selectedUserId,
+        ...formData
+      });
+      setActionMsg("✅ Package action successful!");
+      
+      // Refresh analytics
+      setLoading(true);
+      const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      setAnalytics(res.data.analytics);
+      setLoading(false);
+
+      if (action === 'assign') setShowAssignModal(false);
+      else setShowRenewModal(false);
+      setFormData({ package_id: "", type: "monthly", start_date: "", address_id: "" });
+    } catch (err) {
+      setActionMsg(`❌ Action failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -87,6 +134,17 @@ export default function AdminUserHistory() {
         </div>
       </div>
 
+      {selectedUserId && (
+        <div className="flex gap-4 mb-4">
+          <button onClick={() => setShowAssignModal(true)} className="btn-primary text-sm px-4 py-2 flex items-center gap-2">
+            <span>🎁</span> Assign New Package
+          </button>
+          <button onClick={() => setShowRenewModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-fresh-200 text-fresh-700 bg-fresh-50 hover:bg-fresh-100">
+            <span>🔄</span> Renew Package
+          </button>
+        </div>
+      )}
+
       {msg && (
         <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-red-600 border border-red-200">
           {msg}
@@ -98,6 +156,90 @@ export default function AdminUserHistory() {
           <p className="text-5xl mb-4">👤</p>
           <p className="text-xl font-bold text-gray-900">Select a User</p>
           <p className="text-sm mt-2">Choose a user from the dropdown above to view their complete purchase history and analytics.</p>
+        </div>
+      )}
+
+      {/* MODALS */}
+      {(showAssignModal || showRenewModal) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">{showAssignModal ? "Assign Package to User" : "Renew Package"}</h2>
+              <button onClick={() => { setShowAssignModal(false); setShowRenewModal(false); }} className="text-gray-400 hover:text-gray-600">✖</button>
+            </div>
+            {actionMsg && (
+                <div className={`mx-6 mt-4 p-3 rounded-lg text-sm border ${actionMsg.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                    {actionMsg}
+                </div>
+            )}
+            <form onSubmit={(e) => handleAction(e, showAssignModal ? 'assign' : 'renew')} className="p-6 space-y-4">
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Select Package</label>
+                <select 
+                  className="input w-full text-sm" 
+                  value={formData.package_id} 
+                  onChange={e => setFormData({...formData, package_id: e.target.value})}
+                  required
+                >
+                  <option value="">-- Choose Package --</option>
+                  {packages.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} - ₹{p.price}/month</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Plan Type</label>
+                  <select 
+                    className="input w-full text-sm" 
+                    value={formData.type} 
+                    onChange={e => setFormData({...formData, type: e.target.value})}
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly (-25%)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Start Date</label>
+                  <input 
+                    type="date" 
+                    className="input w-full text-sm" 
+                    value={formData.start_date} 
+                    onChange={e => setFormData({...formData, start_date: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Select Delivery Address</label>
+                <select 
+                  className="input w-full text-sm" 
+                  value={formData.address_id} 
+                  onChange={e => setFormData({...formData, address_id: e.target.value})}
+                  required
+                >
+                  <option value="">-- Choose User's Address --</option>
+                  {selectedUser?.Addresses?.map(addr => (
+                    <option key={addr.id} value={addr.id}>
+                      {addr.address_line}, {addr.city} - {addr.pincode}
+                    </option>
+                  ))}
+                </select>
+                {(!selectedUser?.Addresses || selectedUser.Addresses.length === 0) && (
+                    <p className="text-xs text-red-500 mt-1">This user has no saved addresses. Please create one in User Addresses tab first.</p>
+                )}
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <button type="button" onClick={() => { setShowAssignModal(false); setShowRenewModal(false); }} className="btn-secondary text-sm px-6">Cancel</button>
+                <button type="submit" disabled={saving || !selectedUser?.Addresses?.length} className="btn-primary text-sm px-6">
+                  {saving ? "Saving..." : "Confirm & Save"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -142,7 +284,18 @@ export default function AdminUserHistory() {
                     <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                       <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
                         <div>
-                          <p className="font-bold text-gray-900">{pkg.name}</p>
+                          <p className="font-bold text-gray-900 flex items-center gap-2">
+                            {pkg.name}
+                            {pkg.status && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                                pkg.status === 'active' ? 'bg-green-100 text-green-700' :
+                                pkg.status === 'completed' ? 'bg-gray-200 text-gray-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {pkg.status}
+                              </span>
+                            )}
+                          </p>
                           <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{pkg.type}</p>
                         </div>
                         <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200">

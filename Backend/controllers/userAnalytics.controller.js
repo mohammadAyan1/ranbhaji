@@ -26,7 +26,10 @@ export const getUserAnalytics = async (req, res) => {
 
         // 1. Fetch Subscriptions (Packages)
         const subscriptions = await Subscription.findAll({
-            where: { user_id: userId },
+            where: { 
+                user_id: userId,
+                status: { [Op.in]: ['active', 'paused', 'completed'] }
+            },
             include: [
                 { model: Package },
                 { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] }
@@ -83,6 +86,7 @@ export const getUserAnalytics = async (req, res) => {
                         name: pkg.name,
                         type: 'Veg/Fruit Package',
                         renewals: 0,
+                        status: sub.status,
                         items: {}
                     };
                 }

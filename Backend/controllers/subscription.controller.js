@@ -1183,3 +1183,197 @@ export const saveScheduleSeasonal = async (req, res) => {
     }
 };
 
+// POST /api/subscriptions/admin/assign
+export const assignPackageByAdmin = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { user_id, package_id, type, start_date, address_id } = req.body;
+
+        if (!user_id || !package_id || !start_date || !address_id) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "user_id, package_id, start_date, and address_id are required" });
+        }
+
+        const pkg = await Package.findByPk(package_id, {
+            include: [{ model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] }]
+        });
+        if (!pkg) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Package not found" });
+        }
+
+        const existingSubscription = await Subscription.findOne({
+            where: { user_id, package_id, status: { [Op.in]: ['active', 'paused'] } }
+        });
+        if (existingSubscription) {
+            await t.rollback();
+            return res.status(409).json({ success: false, message: "User already has an active or paused subscription for this package." });
+        }
+
+        let amount = parseFloat(pkg.price);
+        let yearly_amount_paid = null;
+        let total_services = pkg.services_per_month;
+
+        if (type === 'yearly') {
+            const annual_total = parseFloat(pkg.price) * 12;
+            amount = annual_total * 0.75; // 25% discount
+            yearly_amount_paid = amount;
+            total_services = pkg.services_per_month * 12;
+        }
+
+        const daysInCycle = type === 'yearly' ? 360 : 30;
+        const end_date = new Date(start_date);
+        end_date.setDate(end_date.getDate() + daysInCycle - 1);
+
+        const subscription = await Subscription.create({
+            user_id, package_id, type: type || 'monthly',
+            status: 'active',
+            yearly_amount_paid,
+            total_services,
+            address_id,
+            start_date,
+            end_date,
+            renewal_count: 1,
+            locked_price: amount
+        }, { transaction: t });
+
+        // Generate delivery schedule
+        const deliveryDates = generateDeliveryDates(start_date, pkg.services_per_month, type === 'yearly' ? 12 : 1);
+        const scheduleRows = deliveryDates.map(date => ({
+            subscription_id: subscription.id,
+            scheduled_date: date,
+            status: 'pending'
+        }));
+        await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+
+        const fixedItemRows = pkg.FixedItems.map(fi => ({
+            subscription_id: subscription.id,
+            product_id: fi.product_id,
+            qty_gm: fi.default_qty_gm,
+            is_fixed: true,
+            is_seasonal: false
+        }));
+        if (fixedItemRows.length > 0) {
+            await SubscriptionItem.bulkCreate(fixedItemRows, { transaction: t });
+        }
+
+        await PaymentTransaction.create({
+            user_id, amount,
+            payment_method: 'admin_assigned',
+            status: 'success',
+            type: type === 'yearly' ? 'yearly_booking' : 'package_purchase'
+        }, { transaction: t });
+
+        await t.commit();
+        res.status(201).json({ success: true, message: "Package assigned successfully", subscription });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/subscriptions/admin/renew
+export const renewPackageByAdmin = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { user_id, package_id, type, start_date, address_id } = req.body;
+
+        if (!user_id || !package_id || !start_date || !address_id) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "user_id, package_id, start_date, and address_id are required" });
+        }
+
+        const oldSub = await Subscription.findOne({
+            where: { user_id, package_id },
+            order: [['created_at', 'DESC']],
+            transaction: t
+        });
+
+        if (!oldSub) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "No previous subscription found to renew." });
+        }
+
+        if (oldSub.status === 'active') {
+            await oldSub.update({ status: 'completed' }, { transaction: t });
+        }
+
+        const pkg = await Package.findByPk(package_id, {
+            include: [{ model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] }]
+        });
+
+        let amount = parseFloat(pkg.price);
+        let yearly_amount_paid = null;
+        let total_services = pkg.services_per_month;
+        const renewal_count = (oldSub.renewal_count || 1) + 1;
+        let locked_price = parseFloat(oldSub.locked_price || pkg.price);
+
+        if (renewal_count >= 3) {
+            if (type === 'yearly') {
+                amount = locked_price * 12 * 0.75;
+            } else {
+                amount = locked_price;
+            }
+        } else {
+            if (type === 'yearly') {
+                amount = parseFloat(pkg.price) * 12 * 0.75;
+            } else {
+                amount = parseFloat(pkg.price);
+            }
+        }
+        
+        if (type === 'yearly') {
+            yearly_amount_paid = amount;
+            total_services = pkg.services_per_month * 12;
+        }
+
+        const daysInCycle = type === 'yearly' ? 360 : 30;
+        const end_date = new Date(start_date);
+        end_date.setDate(end_date.getDate() + daysInCycle - 1);
+
+        const subscription = await Subscription.create({
+            user_id, package_id, type: type || 'monthly',
+            status: 'active',
+            yearly_amount_paid,
+            total_services,
+            address_id,
+            start_date,
+            end_date,
+            renewal_count,
+            locked_price: (renewal_count >= 3) ? locked_price : amount
+        }, { transaction: t });
+
+        const deliveryDates = generateDeliveryDates(start_date, pkg.services_per_month, type === 'yearly' ? 12 : 1);
+        const scheduleRows = deliveryDates.map(date => ({
+            subscription_id: subscription.id,
+            scheduled_date: date,
+            status: 'pending'
+        }));
+        await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+
+        const fixedItemRows = pkg.FixedItems.map(fi => ({
+            subscription_id: subscription.id,
+            product_id: fi.product_id,
+            qty_gm: fi.default_qty_gm,
+            is_fixed: true,
+            is_seasonal: false
+        }));
+        if (fixedItemRows.length > 0) {
+            await SubscriptionItem.bulkCreate(fixedItemRows, { transaction: t });
+        }
+
+        await PaymentTransaction.create({
+            user_id, amount,
+            payment_method: 'admin_renewed',
+            status: 'success',
+            type: type === 'yearly' ? 'yearly_booking' : 'package_purchase'
+        }, { transaction: t });
+
+        await t.commit();
+        res.status(201).json({ success: true, message: "Package renewed successfully", subscription });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
