@@ -106,7 +106,8 @@ const DeliverySchedule = sequelize.define('DeliverySchedule', {
   delivery_boy_id: { type: DataTypes.INTEGER, allowNull: true },
   delivery_photo_url: { type: DataTypes.STRING(255), allowNull: true },
   delivery_remark: { type: DataTypes.STRING(255), allowNull: true },
-  batch_id: { type: DataTypes.INTEGER, allowNull: true }
+  batch_id: { type: DataTypes.INTEGER, allowNull: true },
+  is_returned_serving: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, { tableName: 'delivery_schedule', timestamps: false });
 
 // 10. DELIVERY_ITEMS
@@ -393,6 +394,19 @@ User.hasMany(MissedProductLog, { foreignKey: 'user_id' });
 MissedProductLog.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(MissedProductLog, { foreignKey: 'product_id' });
 
+// 25. RETURNED_PRODUCT_LOG
+const ReturnedProductLog = sequelize.define('ReturnedProductLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  returned_date: { type: DataTypes.DATEONLY, allowNull: false },
+  returned_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  next_schedule_date: { type: DataTypes.DATEONLY, allowNull: true }
+}, { tableName: 'returned_product_logs', timestamps: true, createdAt: 'created_at', updatedAt: false });
+
+ReturnedProductLog.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(ReturnedProductLog, { foreignKey: 'user_id' });
+ReturnedProductLog.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(ReturnedProductLog, { foreignKey: 'product_id' });
+
 export {
   sequelize,
   User,
@@ -419,6 +433,7 @@ export {
   RetailOrder,
   RetailOrderItem,
   Batch,
-  MissedProductLog
+  MissedProductLog,
+  ReturnedProductLog
 };
 

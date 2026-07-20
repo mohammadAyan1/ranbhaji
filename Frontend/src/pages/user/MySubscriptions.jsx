@@ -793,11 +793,30 @@ export default function MySubscriptions() {
                               <p className="text-[10px] text-gray-600 font-semibold uppercase tracking-wider mb-1.5">Tomorrow's picks / default preferences:</p>
                               {hasSelections ? (
                                 <div className="flex flex-wrap gap-1.5">
-                                  {schedule.selections.map(sel => (
-                                    <span key={sel.id} className="bg-fresh-950/40 border border-fresh-800/50 text-fresh-600 text-xs px-2 py-0.5 rounded-lg">
-                                      {sel.Product?.name} ({parseFloat(sel.qty_gm)}{sel.Product?.unit})
-                                    </span>
-                                  ))}
+                                  {schedule.selections.map(sel => {
+                                    const carriedQty = parseFloat(sel.carried_over_qty || 0);
+                                    const returnedQty = parseFloat(sel.returned_qty || 0);
+                                    const baseQty = parseFloat(sel.qty_gm) - carriedQty - returnedQty;
+                                    
+                                    let breakdown = [];
+                                    if (baseQty > 0) breakdown.push(`${baseQty.toFixed(0)}`);
+                                    if (carriedQty > 0) breakdown.push(`${carriedQty.toFixed(0)} carry`);
+                                    if (returnedQty > 0) breakdown.push(`${returnedQty.toFixed(0)} return`);
+
+                                    return (
+                                      <span key={sel.id} className="bg-fresh-950/40 border border-fresh-800/50 text-fresh-600 text-xs px-2 py-0.5 rounded-lg flex items-center gap-1">
+                                        {sel.Product?.name} 
+                                        <span className="font-semibold ml-1">
+                                          {parseFloat(sel.qty_gm)}{sel.Product?.unit}
+                                        </span>
+                                        {breakdown.length > 1 && (
+                                          <span className="text-[10px] text-gray-500 bg-gray-100/50 px-1 rounded ml-1 border border-gray-200">
+                                            ({breakdown.join(' + ')})
+                                          </span>
+                                        )}
+                                      </span>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <p className="text-xs text-gray-500 italic">No per-service picks. Subscription defaults will be delivered.</p>

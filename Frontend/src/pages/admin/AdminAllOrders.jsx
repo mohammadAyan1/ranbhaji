@@ -252,6 +252,11 @@ export default function AdminAllOrders() {
                                             Ready for Delivery
                                           </span>
                                         )}
+                                        {addrGrp.is_returned_serving && (
+                                          <span className="bg-red-500/20 text-red-500 text-[10px] px-2 py-0.5 rounded-full border border-red-500/30">
+                                            Returned Serving
+                                          </span>
+                                        )}
                                       </div>
                                       <p className="font-medium text-gray-900">{addrGrp.address}</p>
                                     </div>

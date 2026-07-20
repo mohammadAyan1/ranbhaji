@@ -678,7 +678,6 @@ export const reviewReturn = async (req, res) => {
         if (status === 'approved') {
             const product = await Product.findByPk(item.product_id);
             const returnQty = parseFloat(item.return_qty || item.qty_gm);
-            const refund = returnQty * parseFloat(product.purchase_price_per_gm);
 
             // Add returned quantity back to stock and reduce total sold qty
             await product.update({
@@ -686,17 +685,28 @@ export const reviewReturn = async (req, res) => {
                 total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - returnQty)
             }, { transaction: t });
 
-            await user.update({ wallet_balance: parseFloat(user.wallet_balance) + refund }, { transaction: t });
-            await WalletTransaction.create({
-                user_id: user.id, amount: refund, type: 'credit',
-                reason: `Return approved for ${product.name}`,
-                reference_id: item.id
+            // INSTEAD OF REFUND, ADD TO ReturnedProductLog to adjust in next serving
+            // Find next schedule date
+            const nextSchedule = await DeliverySchedule.findOne({
+                where: {
+                    subscription_id: item.DeliverySchedule.subscription_id,
+                    scheduled_date: { [Op.gt]: item.DeliverySchedule.scheduled_date }
+                },
+                order: [['scheduled_date', 'ASC']]
+            });
+
+            await ReturnedProductLog.create({
+                user_id: user.id,
+                product_id: product.id,
+                returned_date: new Date(),
+                returned_qty: returnQty,
+                next_schedule_date: nextSchedule ? nextSchedule.scheduled_date : null
             }, { transaction: t });
 
             await Notification.create({
                 user_id: user.id,
                 title: 'Return Approved',
-                message: `Your return for ${product.name} has been approved. ₹${refund.toFixed(2)} credited to wallet.`,
+                message: `Your return for ${product.name} has been approved. The item will be adjusted in your next serving.`,
                 type: 'alert',
                 scheduled_at: new Date()
             }, { transaction: t });
@@ -1288,6 +1298,7 @@ export const getAllOrdersForDate = async (req, res) => {
                 usersMap[user.id] = {
                     user: user,
                     hasPackage: false,
+                    is_returned_serving: false,
                     status: status,
                     addressesMap: {}, // To group by address string
                     // Also keep total map for the overall summary view
@@ -1306,6 +1317,7 @@ export const getAllOrdersForDate = async (req, res) => {
                     addressText: addrStr,
                     batch_id: batchId,
                     status: status, // Add status to track if it's ready_for_delivery
+                    is_returned_serving: false,
                     scheduleIds: [],
                     retailOrderIds: [],
                     itemsMap: {}
@@ -1360,11 +1372,13 @@ export const getAllOrdersForDate = async (req, res) => {
 
             uMap.hasPackage = true;
             uMap.allScheduleIds.push(s.id);
+            if (s.is_returned_serving) uMap.is_returned_serving = true;
             if (!uMap.commonBatchId && s.batch_id) uMap.commonBatchId = s.batch_id;
 
             const addrStr = formatAddress(address);
             const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id, s.status);
             addrGrp.scheduleIds.push(s.id);
+            if (s.is_returned_serving) addrGrp.is_returned_serving = true;
 
             const dbItems = s.DeliveryItems || [];
             if (dbItems.length > 0) {
@@ -1994,17 +2008,10 @@ export const adminReturnItem = async (req, res) => {
             total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - requestedQty)
         }, { transaction: t });
 
-        await user.update({ wallet_balance: parseFloat(user.wallet_balance) + refund }, { transaction: t });
-        await WalletTransaction.create({
-            user_id: user.id, amount: refund, type: 'credit',
-            reason: `Return processed by Admin for ${product.name}`,
-            reference_id: item.id
-        }, { transaction: t });
-
         await Notification.create({
             user_id: user.id,
             title: 'Return Processed',
-            message: `Admin has processed a return for ${product.name}. ₹${refund.toFixed(2)} credited to wallet.`,
+            message: `Admin has processed a return for ${product.name}. The item will be adjusted in your next serving.`,
             type: 'alert',
             scheduled_at: new Date()
         }, { transaction: t });
@@ -2030,6 +2037,11 @@ export const adminReturnItem = async (req, res) => {
             });
 
             if (nextSchedule) {
+                // We don't need to manually update DeliveryItem here if `getUpcomingSelections` handles ReturnedProductLog dynamically,
+                // but if we want to ensure it's physically in the DB for the next schedule, we can leave this or remove it.
+                // It's cleaner to let `getUpcomingSelections` dynamically aggregate it, BUT wait, other places expect `DeliveryItem`.
+                // For MissedProductLog it was adding it to DeliveryItem AND MissedProductLog.
+                // Let's keep adding it to DeliveryItem so that the packer sees it.
                 const existingNextItem = await DeliveryItem.findOne({
                     where: { schedule_id: nextSchedule.id, product_id: item.product_id },
                     transaction: t
@@ -2045,11 +2057,11 @@ export const adminReturnItem = async (req, res) => {
                     }, { transaction: t });
                 }
 
-                await MissedProductLog.create({
+                await ReturnedProductLog.create({
                     user_id: user.id,
                     product_id: item.product_id,
-                    missed_date: schedule.scheduled_date,
-                    missed_qty: requestedQty,
+                    returned_date: schedule.scheduled_date,
+                    returned_qty: requestedQty,
                     next_schedule_date: nextSchedule.scheduled_date
                 }, { transaction: t });
             }
@@ -2131,17 +2143,10 @@ export const boyReturnItem = async (req, res) => {
             total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - requestedQty)
         }, { transaction: t });
 
-        await user.update({ wallet_balance: parseFloat(user.wallet_balance) + refund }, { transaction: t });
-        await WalletTransaction.create({
-            user_id: user.id, amount: refund, type: 'credit',
-            reason: `Return processed by Delivery Boy for ${product.name}`,
-            reference_id: item.id
-        }, { transaction: t });
-
         await Notification.create({
             user_id: user.id,
             title: 'Return Processed',
-            message: `Delivery Boy has processed a return for ${product.name}. ₹${refund.toFixed(2)} credited to wallet.`,
+            message: `Delivery Boy has processed a return for ${product.name}. The item will be adjusted in your next serving.`,
             type: 'alert',
             scheduled_at: new Date()
         }, { transaction: t });
@@ -2183,11 +2188,11 @@ export const boyReturnItem = async (req, res) => {
                     }, { transaction: t });
                 }
 
-                await MissedProductLog.create({
+                await ReturnedProductLog.create({
                     user_id: user.id,
                     product_id: item.product_id,
-                    missed_date: schedule.scheduled_date,
-                    missed_qty: requestedQty,
+                    returned_date: schedule.scheduled_date,
+                    returned_qty: requestedQty,
                     next_schedule_date: nextSchedule.scheduled_date
                 }, { transaction: t });
             }
@@ -2224,18 +2229,13 @@ export const adminReturnOrder = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found or retail order (not supported)' });
         }
 
-        let totalRefund = 0;
         for (const item of schedule.DeliveryItems) {
             if (item.return_status === 'none') {
                 const product = await Product.findByPk(item.product_id, { transaction: t });
-                const refund = parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
-                totalRefund += refund;
-                
                 await product.update({
                     current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
                     total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
                 }, { transaction: t });
-
                 await item.update({ 
                     return_status: 'approved',
                     return_qty: item.qty_gm,
@@ -2245,16 +2245,6 @@ export const adminReturnOrder = async (req, res) => {
             }
         }
 
-        if (totalRefund > 0) {
-            await user.update({ wallet_balance: parseFloat(user.wallet_balance) + totalRefund }, { transaction: t });
-            await WalletTransaction.create({
-                user_id: user.id, amount: totalRefund, type: 'credit',
-                reason: 'Full order return processed by Admin',
-                reference_id: schedule.id
-            }, { transaction: t });
-        }
-
-        // Add a new schedule at the end of the subscription
         const lastSchedule = await DeliverySchedule.findOne({
             where: { subscription_id: schedule.subscription_id },
             order: [['scheduled_date', 'DESC']],
@@ -2265,15 +2255,13 @@ export const adminReturnOrder = async (req, res) => {
             const gap_days = Math.round(30 / schedule.Subscription.Package.services_per_month);
             let nextDate = new Date(lastSchedule.scheduled_date);
             nextDate.setDate(nextDate.getDate() + gap_days);
-            if (nextDate.getUTCDay() === 0) nextDate.setUTCDate(nextDate.getUTCDate() - 1); // skip sunday
-
+            if (nextDate.getUTCDay() === 0) nextDate.setUTCDate(nextDate.getUTCDate() - 1);
             const newSchedule = await DeliverySchedule.create({
                 subscription_id: schedule.subscription_id,
                 scheduled_date: nextDate.toISOString().split('T')[0],
-                status: 'pending'
+                status: 'pending',
+                is_returned_serving: true
             }, { transaction: t });
-
-            // Copy all items to new schedule and log
             for (const item of schedule.DeliveryItems) {
                 await DeliveryItem.create({
                     schedule_id: newSchedule.id,
@@ -2281,19 +2269,11 @@ export const adminReturnOrder = async (req, res) => {
                     qty_gm: item.qty_gm,
                     packed_qty: null
                 }, { transaction: t });
-
-                await MissedProductLog.create({
-                    user_id: user.id,
-                    product_id: item.product_id,
-                    missed_date: schedule.scheduled_date,
-                    missed_qty: item.qty_gm,
-                    next_schedule_date: newSchedule.scheduled_date
-                }, { transaction: t });
             }
         }
 
         await t.commit();
-        res.status(200).json({ success: true, message: 'Order returned successfully and pushed to next schedule' });
+        res.status(200).json({ success: true, message: 'Order returned successfully and pushed to new schedule' });
     } catch (error) {
         await t.rollback();
         res.status(500).json({ success: false, message: error.message });
@@ -2330,18 +2310,13 @@ export const boyReturnOrder = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found or retail order (not supported)' });
         }
 
-        let totalRefund = 0;
         for (const item of schedule.DeliveryItems) {
             if (item.return_status === 'none') {
                 const product = await Product.findByPk(item.product_id, { transaction: t });
-                const refund = parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
-                totalRefund += refund;
-                
                 await product.update({
                     current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
                     total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
                 }, { transaction: t });
-
                 await item.update({ 
                     return_status: 'approved',
                     return_qty: item.qty_gm,
@@ -2352,16 +2327,6 @@ export const boyReturnOrder = async (req, res) => {
             }
         }
 
-        if (totalRefund > 0) {
-            await user.update({ wallet_balance: parseFloat(user.wallet_balance) + totalRefund }, { transaction: t });
-            await WalletTransaction.create({
-                user_id: user.id, amount: totalRefund, type: 'credit',
-                reason: 'Full order return processed by Delivery Boy',
-                reference_id: schedule.id
-            }, { transaction: t });
-        }
-
-        // Add a new schedule at the end of the subscription
         const lastSchedule = await DeliverySchedule.findOne({
             where: { subscription_id: schedule.subscription_id },
             order: [['scheduled_date', 'DESC']],
@@ -2372,15 +2337,13 @@ export const boyReturnOrder = async (req, res) => {
             const gap_days = Math.round(30 / schedule.Subscription.Package.services_per_month);
             let nextDate = new Date(lastSchedule.scheduled_date);
             nextDate.setDate(nextDate.getDate() + gap_days);
-            if (nextDate.getUTCDay() === 0) nextDate.setUTCDate(nextDate.getUTCDate() - 1); // skip sunday
-
+            if (nextDate.getUTCDay() === 0) nextDate.setUTCDate(nextDate.getUTCDate() - 1);
             const newSchedule = await DeliverySchedule.create({
                 subscription_id: schedule.subscription_id,
                 scheduled_date: nextDate.toISOString().split('T')[0],
-                status: 'pending'
+                status: 'pending',
+                is_returned_serving: true
             }, { transaction: t });
-
-            // Copy all items to new schedule and log
             for (const item of schedule.DeliveryItems) {
                 await DeliveryItem.create({
                     schedule_id: newSchedule.id,
@@ -2388,19 +2351,11 @@ export const boyReturnOrder = async (req, res) => {
                     qty_gm: item.qty_gm,
                     packed_qty: null
                 }, { transaction: t });
-
-                await MissedProductLog.create({
-                    user_id: user.id,
-                    product_id: item.product_id,
-                    missed_date: schedule.scheduled_date,
-                    missed_qty: item.qty_gm,
-                    next_schedule_date: newSchedule.scheduled_date
-                }, { transaction: t });
             }
         }
 
         await t.commit();
-        res.status(200).json({ success: true, message: 'Order returned successfully and pushed to next schedule' });
+        res.status(200).json({ success: true, message: 'Order returned successfully and pushed to new schedule' });
     } catch (error) {
         await t.rollback();
         res.status(500).json({ success: false, message: error.message });

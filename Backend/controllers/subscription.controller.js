@@ -939,6 +939,13 @@ export const getUpcomingSelections = async (req, res) => {
                 next_schedule_date: { [Op.in]: scheduleDates }
             }
         });
+        
+        const returnedLogs = await ReturnedProductLog.findAll({
+            where: {
+                user_id: req.user.id,
+                next_schedule_date: { [Op.in]: scheduleDates }
+            }
+        });
 
         const now = new Date();
         const formattedSchedules = schedules.map(s => {
@@ -971,6 +978,28 @@ export const getUpcomingSelections = async (req, res) => {
                             product_id: log.product_id,
                             qty_gm: log.missed_qty,
                             carried_over_qty: log.missed_qty,
+                            Product: dItem.Product
+                        });
+                    }
+                }
+            });
+
+            // Add or update from ReturnedLogs (carry overs)
+            const myReturnedLogs = returnedLogs.filter(l => l.next_schedule_date === s.scheduled_date);
+            myReturnedLogs.forEach(log => {
+                const existing = finalSelections.find(sel => sel.product_id === log.product_id);
+                if (existing) {
+                    existing.returned_qty = (parseFloat(existing.returned_qty || 0) + parseFloat(log.returned_qty)).toFixed(2);
+                    existing.qty_gm = (parseFloat(existing.qty_gm) + parseFloat(log.returned_qty)).toFixed(2);
+                } else {
+                    const dItem = (s.DeliveryItems || []).find(di => di.product_id === log.product_id);
+                    if (dItem) {
+                        finalSelections.push({
+                            id: 'return_' + log.id,
+                            schedule_id: s.id,
+                            product_id: log.product_id,
+                            qty_gm: log.returned_qty,
+                            returned_qty: log.returned_qty,
                             Product: dItem.Product
                         });
                     }
