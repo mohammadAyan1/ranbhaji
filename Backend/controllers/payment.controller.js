@@ -167,6 +167,7 @@ export const initiatePhonePePayment = async (req, res) => {
         await t.commit();
 
         let simulatedUrl = `${finalRedirectUrl}&simulated=true`;
+        let paymentUrl = simulatedUrl;
         try {
             const response = await axios.post(PHONEPE_PAY_URL, {
                 request: base64Payload
@@ -180,14 +181,14 @@ export const initiatePhonePePayment = async (req, res) => {
             });
 
             if (response.data && response.data.success && response.data.data.instrumentResponse.redirectInfo.url) {
-                redirectUrl = response.data.data.instrumentResponse.redirectInfo.url;
+                paymentUrl = response.data.data.instrumentResponse.redirectInfo.url;
             }
         } catch (apiErr) {
             console.error("[PhonePe API Error] Sandbox failure, falling back to simulation:", apiErr.message);
-            redirectUrl = `${frontendUrl}/payment-status?txnId=${customTxnId}&type=${type}&simulated=true`;
+            paymentUrl = simulatedUrl;
         }
 
-        res.status(200).json({ success: true, redirectUrl });
+        res.status(200).json({ success: true, redirectUrl: paymentUrl, simulatedUrl });
     } catch (error) {
         await t.rollback();
         res.status(500).json({ success: false, message: error.message });
