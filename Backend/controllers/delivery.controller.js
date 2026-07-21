@@ -1268,6 +1268,25 @@ export const getAllOrdersForDate = async (req, res) => {
         const waterProducts = await Product.findAll({ where: { category: 'water', status: 'fresh' } });
         const actualWaterProducts = waterProducts.length > 0 ? waterProducts : await Product.findAll({ where: { category: 'water' } });
 
+        const missedLogs = await MissedProductLog.findAll({
+            where: { next_schedule_date: dateStr }
+        });
+        const returnedLogs = await ReturnedProductLog.findAll({
+            where: { next_schedule_date: dateStr }
+        });
+
+        const carryLogMap = {};
+        missedLogs.forEach(l => {
+            const key = `${l.user_id}_${l.product_id}`;
+            if (!carryLogMap[key]) carryLogMap[key] = { missed: 0, returned: 0 };
+            carryLogMap[key].missed += parseFloat(l.missed_qty);
+        });
+        returnedLogs.forEach(l => {
+            const key = `${l.user_id}_${l.product_id}`;
+            if (!carryLogMap[key]) carryLogMap[key] = { missed: 0, returned: 0 };
+            carryLogMap[key].returned += parseFloat(l.returned_qty);
+        });
+
         // Fetch all default addresses in one go to avoid N+1
         const allUsersIds = new Set();
         schedules.forEach(s => {
@@ -1332,11 +1351,15 @@ export const getAllOrdersForDate = async (req, res) => {
             return uMap.addressesMap[addrStr];
         };
 
-        const addItem = (uMap, addrGrp, product, qty, source, packedQty = null) => {
+        const addItem = (uMap, addrGrp, product, qty, source, packedQty = null, userId = null) => {
             if (!product) return;
             // Add to Address Group
             if (!addrGrp.itemsMap[product.id]) {
-                addrGrp.itemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit, packedQty: 0, isPackedSet: false };
+                addrGrp.itemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit, packedQty: 0, isPackedSet: false, missedQty: 0, returnedQty: 0 };
+                if (source === 'package' && userId && carryLogMap[`${userId}_${product.id}`]) {
+                    addrGrp.itemsMap[product.id].missedQty = carryLogMap[`${userId}_${product.id}`].missed;
+                    addrGrp.itemsMap[product.id].returnedQty = carryLogMap[`${userId}_${product.id}`].returned;
+                }
             }
             if (source === 'package') addrGrp.itemsMap[product.id].packageQty += qty;
             else addrGrp.itemsMap[product.id].retailQty += qty;
@@ -1348,7 +1371,11 @@ export const getAllOrdersForDate = async (req, res) => {
 
             // Add to User Totals
             if (!uMap.totalItemsMap[product.id]) {
-                uMap.totalItemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit };
+                uMap.totalItemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit, missedQty: 0, returnedQty: 0 };
+                if (source === 'package' && userId && carryLogMap[`${userId}_${product.id}`]) {
+                    uMap.totalItemsMap[product.id].missedQty = carryLogMap[`${userId}_${product.id}`].missed;
+                    uMap.totalItemsMap[product.id].returnedQty = carryLogMap[`${userId}_${product.id}`].returned;
+                }
             }
             if (source === 'package') uMap.totalItemsMap[product.id].packageQty += qty;
             else uMap.totalItemsMap[product.id].retailQty += qty;
@@ -1386,7 +1413,7 @@ export const getAllOrdersForDate = async (req, res) => {
                 for (const item of dbItems) {
                     if (!uniqueMap[item.product_id]) {
                         uniqueMap[item.product_id] = true;
-                        if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', item.packed_qty !== null ? parseFloat(item.packed_qty) : null);
+                        if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', item.packed_qty !== null ? parseFloat(item.packed_qty) : null, user ? user.id : null);
                     } else {
                         await item.destroy().catch(e => console.error(e));
                     }
@@ -1402,7 +1429,7 @@ export const getAllOrdersForDate = async (req, res) => {
                     if (selections.length > 0) {
                         for (const sel of selections) {
                             if (sel.Product) {
-                                addItem(uMap, addrGrp, sel.Product, parseFloat(sel.qty_gm || 0), 'package');
+                                addItem(uMap, addrGrp, sel.Product, parseFloat(sel.qty_gm || 0), 'package', null, user ? user.id : null);
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: sel.product_id, qty_gm: sel.qty_gm });
                             }
                         }
@@ -1410,21 +1437,21 @@ export const getAllOrdersForDate = async (req, res) => {
                         const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
                         for (const item of missingFixed) {
                             if (item.Product) {
-                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
                             }
                         }
                     } else {
                         for (const item of fixedItems) {
                             if (item.Product) {
-                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
                             }
                         }
                         const defaultSeasonal = items.filter(item => item.is_seasonal && item.is_active);
                         for (const item of defaultSeasonal) {
                             if (item.Product) {
-                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package');
+                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
                             }
                         }
@@ -1437,7 +1464,7 @@ export const getAllOrdersForDate = async (req, res) => {
                     });
                     if (matchedProduct) {
                         const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
-                        addItem(uMap, addrGrp, matchedProduct, qty, 'package');
+                        addItem(uMap, addrGrp, matchedProduct, qty, 'package', null, user ? user.id : null);
                         newDeliveryItems.push({ schedule_id: s.id, product_id: matchedProduct.id, qty_gm: qty });
                     }
                 }
