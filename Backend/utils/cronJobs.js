@@ -4,7 +4,7 @@ import { sequelize } from "../confiq/db.js";
 import {
     DeliverySchedule, Subscription, SubscriptionItem, Notification, User, Package,
     WalletTransaction, CreditLog, Product, DeliveryItem, WaterSubscription,
-    ScheduleSeasonalSelection, PackageSeasonalConfig
+    ScheduleSeasonalSelection, PackageSeasonalConfig, PauseLog, PackageSeasonalPool
 } from "../models/index.js";
 
 /**
@@ -24,6 +24,88 @@ const runNightlyJob = async () => {
 
     const t = await sequelize.transaction();
     try {
+        // Step 0: Process auto-restarts for expired pauses
+        const todayStr = new Date().toISOString().split('T')[0];
+        const expiredPauses = await PauseLog.findAll({
+            where: {
+                status: 'active',
+                pause_end: { [Op.lte]: todayStr }
+            },
+            transaction: t
+        });
+
+        for (const p of expiredPauses) {
+            await p.update({ status: 'completed' }, { transaction: t });
+            
+            // Standard Subscription Restart
+            if (p.subscription_id) {
+                const subscription = await Subscription.findByPk(p.subscription_id, {
+                    include: [{ model: Package }],
+                    transaction: t
+                });
+                
+                if (subscription && subscription.status === 'paused') {
+                    const remainingServices = subscription.total_services - subscription.services_completed;
+                    const newDates = [];
+
+                    if (remainingServices > 0) {
+                        const gap_days = 30 / subscription.Package.services_per_month;
+                        const startParts = tomorrowStr.split('-').map(Number);
+                        const baseTime = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
+
+                        for (let i = 0; i < remainingServices; i++) {
+                            const dateVal = new Date(baseTime + Math.round(i * gap_days) * 24 * 60 * 60 * 1000);
+                            if (dateVal.getUTCDay() === 0) {
+                                dateVal.setUTCDate(dateVal.getUTCDate() - 1);
+                            }
+                            newDates.push(dateVal.toISOString().split('T')[0]);
+                        }
+                    }
+
+                    const scheduleRows = newDates.map(date => ({ subscription_id: subscription.id, scheduled_date: date, status: 'pending' }));
+                    await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+
+                    const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : subscription.end_date;
+                    await subscription.update({ status: 'active', end_date: new_end_date }, { transaction: t });
+                    console.log(`[CRON] Auto-restarted subscription ${subscription.id} for tomorrow`);
+                }
+            }
+            
+            // Water Subscription Restart
+            if (p.water_subscription_id) {
+                const sub = await WaterSubscription.findByPk(p.water_subscription_id, { transaction: t });
+                if (sub && sub.status === 'paused') {
+                    const remainingServices = sub.total_services - sub.services_completed;
+                    const newDates = [];
+
+                    if (remainingServices > 0) {
+                        const gap_days = sub.frequency === 'daily' ? 1 : 2;
+                        const startParts = tomorrowStr.split('-').map(Number);
+                        const baseTime = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
+
+                        for (let i = 0; i < remainingServices; i++) {
+                            const dateVal = new Date(baseTime + Math.round(i * gap_days) * 24 * 60 * 60 * 1000);
+                            if (dateVal.getUTCDay() === 0) {
+                                dateVal.setUTCDate(dateVal.getUTCDate() - 1);
+                            }
+                            newDates.push(dateVal.toISOString().split('T')[0]);
+                        }
+                    }
+
+                    const scheduleRows = newDates.map(date => ({
+                        water_subscription_id: sub.id,
+                        scheduled_date: date,
+                        status: 'pending'
+                    }));
+                    await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+
+                    const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : sub.end_date;
+                    await sub.update({ status: 'active', end_date: new_end_date }, { transaction: t });
+                    console.log(`[CRON] Auto-restarted water subscription ${sub.id} for tomorrow`);
+                }
+            }
+        }
+
         // Step 1: Find all pending, unlocked schedules for tomorrow
         const schedules = await DeliverySchedule.findAll({
             where: { scheduled_date: tomorrowStr, status: 'pending', is_locked: false },
@@ -73,30 +155,42 @@ const runNightlyJob = async () => {
                     });
 
                     if (userSelectionsCount === 0) {
-                        // Retrieve user's historical selections for this subscription
-                        const pastSchedules = await DeliverySchedule.findAll({
-                            where: { subscription_id: sub.id },
+                        // Retrieve what other users have selected for tomorrow's deliveries
+                        const allTomorrowSchedules = await DeliverySchedule.findAll({
+                            where: { scheduled_date: tomorrowStr },
                             attributes: ['id'],
                             transaction: t
                         });
-                        const pastScheduleIds = pastSchedules.map(ps => ps.id);
+                        const tomorrowScheduleIds = allTomorrowSchedules.map(s => s.id);
 
-                        const pastSelections = await ScheduleSeasonalSelection.findAll({
-                            where: { schedule_id: { [Op.in]: pastScheduleIds } },
+                        const globalSelections = await ScheduleSeasonalSelection.findAll({
+                            where: { schedule_id: { [Op.in]: tomorrowScheduleIds } },
                             attributes: ['product_id'],
                             transaction: t
                         });
 
-                        // Count frequencies
+                        // Count frequencies globally
                         const frequencyMap = {};
-                        pastSelections.forEach(sel => {
+                        globalSelections.forEach(sel => {
                             frequencyMap[sel.product_id] = (frequencyMap[sel.product_id] || 0) + 1;
                         });
 
-                        const sortedProducts = Object.keys(frequencyMap).map(id => ({
-                            product_id: parseInt(id),
-                            frequency: frequencyMap[id]
-                        })).sort((a, b) => b.frequency - a.frequency);
+                        // Get allowed seasonal products for this specific package
+                        const allowedPool = await PackageSeasonalPool.findAll({
+                            where: { package_id: sub.package_id },
+                            attributes: ['product_id'],
+                            transaction: t
+                        });
+                        const allowedProductIds = allowedPool.map(p => p.product_id);
+
+                        // Filter popular products to only those allowed in this package
+                        const sortedProducts = Object.keys(frequencyMap)
+                            .map(id => parseInt(id))
+                            .filter(id => allowedProductIds.includes(id))
+                            .map(id => ({
+                                product_id: id,
+                                frequency: frequencyMap[id]
+                            })).sort((a, b) => b.frequency - a.frequency);
 
                         const maxSelectCount = seasonalConfig.max_select_count || 3;
                         const topProducts = sortedProducts.slice(0, maxSelectCount);

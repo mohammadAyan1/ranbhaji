@@ -114,7 +114,7 @@ export default function MySubscriptions() {
 
   const startResumeFlow = async (sub) => {
     setResumingSub(sub);
-    setSelectedResumeDate("");
+    setSelectedResumeDate(getMinStartDate());
     setResumeMsg("");
     setResumeDates([]);
     try {

@@ -564,6 +564,20 @@ export const restartSubscription = async (req, res) => {
             return res.status(400).json({ success: false, message: "restart_date is required" });
         }
 
+        // Validate restart_date with 8 PM rule
+        const now = new Date();
+        const currentHour = now.getHours();
+        const daysToAdd = currentHour >= 20 ? 2 : 1;
+        
+        const minDate = new Date(now);
+        minDate.setDate(minDate.getDate() + daysToAdd);
+        const minDateStr = minDate.toISOString().split('T')[0];
+
+        if (restart_date < minDateStr) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: `Invalid restart date. Based on the 8 PM cutoff rule, the earliest possible restart date is ${minDateStr}` });
+        }
+
         const subscription = await Subscription.findOne({
             where: { id: req.params.id, user_id: req.user.id },
             include: [{ model: Package }]

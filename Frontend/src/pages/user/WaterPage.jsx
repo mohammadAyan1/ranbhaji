@@ -269,7 +269,7 @@ export default function WaterPage() {
 
   const startResumeFlow = async (sub) => {
     setResumingSub(sub);
-    setSelectedResumeDate("");
+    setSelectedResumeDate(getMinStartDate());
     setResumeMsg("");
     setResumeDates([]);
     try {

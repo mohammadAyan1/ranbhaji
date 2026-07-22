@@ -6,7 +6,8 @@ const UNITS = ["gm", "ml", "piece"];
 
 const emptyForm = {
   name: "", hindi_name: "", category: "vegetable", sub_category: "",
-  purchase_price_input: "", selling_price_input: "", unit: "gm", time: "", image: null
+  purchase_price_input: "", margin_percentage: "", unit: "gm", 
+  soaking_time: "", cleaning_time: "", cutting_time: "", drying_time: "", weighting_time: "", image: null
 };
 
 const showKgToggle = (category, unit) =>
@@ -30,17 +31,19 @@ export default function AdminProducts() {
   // Purchase Entry Form State
   const [demands, setDemands] = useState([]);
   const [completedDemands, setCompletedDemands] = useState([]);
-  
+
   const [purchaseForm, setPurchaseForm] = useState({
     product_id: "",
     quantity: "",
-    total_price: "",
-    selling_price_per_kg: ""
+    total_price: ""
   });
   const [purchaseLogs, setPurchaseLogs] = useState([]);
   const [stockSummary, setStockSummary] = useState([]);
   const [submittingPurchase, setSubmittingPurchase] = useState(false);
   const [selectedDemand, setSelectedDemand] = useState(null);
+
+  // Products awaiting retail price update
+  const [pendingRetailPricing, setPendingRetailPricing] = useState([]);
 
   const fetchProducts = () => {
     api.get("/products").then(r => setProducts(r.data.products || [])).finally(() => setLoading(false));
@@ -84,7 +87,7 @@ export default function AdminProducts() {
       }
       if (field === "category") {
         updated.purchase_price_input = "";
-        updated.selling_price_input = "";
+        updated.margin_percentage = "";
       }
     }
     setForm(updated);
@@ -95,12 +98,14 @@ export default function AdminProducts() {
     e.preventDefault();
     setMsg("");
 
-    const purchaseInput = parseFloat(form.purchase_price_input);
-    const sellingInput = parseFloat(form.selling_price_input);
+    const purchaseInput = parseFloat(form.purchase_price_input) || 0;
+    const marginPercentage = parseFloat(form.margin_percentage) || 0;
 
     const useKg = showKgToggle(form.category, form.unit) && priceUnit === "kg";
     const purchase_price_per_gm = useKg ? purchaseInput / 1000 : purchaseInput;
-    const selling_price_per_gm = useKg ? sellingInput / 1000 : sellingInput;
+
+    // Calculate selling price based on purchase price and margin percentage
+    const selling_price_per_gm = purchase_price_per_gm * (1 + (marginPercentage / 100));
 
     const payload = new FormData();
     payload.append("name", form.name);
@@ -110,7 +115,11 @@ export default function AdminProducts() {
     payload.append("purchase_price_per_gm", purchase_price_per_gm);
     payload.append("selling_price_per_gm", selling_price_per_gm);
     payload.append("unit", form.unit);
-    payload.append("time", form.time || "");
+    payload.append("soaking_time", form.soaking_time || 0);
+    payload.append("cleaning_time", form.cleaning_time || 0);
+    payload.append("cutting_time", form.cutting_time || 0);
+    payload.append("drying_time", form.drying_time || 0);
+    payload.append("weighting_time", form.weighting_time || 0);
     if (form.image) {
       payload.append("image", form.image);
     }
@@ -161,11 +170,15 @@ export default function AdminProducts() {
       purchase_price_input: canUseKg
         ? (parseFloat(p.purchase_price_per_gm) * 1000).toFixed(2)
         : p.purchase_price_per_gm,
-      selling_price_input: canUseKg
-        ? (parseFloat(p.selling_price_per_gm) * 1000).toFixed(2)
-        : p.selling_price_per_gm,
+      margin_percentage: p.selling_price_per_gm && p.purchase_price_per_gm
+        ? (((parseFloat(p.selling_price_per_gm) - parseFloat(p.purchase_price_per_gm)) / parseFloat(p.purchase_price_per_gm)) * 100).toFixed(1)
+        : "",
       unit: unt,
-      time: p.preparation_time || "",
+      soaking_time: p.soaking_time || "",
+      cleaning_time: p.cleaning_time || "",
+      cutting_time: p.cutting_time || "",
+      drying_time: p.drying_time || "",
+      weighting_time: p.weighting_time || "",
       image: null
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -198,20 +211,27 @@ export default function AdminProducts() {
       if (qty > 0) {
         calculated_purchase_price = total / qty;
       }
-      
+
       await api.post("/products/purchase", {
         product_id: parseInt(purchaseForm.product_id),
         quantity: qty,
-        purchase_price_per_kg: calculated_purchase_price,
-        selling_price_per_kg: parseFloat(purchaseForm.selling_price_per_kg) || 0
+        purchase_price_per_kg: calculated_purchase_price
       });
       setMsg("✅ Purchase entry logged and stock updated!");
+
+      const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
+
       setCompletedDemands([...completedDemands, parseInt(purchaseForm.product_id)]);
+      setPendingRetailPricing([...pendingRetailPricing, {
+        product_id: purchaseForm.product_id,
+        name: productObj ? productObj.name : "Unknown",
+        calculated_purchase_price: calculated_purchase_price
+      }]);
+
       setPurchaseForm({
         product_id: "",
         quantity: "",
-        total_price: "",
-        selling_price_per_kg: ""
+        total_price: ""
       });
       fetchStockSummary();
       fetchPurchaseLogs();
@@ -227,17 +247,16 @@ export default function AdminProducts() {
 
   // Live preview values
   const purchaseInput = parseFloat(form.purchase_price_input) || 0;
-  const sellingInput = parseFloat(form.selling_price_input) || 0;
+  const marginPercentage = parseFloat(form.margin_percentage) || 0;
   const useKgMode = showKgToggle(form.category, form.unit) && priceUnit === "kg";
 
   const purchasePerGm = useKgMode ? purchaseInput / 1000 : purchaseInput;
-  const sellingPerGm = useKgMode ? sellingInput / 1000 : sellingInput;
   const purchasePerKg = useKgMode ? purchaseInput : purchaseInput * 1000;
-  const sellingPerKg = useKgMode ? sellingInput : sellingInput * 1000;
 
-  const profit = sellingInput && purchaseInput
-    ? (((sellingPerGm - purchasePerGm) / sellingPerGm) * 100).toFixed(1)
-    : null;
+  const sellingPerGm = purchasePerGm * (1 + marginPercentage / 100);
+  const sellingPerKg = purchasePerKg * (1 + marginPercentage / 100);
+
+  const profit = marginPercentage;
 
   const isWater = form.category === "water";
   const isPiece = form.unit === "piece";
@@ -279,6 +298,7 @@ export default function AdminProducts() {
           {[
             { id: "catalog", label: "Product Catalog", icon: "🥦" },
             { id: "purchase", label: "Log Purchase", icon: "➕" },
+            { id: "retail_pricing", label: "Retail Pricing", icon: "🏷️" },
             { id: "stock", label: "Stock Inventory", icon: "📦" },
             { id: "logs", label: "Purchase Logs", icon: "📋" }
           ].map(tab => (
@@ -376,12 +396,10 @@ export default function AdminProducts() {
                         onClick={() => {
                           if (priceUnit === "kg") {
                             const newPurchase = purchaseInput ? (purchaseInput / 1000).toFixed(4) : "";
-                            const newSelling = sellingInput ? (sellingInput / 1000).toFixed(4) : "";
-                            setForm(f => ({ ...f, purchase_price_input: newPurchase, selling_price_input: newSelling }));
+                            setForm(f => ({ ...f, purchase_price_input: newPurchase }));
                           } else {
                             const newPurchase = purchaseInput ? (purchaseInput * 1000).toFixed(2) : "";
-                            const newSelling = sellingInput ? (sellingInput * 1000).toFixed(2) : "";
-                            setForm(f => ({ ...f, purchase_price_input: newPurchase, selling_price_input: newSelling }));
+                            setForm(f => ({ ...f, purchase_price_input: newPurchase }));
                           }
                           setPriceUnit(p => p === "kg" ? "gm" : "kg");
                         }}
@@ -394,8 +412,7 @@ export default function AdminProducts() {
                         onClick={() => {
                           if (priceUnit === "gm") return;
                           const newPurchase = purchaseInput ? (purchaseInput / 1000).toFixed(4) : "";
-                          const newSelling = sellingInput ? (sellingInput / 1000).toFixed(4) : "";
-                          setForm(f => ({ ...f, purchase_price_input: newPurchase, selling_price_input: newSelling }));
+                          setForm(f => ({ ...f, purchase_price_input: newPurchase }));
                           setPriceUnit("gm");
                         }}
                         className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${priceUnit === "gm" ? "bg-gray-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
@@ -419,16 +436,15 @@ export default function AdminProducts() {
 
               <div>
                 <label className="label">
-                  {isWater ? "Selling Price per Bottle (₹)" : isPiece ? "Selling Price per Piece (₹)" : `Selling ${priceLabel}`}
+                  Retail Margin Percentage (%)
                 </label>
                 <input
                   type="number"
-                  step="0.0001"
-                  min="0"
+                  step="0.1"
                   className="input"
-                  placeholder={useKgMode ? "e.g. 20 (per kg)" : "e.g. 0.020 (per gm)"}
-                  value={form.selling_price_input}
-                  onChange={e => handleFormChange("selling_price_input", e.target.value)}
+                  placeholder="e.g. 10 (for 10% margin)"
+                  value={form.margin_percentage}
+                  onChange={e => handleFormChange("margin_percentage", e.target.value)}
                   required
                 />
               </div>
@@ -440,17 +456,33 @@ export default function AdminProducts() {
                 </select>
               </div>
 
-              <div>
-                <label className="label">Time (min) (e.g. 0.9 = 54s)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="input"
-                  placeholder="e.g. 75 or 0.9"
-                  value={form.time}
-                  onChange={e => handleFormChange("time", e.target.value)}
-                />
+              {/* Time Fields */}
+              <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-5 gap-4 pt-2 pb-2 border-y border-gray-100 mt-2">
+                <div>
+                  <label className="label text-[11px] mb-1">Soaking (min/100g)</label>
+                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                    value={form.soaking_time} onChange={e => handleFormChange("soaking_time", e.target.value)} />
+                </div>
+                <div>
+                  <label className="label text-[11px] mb-1">Cleaning (min/100g)</label>
+                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 5"
+                    value={form.cleaning_time} onChange={e => handleFormChange("cleaning_time", e.target.value)} />
+                </div>
+                <div>
+                  <label className="label text-[11px] mb-1">Cutting (min/100g)</label>
+                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 15"
+                    value={form.cutting_time} onChange={e => handleFormChange("cutting_time", e.target.value)} />
+                </div>
+                <div>
+                  <label className="label text-[11px] mb-1">Drying (min/100g)</label>
+                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                    value={form.drying_time} onChange={e => handleFormChange("drying_time", e.target.value)} />
+                </div>
+                <div>
+                  <label className="label text-[11px] mb-1">Weighting (min/100g)</label>
+                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
+                    value={form.weighting_time} onChange={e => handleFormChange("weighting_time", e.target.value)} />
+                </div>
               </div>
 
               <div className="md:col-span-2 lg:col-span-3 flex flex-wrap items-center gap-4 pt-3">
@@ -518,9 +550,9 @@ export default function AdminProducts() {
                       <tr key={p.id} className="table-row">
                         <td className="p-3">
                           {p.image_url ? (
-                            <img 
-                              src={`${import.meta.env.VITE_API_URL}${p.image_url}`} 
-                              alt={p.name} 
+                            <img
+                              src={`${import.meta.env.VITE_API_URL}${p.image_url}`}
+                              alt={p.name}
                               className="w-10 h-10 object-cover rounded-lg border border-gray-300 bg-gray-100"
                             />
                           ) : (
@@ -593,29 +625,29 @@ export default function AdminProducts() {
                   const isGm = d.unit === 'gm' || d.unit === 'ml';
                   const displayQty = isGm ? totalQty / 1000 : totalQty;
                   const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : 'pcs';
-                  
+
                   return (
                     <tr key={d.id} className="table-row">
                       <td className="p-3 text-gray-900 font-medium">{d.name}</td>
-                      <td 
-                        className="p-3 text-right font-bold text-blue-400 cursor-pointer hover:underline hover:text-blue-500 transition-colors" 
+                      <td
+                        className="p-3 text-right font-bold text-blue-400 cursor-pointer hover:underline hover:text-blue-500 transition-colors"
                         title="Click to view demand breakdown"
                         onClick={() => setSelectedDemand(d)}
                       >
                         {displayQty} {displayUnit}
                       </td>
                       <td className="p-3 text-right">
-                        <button 
+                        <button
                           onClick={() => {
                             const matchingProduct = products.find(p => p.id === d.id);
                             const sellingPrice = matchingProduct ? (isGm ? matchingProduct.selling_price_per_gm * 1000 : matchingProduct.selling_price_per_gm) : "";
-                            setPurchaseForm({ 
-                              product_id: d.id, 
-                              quantity: displayQty, 
-                              total_price: "", 
+                            setPurchaseForm({
+                              product_id: d.id,
+                              quantity: displayQty,
+                              total_price: "",
                               selling_price_per_kg: sellingPrice || ""
                             });
-                          }} 
+                          }}
                           className="btn-primary py-1 px-3 text-xs"
                         >
                           Submit Purchase
@@ -641,7 +673,7 @@ export default function AdminProducts() {
                     <h4 className="font-bold text-lg text-gray-900">Log Purchase</h4>
                     <p className="text-sm text-gray-500">{demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}</p>
                   </div>
-                  <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
+                  <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
                 </div>
                 <div className="p-6 overflow-y-auto">
                   <form onSubmit={handlePurchaseSubmit} className="space-y-4">
@@ -680,22 +712,6 @@ export default function AdminProducts() {
                         />
                       </div>
 
-                      {/* Selling Price per Kg */}
-                      <div>
-                        <label className="label">
-                          Selling Price ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'per pc' : 'per kg/L') : 'per kg'})
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="e.g. 15"
-                          className="input"
-                          value={purchaseForm.selling_price_per_kg}
-                          onChange={e => setPurchaseForm({ ...purchaseForm, selling_price_per_kg: e.target.value })}
-                          required
-                        />
-                      </div>
                     </div>
 
                     {/* Auto Calculated Per Kg Live Preview */}
@@ -709,7 +725,7 @@ export default function AdminProducts() {
                     )}
 
                     <div className="pt-4 border-t border-gray-200 mt-6 flex flex-col sm:flex-row justify-end gap-3">
-                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "", selling_price_per_kg: "" })} className="px-5 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors w-full sm:w-auto">Cancel</button>
+                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="px-5 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors w-full sm:w-auto">Cancel</button>
                       <button
                         type="submit"
                         disabled={submittingPurchase}
@@ -723,6 +739,85 @@ export default function AdminProducts() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ─── TAB: RETAIL PRICING ───────────────────────────────── */}
+      {activeTab === "retail_pricing" && (
+        <div className="card">
+          <h3 className="font-semibold text-gray-900 mb-4">Set Retail Pricing</h3>
+          <p className="text-gray-600 text-xs mb-6">
+            Enter the retail margin percentage for products whose purchase logs were recently added.
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="table-header">
+                  <th className="text-left p-3 rounded-tl-xl">Product Name</th>
+                  <th className="text-right p-3">Cost Price (₹)</th>
+                  <th className="text-center p-3">Margin Percentage (%)</th>
+                  <th className="text-right p-3">Calculated Retail Price</th>
+                  <th className="text-center p-3 rounded-tr-xl">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRetailPricing.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="text-center py-6 text-gray-500">No pending retail pricing tasks.</td>
+                  </tr>
+                ) : (
+                  pendingRetailPricing.map((item, idx) => {
+                    const margin = parseFloat(item.margin_percentage) || 0;
+                    const retailPrice = item.calculated_purchase_price * (1 + margin / 100);
+                    return (
+                      <tr key={idx} className="table-row">
+                        <td className="p-3 font-medium text-gray-900">{item.name}</td>
+                        <td className="p-3 text-right">₹{item.calculated_purchase_price.toFixed(2)}</td>
+                        <td className="p-3 text-center">
+                          <input
+                            type="number"
+                            step="0.1"
+                            className="input w-24 mx-auto text-center"
+                            placeholder="%"
+                            value={item.margin_percentage || ""}
+                            onChange={e => {
+                              const newArr = [...pendingRetailPricing];
+                              newArr[idx].margin_percentage = e.target.value;
+                              setPendingRetailPricing(newArr);
+                            }}
+                          />
+                        </td>
+                        <td className="p-3 text-right font-bold text-fresh-600">
+                          ₹{retailPrice.toFixed(2)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={async () => {
+                              try {
+                                await api.put(`/products/${item.product_id}/retail-price`, {
+                                  markup_percentage: margin
+                                });
+                                setMsg(`✅ Retail price set for ${item.name}`);
+                                setPendingRetailPricing(pendingRetailPricing.filter((_, i) => i !== idx));
+                                fetchProducts();
+                              } catch (err) {
+                                setMsg(`❌ Failed to update retail price: ${err.response?.data?.message || err.message}`);
+                              }
+                            }}
+                            className="btn-primary py-1 px-3 text-xs"
+                            disabled={!item.margin_percentage}
+                          >
+                            Set Price
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -844,14 +939,14 @@ export default function AdminProducts() {
                 <h3 className="font-bold text-lg text-gray-900">Demand Breakdown</h3>
                 <p className="text-sm text-gray-500">{selectedDemand.name}</p>
               </div>
-              <button 
-                onClick={() => setSelectedDemand(null)} 
+              <button
+                onClick={() => setSelectedDemand(null)}
                 className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500"
               >
                 ✕
               </button>
             </div>
-            
+
             <div className="p-5 max-h-[60vh] overflow-y-auto space-y-6">
               {/* Package Demands */}
               {selectedDemand.package_details && selectedDemand.package_details.length > 0 && (
@@ -864,8 +959,8 @@ export default function AdminProducts() {
                     {selectedDemand.package_details.map((detail, idx) => {
                       const qtyVal = parseFloat(detail.qty);
                       const isGm = selectedDemand.unit === 'gm' || selectedDemand.unit === 'ml';
-                      const dispQty = isGm && qtyVal >= 1000 ? `${(qtyVal/1000).toFixed(1)} ${selectedDemand.unit === 'gm' ? 'kg' : 'L'}` : `${qtyVal} ${selectedDemand.unit === 'piece' ? 'pcs' : selectedDemand.unit}`;
-                      
+                      const dispQty = isGm && qtyVal >= 1000 ? `${(qtyVal / 1000).toFixed(1)} ${selectedDemand.unit === 'gm' ? 'kg' : 'L'}` : `${qtyVal} ${selectedDemand.unit === 'piece' ? 'pcs' : selectedDemand.unit}`;
+
                       return (
                         <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                           <div className="flex justify-between items-center mb-2">
@@ -900,8 +995,8 @@ export default function AdminProducts() {
                     {selectedDemand.retail_details.map((detail, idx) => {
                       const qtyVal = parseFloat(detail.qty);
                       const isGm = selectedDemand.unit === 'gm' || selectedDemand.unit === 'ml';
-                      const dispQty = isGm && qtyVal >= 1000 ? `${(qtyVal/1000).toFixed(1)} ${selectedDemand.unit === 'gm' ? 'kg' : 'L'}` : `${qtyVal} ${selectedDemand.unit === 'piece' ? 'pcs' : selectedDemand.unit}`;
-                      
+                      const dispQty = isGm && qtyVal >= 1000 ? `${(qtyVal / 1000).toFixed(1)} ${selectedDemand.unit === 'gm' ? 'kg' : 'L'}` : `${qtyVal} ${selectedDemand.unit === 'piece' ? 'pcs' : selectedDemand.unit}`;
+
                       return (
                         <div key={idx} className="bg-purple-50 p-3 rounded-lg border border-purple-100">
                           <div className="flex justify-between items-center mb-2">

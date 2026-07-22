@@ -6,7 +6,7 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, D
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, time } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time } = req.body;
         if (!name || !category || !purchase_price_per_gm || !selling_price_per_gm || !unit) {
             return res.status(400).json({ success: false, message: "name, category, purchase_price_per_gm, selling_price_per_gm and unit are required" });
         }
@@ -17,7 +17,12 @@ export const createProduct = async (req, res) => {
         }
 
         const product = await Product.create({ 
-            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, preparation_time: time 
+            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, 
+            soaking_time: soaking_time || 0,
+            cleaning_time: cleaning_time || 0,
+            cutting_time: cutting_time || 0,
+            drying_time: drying_time || 0,
+            weighting_time: weighting_time || 0
         });
         res.status(201).json({ success: true, product });
     } catch (error) {
@@ -59,11 +64,6 @@ export const updateProduct = async (req, res) => {
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
 
         const updateData = { ...req.body };
-        
-        if (updateData.time !== undefined) {
-            updateData.preparation_time = updateData.time;
-            delete updateData.time;
-        }
         if (req.file) {
             // New image uploaded, set new image url
             updateData.image_url = `/uploads/${req.file.filename}`;
@@ -101,9 +101,9 @@ export const createPurchase = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { product_id, quantity, purchase_price_per_kg, selling_price_per_kg } = req.body;
-        if (!product_id || !quantity || !purchase_price_per_kg || !selling_price_per_kg) {
+        if (!product_id || !quantity || !purchase_price_per_kg) {
             await t.rollback();
-            return res.status(400).json({ success: false, message: "product_id, quantity, purchase_price_per_kg, and selling_price_per_kg are required" });
+            return res.status(400).json({ success: false, message: "product_id, quantity, and purchase_price_per_kg are required" });
         }
 
         const product = await Product.findByPk(product_id, { transaction: t });
@@ -114,7 +114,7 @@ export const createPurchase = async (req, res) => {
 
         const qtyVal = parseFloat(quantity);
         const purchasePricePerKg = parseFloat(purchase_price_per_kg);
-        const sellingPricePerKg = parseFloat(selling_price_per_kg);
+        const sellingPricePerKg = selling_price_per_kg ? parseFloat(selling_price_per_kg) : null;
 
         let baseQty = qtyVal;
         if (product.unit === 'gm') {
@@ -126,23 +126,26 @@ export const createPurchase = async (req, res) => {
         const totalAmount = qtyVal * purchasePricePerKg;
         const currentStock = parseFloat(product.current_stock || 0);
         
-        const isPiece = product.unit === 'piece';
-        const newSellingPricePerGm = sellingPricePerKg / (isPiece ? 1 : 1000);
-
         const updatedTotalPurchased = parseFloat(product.total_purchased_qty || 0) + baseQty;
         const updatedCurrentStock = currentStock + baseQty;
-
-        await product.update({
-            selling_price_per_gm: newSellingPricePerGm,
+        
+        const updateData = {
             total_purchased_qty: updatedTotalPurchased,
             current_stock: updatedCurrentStock
-        }, { transaction: t });
+        };
+
+        if (sellingPricePerKg !== null) {
+            const isPiece = product.unit === 'piece';
+            updateData.selling_price_per_gm = sellingPricePerKg / (isPiece ? 1 : 1000);
+        }
+
+        await product.update(updateData, { transaction: t });
 
         const log = await PurchaseLog.create({
             product_id,
             quantity: baseQty,
             purchase_price_per_kg: purchasePricePerKg,
-            selling_price_per_kg: sellingPricePerKg,
+            selling_price_per_kg: sellingPricePerKg || 0,
             total_amount: totalAmount
         }, { transaction: t });
 
@@ -274,6 +277,37 @@ export const getProductSales = async (req, res) => {
         res.status(200).json({ success: true, data: salesData });
     } catch (error) {
         console.error("Error in getProductSales:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/products/:id/retail-price
+export const updateRetailPrice = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { markup_percentage } = req.body;
+
+        if (markup_percentage === undefined) {
+            return res.status(400).json({ success: false, message: "markup_percentage is required" });
+        }
+
+        const product = await Product.findByPk(id);
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+
+        const percentage = parseFloat(markup_percentage);
+        const purchasePrice = parseFloat(product.purchase_price_per_gm || 0);
+
+        // calculate new selling price
+        const newSellingPrice = purchasePrice * (1 + (percentage / 100));
+
+        await product.update({
+            selling_price_per_gm: newSellingPrice
+        });
+
+        res.status(200).json({ success: true, message: "Retail price updated successfully", product });
+    } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };

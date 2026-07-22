@@ -1,5 +1,5 @@
 import express from "express";
-import { createProduct, getProducts, updateProduct, deleteProduct, createPurchase, getPurchases, getStockSummary, getProductSales } from "../controllers/product.controller.js";
+import { createProduct, getProducts, updateProduct, deleteProduct, createPurchase, getPurchases, getStockSummary, getProductSales, updateRetailPrice } from "../controllers/product.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
 
@@ -8,6 +8,7 @@ const router = express.Router();
 router.get("/", requireAuth, getProducts);
 router.post("/", requireAuth, requireRole(["admin"]), upload.single("image"), createProduct);
 router.put("/:id", requireAuth, requireRole(["admin"]), upload.single("image"), updateProduct);
+router.put("/:id/retail-price", requireAuth, requireRole(["admin"]), updateRetailPrice);
 router.delete("/:id", requireAuth, requireRole(["admin"]), deleteProduct);
 
 // Purchase & Stock routes

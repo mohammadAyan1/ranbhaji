@@ -35,7 +35,11 @@ const Product = sequelize.define('Product', {
   total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   current_stock: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-  preparation_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true } // time in minutes (decimals for seconds)
+  soaking_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
+  cleaning_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
+  cutting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
+  drying_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
+  weighting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 } // time in minutes per 100gm
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 3. PACKAGES
@@ -324,7 +328,7 @@ const PurchaseLog = sequelize.define('PurchaseLog', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   quantity: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
   purchase_price_per_kg: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-  selling_price_per_kg: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  selling_price_per_kg: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   total_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   purchase_date: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
 }, { tableName: 'purchase_logs', timestamps: false });
