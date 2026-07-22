@@ -59,7 +59,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Routes */}
-        {/* <Route path="/" element={<Landing />} /> */}
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
         <Route path="/verify-otp" element={<PublicRoute><VerifyOTPPage /></PublicRoute>} />
