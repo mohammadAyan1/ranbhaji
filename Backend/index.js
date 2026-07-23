@@ -27,7 +27,7 @@ import retailRoutes from "./routes/retail.route.js";
 import batchRoutes from "./routes/batch.route.js";
 import userAnalyticsRoutes from "./routes/userAnalytics.route.js";
 import dashboardRoutes from "./routes/dashboard.route.js";
-
+import unitRoutes from "./routes/unit.routes.js";
 
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
@@ -84,6 +84,7 @@ app.use("/api/retail", retailRoutes);
 app.use("/api", batchRoutes);
 app.use("/api/admin/user-analytics", userAnalyticsRoutes);
 app.use("/api/admin", dashboardRoutes);
+app.use("/api/units", unitRoutes);
 
 
 // 404 fallback

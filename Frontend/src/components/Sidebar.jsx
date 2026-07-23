@@ -3,12 +3,13 @@ import useAuthStore from "../store/authStore";
 import { 
   LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin, 
   Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator, 
-  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale
 } from "lucide-react";
 
 const adminLinks = [
   { to: "/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
   { to: "/admin/products", label: "Products", icon: <ShoppingBag size={20} /> },
+  { to: "/admin/units", label: "Units Management", icon: <Scale size={20} /> },
   { to: "/admin/packages", label: "Packages", icon: <Package size={20} /> },
   { to: "/admin/subscriptions", label: "Subscriptions", icon: <RefreshCw size={20} /> },
   { to: "/admin/users", label: "Users", icon: <Users size={20} /> },

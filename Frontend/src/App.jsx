@@ -41,6 +41,7 @@ import AdminAllOrders from "./pages/admin/AdminAllOrders";
 import AdminMissedProducts from "./pages/admin/AdminMissedProducts";
 import AdminProductSales from "./pages/admin/AdminProductSales";
 import AdminUserHistory from "./pages/admin/AdminUserHistory";
+import AdminUnits from "./pages/admin/AdminUnits";
 import AdminReverseCalculator from "./pages/admin/AdminReverseCalculator";
 import Landing from "./pages/Landing/Landing";
 
@@ -108,6 +109,7 @@ function App() {
           <Route path="/admin/all-orders" element={<AdminAllOrders />} />
           <Route path="/admin/missed-products" element={<AdminMissedProducts />} />
           <Route path="/admin/product-sales" element={<AdminProductSales />} />
+          <Route path="/admin/units" element={<AdminUnits />} />
         </Route>
 
         {/* 🚚 DELIVERY Routes 🚚 */}

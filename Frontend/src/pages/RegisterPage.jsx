@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ name: "", phone: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", password: "", gender: "male" });
   const [error, setError] = useState("");
   const { register, isLoading } = useAuthStore();
   const navigate = useNavigate();
@@ -55,6 +55,14 @@ export default function RegisterPage() {
             <div>
               <label className="label">Password</label>
               <input id="reg-password" type="password" className="input" placeholder="••••••••" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
+            </div>
+            <div>
+              <label className="label">Gender</label>
+              <select id="reg-gender" className="input" value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
             </div>
             <button type="submit" id="register-btn" disabled={isLoading} className="btn-primary w-full mt-2">
               {isLoading ? "Creating account..." : "Create Account"}

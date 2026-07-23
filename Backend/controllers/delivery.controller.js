@@ -491,20 +491,20 @@ export const markDelivered = async (req, res) => {
             });
             let nextDateStr = new Date().toISOString().split('T')[0];
             if (lastSchedule) {
-                 const gap_days = 30 / sub.Package.services_per_month;
-                 const d = new Date(lastSchedule.scheduled_date);
-                 d.setDate(d.getDate() + Math.round(gap_days));
-                 if (d.getDay() === 0) d.setDate(d.getDate() - 1);
-                 nextDateStr = d.toISOString().split('T')[0];
+                const gap_days = 30 / sub.Package.services_per_month;
+                const d = new Date(lastSchedule.scheduled_date);
+                d.setDate(d.getDate() + Math.round(gap_days));
+                if (d.getDay() === 0) d.setDate(d.getDate() - 1);
+                nextDateStr = d.toISOString().split('T')[0];
             }
             await DeliverySchedule.create({
                 subscription_id: sub.id,
                 scheduled_date: nextDateStr,
                 status: 'pending'
             }, { transaction: t });
-            
+
             await sub.update({ postpaid_serving_given: true, end_date: nextDateStr }, { transaction: t });
-            
+
             const cost = parseFloat(sub.locked_price || sub.Package.price) / sub.Package.services_per_month;
             const userForDebt = await User.findByPk(sub.user_id, { transaction: t });
             await userForDebt.update({ postpaid_debt: parseFloat(userForDebt.postpaid_debt) + cost }, { transaction: t });
@@ -812,7 +812,7 @@ export const getCompletedDeliveries = async (req, res) => {
         // Enrich with MissedProductLogs
         const userIds = deliveriesData.map(d => d.subscription_id ? d.Subscription?.user_id : null).filter(Boolean);
         const dates = deliveriesData.map(d => d.scheduled_date);
-        
+
         if (userIds.length > 0 && dates.length > 0) {
             const missedLogs = await MissedProductLog.findAll({
                 where: {
@@ -857,8 +857,8 @@ export const getReturns = async (req, res) => {
         } else if (all_time === 'true') {
             // no date filter
         } else if (from_date && to_date) {
-            scheduleWhere.actual_delivery_date = { 
-                [Op.between]: [`${from_date}`, `${to_date}`] 
+            scheduleWhere.actual_delivery_date = {
+                [Op.between]: [`${from_date}`, `${to_date}`]
             };
         } else {
             const todayStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
@@ -894,7 +894,7 @@ export const getReturns = async (req, res) => {
         // Enrich with next_schedule_date
         const userIds = returnsData.map(r => r.DeliverySchedule?.Subscription?.user_id).filter(Boolean);
         const dates = returnsData.map(r => r.DeliverySchedule?.scheduled_date).filter(Boolean);
-        
+
         if (userIds.length > 0 && dates.length > 0) {
             const missedLogs = await MissedProductLog.findAll({
                 where: {
@@ -1503,7 +1503,9 @@ export const getAllOrdersForDate = async (req, res) => {
                 unit: i.unit,
                 packageQty: i.packageQty,
                 retailQty: i.retailQty,
-                totalQty: i.packageQty + i.retailQty
+                totalQty: i.packageQty + i.retailQty,
+                missedQty: i.missedQty,
+                returnedQty: i.returnedQty
             }));
 
             const addresses = Object.values(u.addressesMap).map(a => ({
@@ -1521,7 +1523,9 @@ export const getAllOrdersForDate = async (req, res) => {
                     retailQty: i.retailQty,
                     totalQty: i.packageQty + i.retailQty,
                     packedQty: i.isPackedSet ? i.packedQty : (i.packageQty + i.retailQty),
-                    isPackedSet: i.isPackedSet
+                    isPackedSet: i.isPackedSet,
+                    missedQty: i.missedQty,
+                    returnedQty: i.returnedQty
                 }))
             }));
 
@@ -1724,14 +1728,14 @@ export const packOrders = async (req, res) => {
                     let deliveryBoys = await User.findAll({
                         where: { role: 'delivery', status: 'active' }
                     });
-                    
+
                     // Sort manually by last_assigned_at ASC, treating null as very old date
                     deliveryBoys.sort((a, b) => {
                         const aTime = a.last_assigned_at ? new Date(a.last_assigned_at).getTime() : 0;
                         const bTime = b.last_assigned_at ? new Date(b.last_assigned_at).getTime() : 0;
                         return aTime - bTime;
                     });
-                    
+
                     const matchedBoy = deliveryBoys.find(boy => {
                         try {
                             const zones = typeof boy.delivery_zones === 'string' ? JSON.parse(boy.delivery_zones) : boy.delivery_zones;
@@ -1798,7 +1802,7 @@ export const getAvailableOrders = async (req, res) => {
         for (const schedule of schedules) {
             const userId = schedule.Subscription?.User?.id;
             if (!userId) continue;
-            
+
             if (!groupedSchedulesMap[userId]) {
                 groupedSchedulesMap[userId] = schedule.toJSON();
                 // Ensure DeliveryItems is an array we can push to
@@ -1810,7 +1814,7 @@ export const getAvailableOrders = async (req, res) => {
                 }
             }
         }
-        
+
         const groupedSchedules = Object.values(groupedSchedulesMap);
 
         // Fetch retail orders ready for delivery without a delivery boy
@@ -1915,7 +1919,7 @@ export const getDeliveryBoyHistory = async (req, res) => {
             const today = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
             const [m, d, y] = today.split('/');
             const dateStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-            
+
             whereClause.actual_delivery_date = dateStr;
             retailWhereClause.actual_delivery_date = dateStr;
         }
@@ -1947,7 +1951,7 @@ export const getDeliveryBoyHistory = async (req, res) => {
         // Enrich with MissedProductLogs
         const userIds = schedulesData.map(s => s.subscription_id ? s.Subscription?.user_id : null).filter(Boolean);
         const dates = schedulesData.map(s => s.scheduled_date);
-        
+
         if (userIds.length > 0 && dates.length > 0) {
             const missedLogs = await MissedProductLog.findAll({
                 where: {
@@ -1984,7 +1988,7 @@ export const adminReturnItem = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { delivery_item_id, return_qty, return_reason } = req.body;
-        
+
         const item = await DeliveryItem.findByPk(delivery_item_id, {
             include: [{
                 model: DeliverySchedule,
@@ -2043,7 +2047,7 @@ export const adminReturnItem = async (req, res) => {
             scheduled_at: new Date()
         }, { transaction: t });
 
-        await item.update({ 
+        await item.update({
             return_status: 'approved',
             return_qty: requestedQty,
             return_reason: return_reason || "Admin initiated return",
@@ -2113,7 +2117,7 @@ export const boyReturnItem = async (req, res) => {
             await t.rollback();
             return res.status(400).json({ success: false, message: "Image is required for return" });
         }
-        
+
         const item = await DeliveryItem.findByPk(delivery_item_id, {
             include: [{
                 model: DeliverySchedule,
@@ -2178,7 +2182,7 @@ export const boyReturnItem = async (req, res) => {
             scheduled_at: new Date()
         }, { transaction: t });
 
-        await item.update({ 
+        await item.update({
             return_status: 'approved',
             return_qty: requestedQty,
             return_reason: return_reason || "Delivery Boy initiated return",
@@ -2263,7 +2267,7 @@ export const adminReturnOrder = async (req, res) => {
                     current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
                     total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
                 }, { transaction: t });
-                await item.update({ 
+                await item.update({
                     return_status: 'approved',
                     return_qty: item.qty_gm,
                     return_reason: return_reason || 'Admin returned entire order',
@@ -2344,7 +2348,7 @@ export const boyReturnOrder = async (req, res) => {
                     current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
                     total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
                 }, { transaction: t });
-                await item.update({ 
+                await item.update({
                     return_status: 'approved',
                     return_qty: item.qty_gm,
                     return_reason: return_reason || 'Delivery Boy returned entire order',

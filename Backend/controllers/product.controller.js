@@ -6,9 +6,9 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, D
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time } = req.body;
-        if (!name || !category || !purchase_price_per_gm || !selling_price_per_gm || !unit) {
-            return res.status(400).json({ success: false, message: "name, category, purchase_price_per_gm, selling_price_per_gm and unit are required" });
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time } = req.body;
+        if (!name || !category || !purchase_price_per_gm || !selling_price_per_gm || (!unit && !unit_id)) {
+            return res.status(400).json({ success: false, message: "name, category, purchase_price_per_gm, selling_price_per_gm and unit/unit_id are required" });
         }
         
         let image_url = null;
@@ -17,7 +17,8 @@ export const createProduct = async (req, res) => {
         }
 
         const product = await Product.create({ 
-            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, 
+            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description,
+            min_retail_qty: min_retail_qty || 0,
             soaking_time: soaking_time || 0,
             cleaning_time: cleaning_time || 0,
             cutting_time: cutting_time || 0,

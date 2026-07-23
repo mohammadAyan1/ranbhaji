@@ -83,10 +83,10 @@ export const subscribe = async (req, res) => {
             order: [['created_at', 'DESC']],
             transaction: t
         });
-        
+
         let renewal_count = 1;
         let locked_price = amount;
-        
+
         if (oldSub) {
             let isEligible = false;
             if (oldSub.status === 'active' || oldSub.status === 'paused') {
@@ -104,10 +104,10 @@ export const subscribe = async (req, res) => {
                 locked_price = parseFloat(oldSub.locked_price || oldSub.Package?.price || pkg.price);
                 if (renewal_count >= 3) {
                     if (type === 'yearly') {
-                         amount = locked_price * 12 * 0.75;
-                         yearly_amount_paid = amount;
+                        amount = locked_price * 12 * 0.75;
+                        yearly_amount_paid = amount;
                     } else {
-                         amount = locked_price;
+                        amount = locked_price;
                     }
                 }
             }
@@ -568,7 +568,7 @@ export const restartSubscription = async (req, res) => {
         const now = new Date();
         const currentHour = now.getHours();
         const daysToAdd = currentHour >= 20 ? 2 : 1;
-        
+
         const minDate = new Date(now);
         minDate.setDate(minDate.getDate() + daysToAdd);
         const minDateStr = minDate.toISOString().split('T')[0];
@@ -878,13 +878,13 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: SubscriptionItem,
                     as: 'Items',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }]
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }] }
                     ]
                 }
             ]
@@ -935,12 +935,12 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: ScheduleSeasonalSelection,
                     as: 'SeasonalSelections',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'hindi_name'] }]
                 },
                 {
                     model: DeliveryItem,
                     as: 'DeliveryItems',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'hindi_name'] }]
                 }
             ]
         });
@@ -953,7 +953,7 @@ export const getUpcomingSelections = async (req, res) => {
                 next_schedule_date: { [Op.in]: scheduleDates }
             }
         });
-        
+
         const returnedLogs = await ReturnedProductLog.findAll({
             where: {
                 user_id: req.user.id,
@@ -971,10 +971,10 @@ export const getUpcomingSelections = async (req, res) => {
             cutoffTime.setHours(20, 0, 0, 0); // 8:00 PM the day before
 
             const isWindowOpen = now < cutoffTime;
-            
+
             // Merge selections and delivery items (carry overs)
             let finalSelections = (s.SeasonalSelections || []).map(sel => sel.toJSON());
-            
+
             // Add or update from MissedLogs (carry overs)
             const myLogs = missedLogs.filter(l => l.next_schedule_date === s.scheduled_date);
             myLogs.forEach(log => {
@@ -1148,7 +1148,7 @@ export const saveScheduleSeasonal = async (req, res) => {
         const activeSelectionsCount = inputSeasonalItems.filter(item => parseFloat(item.qty_gm) > 0).length;
         const removedFixedCount = inputFixedItems.filter(item => parseFloat(item.qty_gm) === 0).length;
         const effectiveMaxCount = maxCount ? maxCount + removedFixedCount : undefined;
-        
+
         if (effectiveMaxCount && activeSelectionsCount > effectiveMaxCount) {
             await t.rollback();
             return res.status(400).json({ success: false, message: `You can select a maximum of ${effectiveMaxCount} seasonal items.` });
@@ -1364,7 +1364,7 @@ export const renewPackageByAdmin = async (req, res) => {
                 amount = parseFloat(pkg.price);
             }
         }
-        
+
         if (type === 'yearly') {
             yearly_amount_paid = amount;
             total_services = pkg.services_per_month * 12;

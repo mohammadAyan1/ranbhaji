@@ -8,6 +8,7 @@ const User = sequelize.define('User', {
   phone: { type: DataTypes.STRING(15), unique: true },
   email: { type: DataTypes.STRING(100), unique: true },
   password_hash: { type: DataTypes.STRING(255) },
+  gender: { type: DataTypes.ENUM('male', 'female', 'other'), allowNull: true },
   role: { type: DataTypes.ENUM('admin', 'user', 'delivery'), defaultValue: 'user' },
   wallet_balance: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   due_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
@@ -20,6 +21,14 @@ const User = sequelize.define('User', {
   last_assigned_at: { type: DataTypes.DATE, allowNull: true }
 }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
+// 1.5. UNITS
+const Unit = sequelize.define('Unit', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(50), allowNull: false },
+  abbreviation: { type: DataTypes.STRING(20), allowNull: false },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+}, { tableName: 'units', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
 // 2. PRODUCTS
 const Product = sequelize.define('Product', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -28,9 +37,12 @@ const Product = sequelize.define('Product', {
   image_url: { type: DataTypes.STRING(255), allowNull: true },
   category: { type: DataTypes.ENUM('vegetable', 'fruit', 'water', 'exotic', 'salad') },
   sub_category: { type: DataTypes.STRING(50) },
+  description: { type: DataTypes.TEXT, allowNull: true },
   purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
   selling_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
-  unit: { type: DataTypes.ENUM('gm', 'ml', 'piece') },
+  unit: { type: DataTypes.STRING(20), allowNull: true }, // keeping as string for backward compatibility during migration
+  unit_id: { type: DataTypes.INTEGER, allowNull: true },
+  min_retail_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
   total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
@@ -217,6 +229,10 @@ const PaymentTransaction = sequelize.define('PaymentTransaction', {
 
 
 // Define Associations
+
+// Units -> Products
+Product.belongsTo(Unit, { foreignKey: 'unit_id', as: 'UnitInfo' });
+Unit.hasMany(Product, { foreignKey: 'unit_id', as: 'Products' });
 
 // Packages -> target_user_id
 Package.belongsTo(User, { as: 'TargetUser', foreignKey: 'target_user_id' });
@@ -414,6 +430,7 @@ Product.hasMany(ReturnedProductLog, { foreignKey: 'product_id' });
 export {
   sequelize,
   User,
+  Unit,
   Product,
   Package,
   PackageFixedItem,

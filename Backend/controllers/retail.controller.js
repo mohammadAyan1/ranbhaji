@@ -25,6 +25,13 @@ export const createRetailOrder = async (req, res) => {
             }
 
             const qtyVal = parseFloat(item.quantity);
+            const minQty = parseFloat(product.min_retail_qty || 0);
+
+            if (qtyVal < minQty) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: `Minimum quantity for ${product.name} is ${minQty}` });
+            }
+
             let baseQty = qtyVal;
             if (product.unit === 'gm' || product.unit === 'ml') {
                 baseQty = qtyVal * 1000;

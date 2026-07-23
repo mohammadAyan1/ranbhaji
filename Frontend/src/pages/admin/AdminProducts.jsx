@@ -6,7 +6,8 @@ const UNITS = ["gm", "ml", "piece"];
 
 const emptyForm = {
   name: "", hindi_name: "", category: "vegetable", sub_category: "",
-  purchase_price_input: "", margin_percentage: "", unit: "gm", 
+  purchase_price_input: "", margin_percentage: "", unit: "gm", unit_id: "",
+  description: "", min_retail_qty: "",
   soaking_time: "", cleaning_time: "", cutting_time: "", drying_time: "", weighting_time: "", image: null
 };
 
@@ -21,6 +22,7 @@ export default function AdminProducts() {
   const [msg, setMsg] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [priceUnit, setPriceUnit] = useState("kg");
+  const [unitsList, setUnitsList] = useState([]);
 
   // Tabs: "catalog" | "purchase" | "stock" | "logs"
   const [activeTab, setActiveTab] = useState(() => {
@@ -49,6 +51,24 @@ export default function AdminProducts() {
     api.get("/products").then(r => setProducts(r.data.products || [])).finally(() => setLoading(false));
   };
 
+  const fetchUnits = () => {
+    api.get("/units").then(r => {
+      const activeUnits = r.data.units || [];
+      setUnitsList(activeUnits);
+      if (activeUnits.length > 0) {
+        // Find default unit 'gm' if possible, else first one
+        const gmUnit = activeUnits.find(u => u.abbreviation === 'gm');
+        if (gmUnit) {
+          emptyForm.unit = gmUnit.abbreviation;
+          emptyForm.unit_id = gmUnit.id;
+        } else {
+          emptyForm.unit = activeUnits[0].abbreviation;
+          emptyForm.unit_id = activeUnits[0].id;
+        }
+      }
+    });
+  };
+
   const fetchPurchaseLogs = () => {
     api.get("/products/purchases").then(r => setPurchaseLogs(r.data.purchases || []));
   };
@@ -67,6 +87,7 @@ export default function AdminProducts() {
     fetchPurchaseLogs();
     fetchStockSummary();
     fetchDemands();
+    fetchUnits();
   }, []);
 
   useEffect(() => {
@@ -115,6 +136,9 @@ export default function AdminProducts() {
     payload.append("purchase_price_per_gm", purchase_price_per_gm);
     payload.append("selling_price_per_gm", selling_price_per_gm);
     payload.append("unit", form.unit);
+    if (form.unit_id) payload.append("unit_id", form.unit_id);
+    if (form.description) payload.append("description", form.description);
+    payload.append("min_retail_qty", form.min_retail_qty || 0);
     payload.append("soaking_time", form.soaking_time || 0);
     payload.append("cleaning_time", form.cleaning_time || 0);
     payload.append("cutting_time", form.cutting_time || 0);
@@ -174,6 +198,9 @@ export default function AdminProducts() {
         ? (((parseFloat(p.selling_price_per_gm) - parseFloat(p.purchase_price_per_gm)) / parseFloat(p.purchase_price_per_gm)) * 100).toFixed(1)
         : "",
       unit: unt,
+      unit_id: p.unit_id || "",
+      description: p.description || "",
+      min_retail_qty: p.min_retail_qty || "",
       soaking_time: p.soaking_time || "",
       cleaning_time: p.cleaning_time || "",
       cutting_time: p.cutting_time || "",
@@ -451,9 +478,40 @@ export default function AdminProducts() {
 
               <div>
                 <label className="label">Unit</label>
-                <select className="input" value={form.unit} onChange={e => handleFormChange("unit", e.target.value)}>
-                  {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                <select className="input" value={form.unit_id || ""} onChange={e => {
+                  const selId = parseInt(e.target.value);
+                  const selUnit = unitsList.find(u => u.id === selId);
+                  if(selUnit) {
+                    handleFormChange("unit_id", selUnit.id);
+                    handleFormChange("unit", selUnit.abbreviation);
+                  }
+                }}>
+                  <option value="" disabled>Select Unit</option>
+                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.name} ({u.abbreviation})</option>)}
                 </select>
+              </div>
+
+              <div>
+                <label className="label">Min Retail Qty ({form.unit})</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input"
+                  placeholder="e.g. 0.5 (for 500gm)"
+                  value={form.min_retail_qty}
+                  onChange={e => handleFormChange("min_retail_qty", e.target.value)}
+                />
+              </div>
+
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="label">Product Description</label>
+                <textarea
+                  className="input min-h-[80px]"
+                  placeholder="Enter product description, benefits, etc."
+                  value={form.description}
+                  onChange={e => handleFormChange("description", e.target.value)}
+                />
               </div>
 
               {/* Time Fields */}

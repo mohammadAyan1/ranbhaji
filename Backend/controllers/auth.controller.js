@@ -15,7 +15,7 @@ const cookieOpts = {
 // POST /api/auth/register
 export const register = async (req, res) => {
     try {
-        const { name, phone, email, password, role } = req.body;
+        const { name, phone, email, password, role, gender } = req.body;
         if (!name || !phone || !password) {
             return res.status(400).json({ success: false, message: "name, phone, and password are required" });
         }
@@ -36,7 +36,7 @@ export const register = async (req, res) => {
         const otp_expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
         const user = await User.create({
-            name, phone, email: email || null, password_hash, role: userRole,
+            name, phone, email: email || null, password_hash, role: userRole, gender: gender || null,
             otp, otp_expiry, is_verified: false
         });
 
