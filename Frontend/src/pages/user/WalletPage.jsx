@@ -36,7 +36,7 @@ export default function WalletPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="page-header">My Wallet 💰</h1>
-        <p className="page-sub">Manage your FreshBox wallet balance</p>
+        <p className="page-sub">Manage your RamBhaji wallet balance</p>
       </div>
 
       {msg && (

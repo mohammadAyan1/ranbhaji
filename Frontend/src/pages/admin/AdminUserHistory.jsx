@@ -11,8 +11,16 @@ export default function AdminUserHistory() {
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
+  const [batches, setBatches] = useState([]);
+  
+  const [batchFormData, setBatchFormData] = useState({
+    sub_id: "",
+    is_water: false,
+    batch_id: ""
+  });
 
   const [formData, setFormData] = useState({
     package_id: "",
@@ -25,12 +33,14 @@ export default function AdminUserHistory() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, pkgRes] = await Promise.all([
+        const [usersRes, pkgRes, batchesRes] = await Promise.all([
           api.get("/admin/users"),
-          api.get("/packages")
+          api.get("/packages"),
+          api.get("/user/batches")
         ]);
         setUsers(usersRes.data.users || []);
         setPackages(pkgRes.data.packages || []);
+        setBatches(batchesRes.data.batches || []);
       } catch (err) {
         setMsg(`❌ Failed to load data: ${err.response?.data?.message || err.message}`);
       }
@@ -104,6 +114,29 @@ export default function AdminUserHistory() {
       if (action === 'assign') setShowAssignModal(false);
       else setShowRenewModal(false);
       setFormData({ package_id: "", type: "monthly", start_date: "", address_id: "" });
+    } catch (err) {
+      setActionMsg(`❌ Action failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBatchUpdate = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setActionMsg("");
+    try {
+      const endpoint = batchFormData.is_water ? `/admin/water/${batchFormData.sub_id}/batch` : `/admin/subscriptions/${batchFormData.sub_id}/batch`;
+      await api.patch(endpoint, { batch_id: batchFormData.batch_id });
+      setActionMsg("✅ Batch updated successfully!");
+      
+      // Refresh analytics
+      setLoading(true);
+      const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      setAnalytics(res.data.analytics);
+      setLoading(false);
+
+      setShowBatchModal(false);
     } catch (err) {
       setActionMsg(`❌ Action failed: ${err.response?.data?.message || err.message}`);
     } finally {
@@ -243,6 +276,46 @@ export default function AdminUserHistory() {
         </div>
       )}
 
+      {/* BATCH MODAL */}
+      {showBatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">Change Batch</h2>
+              <button onClick={() => setShowBatchModal(false)} className="text-gray-400 hover:text-gray-600">✖</button>
+            </div>
+            {actionMsg && (
+                <div className={`mx-6 mt-4 p-3 rounded-lg text-sm border ${actionMsg.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                    {actionMsg}
+                </div>
+            )}
+            <form onSubmit={handleBatchUpdate} className="p-6 space-y-4">
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Select Batch</label>
+                <select 
+                  className="input w-full text-sm" 
+                  value={batchFormData.batch_id} 
+                  onChange={e => setBatchFormData({...batchFormData, batch_id: e.target.value})}
+                  required
+                >
+                  <option value="">-- Choose Batch --</option>
+                  {batches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.time_range})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setShowBatchModal(false)} className="btn-secondary text-sm px-6">Cancel</button>
+                <button type="submit" disabled={saving} className="btn-primary text-sm px-6">
+                  {saving ? "Saving..." : "Save Batch"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {loading && (
         <div className="flex items-center justify-center py-20 text-gray-600 card">
           <span className="animate-pulse flex items-center gap-2">
@@ -296,7 +369,24 @@ export default function AdminUserHistory() {
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{pkg.type}</p>
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
+                            {pkg.type}
+                            {pkg.status === 'active' && (
+                              <>
+                                &nbsp;• Batch: {pkg.batch || 'None'}
+                                <button
+                                  type="button"
+                                  className="ml-2 text-blue-500 underline"
+                                  onClick={() => {
+                                    setBatchFormData({ sub_id: pkg.sub_id, is_water: pkg.is_water, batch_id: pkg.batch_id || "" });
+                                    setShowBatchModal(true);
+                                  }}
+                                >
+                                  Edit Batch
+                                </button>
+                              </>
+                            )}
+                          </p>
                         </div>
                         <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200">
                           Renewed {pkg.renewals} {pkg.renewals === 1 ? 'Time' : 'Times'}

@@ -46,7 +46,7 @@ export default function UserDashboard() {
         <h1 className="page-header flex items-center gap-2">
           Welcome back, {user?.name?.split(" ")[0]} <span className="text-3xl wave">👋</span>
         </h1>
-        <p className="page-sub">Here's your FreshBox overview for today</p>
+        <p className="page-sub">Here's your RamBhaji overview for today</p>
       </div>
 
       {/* Stats */}

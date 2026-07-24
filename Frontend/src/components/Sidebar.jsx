@@ -66,7 +66,7 @@ export default function Sidebar({ onClose }) {
             🥦
           </div>
           <div>
-            <h1 className="font-bold text-gray-900 text-lg leading-none tracking-tight">FreshBox</h1>
+            <h1 className="font-bold text-gray-900 text-lg leading-none tracking-tight">RamBhaji</h1>
             <p className="text-xs text-fresh-600 font-medium capitalize tracking-wide">{user?.role} Panel</p>
           </div>
         </div>

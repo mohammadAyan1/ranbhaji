@@ -28,7 +28,7 @@ export default function RegisterPage() {
       <div className="relative w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-fresh-600 rounded-2xl text-3xl mb-4 shadow-lg shadow-fresh-600/30">🥦</div>
-          <h1 className="text-4xl font-bold text-gray-900">FreshBox</h1>
+          <h1 className="text-4xl font-bold text-gray-900">RamBhaji</h1>
           <p className="text-gray-600 mt-1">Create your account</p>
         </div>
 

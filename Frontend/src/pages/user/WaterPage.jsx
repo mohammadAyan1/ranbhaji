@@ -18,6 +18,8 @@ export default function WaterPage() {
   // Address states
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [activeBatches, setActiveBatches] = useState([]);
+  const [selectedBatchId, setSelectedBatchId] = useState("");
   const [showAddressChoiceModal, setShowAddressChoiceModal] = useState(false);
   const [addressChoiceMode, setAddressChoiceMode] = useState("existing");
   const [showInlineAddressModal, setShowInlineAddressModal] = useState(false);
@@ -118,6 +120,14 @@ export default function WaterPage() {
         if (defaultAddr) setSelectedAddressId(defaultAddr.id);
         else if (addrs.length > 0) setSelectedAddressId(addrs[0].id);
       });
+      
+    api.get("/user/batches")
+      .then(r => {
+        const b = r.data.batches || [];
+        setActiveBatches(b);
+        if (b.length > 0) setSelectedBatchId(b[0].id);
+      })
+      .catch(() => {});
   }, []);
 
   const getMatchedProduct = () => {
@@ -215,7 +225,8 @@ export default function WaterPage() {
         frequency: form.frequency,
         type: selectedType,
         payment_method: "razorpay",
-        address_id: parseInt(selectedAddressId)
+        address_id: parseInt(selectedAddressId),
+        batch_id: parseInt(selectedBatchId)
       });
       setCurrentSubId(res.data.water_subscription_id);
       
@@ -626,6 +637,26 @@ export default function WaterPage() {
                     </select>
                   )}
                 </div>
+                <div>
+                  <label className="label">Delivery Batch</label>
+                  {activeBatches.length === 0 ? (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-yellow-400 text-xs font-semibold">⚠️ No batches found.</p>
+                    </div>
+                  ) : (
+                    <select 
+                      className="input text-sm" 
+                      value={selectedBatchId} 
+                      onChange={e => setSelectedBatchId(e.target.value)}
+                    >
+                      {activeBatches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.time_range})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
 
                 {/* Price Preview */}
                 <div className="bg-white rounded-xl p-4 border border-gray-300 space-y-2">
@@ -797,19 +828,46 @@ export default function WaterPage() {
                   <span className="text-gray-900 font-medium">Deliver to a new address</span>
                 </div>
               </label>
+              
+              <div className="space-y-1.5 mt-2">
+                <label className="text-gray-600 text-xs font-bold uppercase tracking-wider">⏱ Delivery Batch</label>
+                {activeBatches.length === 0 ? (
+                  <div className="bg-yellow-950/15 border border-yellow-800/30 rounded-xl p-3 text-center">
+                    <p className="text-yellow-400 text-xs font-medium">⚠️ No batches available.</p>
+                  </div>
+                ) : (
+                  <select
+                    className="input py-2 text-sm w-full"
+                    value={selectedBatchId}
+                    onChange={e => setSelectedBatchId(e.target.value)}
+                  >
+                    <option value="" disabled>-- Select a batch --</option>
+                    {activeBatches.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.time_range})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
 
             <div className="mt-8 flex gap-3">
               <button 
                 onClick={() => {
-                  setShowAddressChoiceModal(false);
                   if (addressChoiceMode === 'new') {
+                    setShowAddressChoiceModal(false);
                     setShowInlineAddressModal(true);
                   } else {
                     if (addresses.length === 0) {
                        setMsg("❌ Please add an address first.");
                        return;
                     }
+                    if (!selectedBatchId) {
+                       setMsg("❌ Please select a delivery batch.");
+                       return;
+                    }
+                    setShowAddressChoiceModal(false);
                     setShowRazorpay(true);
                   }
                 }}
@@ -942,7 +1000,7 @@ export default function WaterPage() {
               <div className="space-y-5">
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Merchant</p>
-                  <p className="text-sm font-bold text-gray-900">FreshBox Delivery Subscriptions</p>
+                  <p className="text-sm font-bold text-gray-900">RamBhaji Delivery Subscriptions</p>
                 </div>
 
                 <div className="bg-white/50 rounded-2xl p-4 border border-gray-200 space-y-3">
@@ -972,12 +1030,23 @@ export default function WaterPage() {
                 </div>
 
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Delivery Address</p>
-                  <div className="bg-white/30 rounded-xl p-3 border border-gray-200 text-xs text-gray-700">
-                    {(() => {
-                      const addr = addresses.find(a => a.id === parseInt(selectedAddressId));
-                      return addr ? `${addr.address_line}, ${addr.city} - ${addr.pincode}` : "No address selected";
-                    })()}
+                  <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Delivery Info</p>
+                  <div className="bg-white/30 rounded-xl p-3 border border-gray-200 text-xs text-gray-700 flex flex-col gap-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 font-medium">Address:</span>
+                      <span className="text-right max-w-[200px] truncate">
+                        {(() => {
+                          const addr = addresses.find(a => a.id === parseInt(selectedAddressId));
+                          return addr ? `${addr.address_line}, ${addr.city}` : "New Address";
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 font-medium">Batch:</span>
+                      <span className="text-right font-semibold text-gray-900">
+                        {activeBatches.find(b => b.id === parseInt(selectedBatchId))?.name || "Not selected"}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

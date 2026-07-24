@@ -100,7 +100,8 @@ const Subscription = sequelize.define('Subscription', {
   address_id: { type: DataTypes.INTEGER, allowNull: true },
   renewal_count: { type: DataTypes.INTEGER, defaultValue: 1 },
   locked_price: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
-  postpaid_serving_given: { type: DataTypes.BOOLEAN, defaultValue: false }
+  postpaid_serving_given: { type: DataTypes.BOOLEAN, defaultValue: false },
+  batch_id: { type: DataTypes.INTEGER, allowNull: true }
 }, { tableName: 'subscriptions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 8. SUBSCRIPTION_ITEMS
@@ -181,7 +182,8 @@ const WaterSubscription = sequelize.define('WaterSubscription', {
   yearly_amount_paid: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   services_completed: { type: DataTypes.INTEGER, defaultValue: 0 },
   total_services: { type: DataTypes.INTEGER, defaultValue: 0 },
-  address_id: { type: DataTypes.INTEGER, allowNull: true }
+  address_id: { type: DataTypes.INTEGER, allowNull: true },
+  batch_id: { type: DataTypes.INTEGER, allowNull: true }
 }, { tableName: 'water_subscriptions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 14. NOTIFICATIONS
@@ -400,6 +402,12 @@ Batch.hasMany(DeliverySchedule, { foreignKey: 'batch_id' });
 
 RetailOrder.belongsTo(Batch, { foreignKey: 'batch_id' });
 Batch.hasMany(RetailOrder, { foreignKey: 'batch_id' });
+
+Subscription.belongsTo(Batch, { foreignKey: 'batch_id' });
+Batch.hasMany(Subscription, { foreignKey: 'batch_id' });
+
+WaterSubscription.belongsTo(Batch, { foreignKey: 'batch_id' });
+Batch.hasMany(WaterSubscription, { foreignKey: 'batch_id' });
 
 // 24. MISSED_PRODUCT_LOG
 const MissedProductLog = sequelize.define('MissedProductLog', {

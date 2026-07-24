@@ -6,11 +6,11 @@ import { Op } from "sequelize";
 export const subscribeWater = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { water_type, container, frequency, type, payment_method, address_id } = req.body;
+        const { water_type, container, frequency, type, payment_method, address_id, batch_id } = req.body;
         
-        if (!water_type || !container || !frequency) {
+        if (!water_type || !container || !frequency || !batch_id) {
             await t.rollback();
-            return res.status(400).json({ success: false, message: "water_type, container, and frequency are required" });
+            return res.status(400).json({ success: false, message: "water_type, container, frequency, and batch_id are required" });
         }
 
         const subType = type || 'monthly'; // 'monthly' or 'yearly'
@@ -105,7 +105,8 @@ export const subscribeWater = async (req, res) => {
             yearly_amount_paid,
             total_services,
             services_completed: 0,
-            address_id: finalAddressId
+            address_id: finalAddressId,
+            batch_id
         }, { transaction: t });
 
         await t.commit();
@@ -220,7 +221,8 @@ export const confirmWaterStartDate = async (req, res) => {
         const scheduleRows = dates.map(date => ({
             water_subscription_id,
             scheduled_date: date,
-            status: 'pending'
+            status: 'pending',
+            batch_id: sub.batch_id
         }));
 
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
@@ -535,7 +537,8 @@ export const restartWaterSubscription = async (req, res) => {
         const scheduleRows = newDates.map(date => ({
             water_subscription_id: sub.id,
             scheduled_date: date,
-            status: 'pending'
+            status: 'pending',
+            batch_id: sub.batch_id
         }));
 
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
@@ -565,6 +568,38 @@ export const cancelWaterSubscription = async (req, res) => {
         await sub.update({ status: 'cancelled' });
         res.status(200).json({ success: true, message: "Water subscription cancelled" });
     } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PATCH /api/admin/water/:id/batch
+export const updateWaterSubscriptionBatch = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { batch_id } = req.body;
+        if (!batch_id) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "batch_id is required" });
+        }
+
+        const sub = await WaterSubscription.findByPk(req.params.id, { transaction: t });
+        if (!sub) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Water subscription not found" });
+        }
+
+        await sub.update({ batch_id }, { transaction: t });
+
+        // Update all pending delivery schedules
+        await DeliverySchedule.update(
+            { batch_id },
+            { where: { water_subscription_id: sub.id, status: 'pending' }, transaction: t }
+        );
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Water subscription batch updated successfully" });
+    } catch (error) {
+        await t.rollback();
         res.status(500).json({ success: false, message: error.message });
     }
 };

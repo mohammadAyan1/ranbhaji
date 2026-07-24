@@ -1,5 +1,5 @@
 /**
- * Generates delivery dates based on FreshBox business rules.
+ * Generates delivery dates based on RamBhaji business rules.
  * - gap_days = 30 / services_per_month
  * - Sunday rule: if a date falls on Sunday, shift to Saturday (previous day)
  * - Only that single date moves; subsequent dates keep original spacing

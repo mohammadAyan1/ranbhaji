@@ -58,14 +58,14 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.get("/health", async (req, res) => {
     try {
         await sequelize.authenticate();
-        res.status(200).json({ success: true, message: "FreshBox API is running. DB connected." });
+        res.status(200).json({ success: true, message: "RamBhaji API is running. DB connected." });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
 app.get("/", (req, res) => {
-    res.status(200).json({ message: "FreshBox API v1.0", success: true });
+    res.status(200).json({ message: "RamBhaji API v1.0", success: true });
 });
 
 // API Routes
@@ -109,7 +109,7 @@ const startServer = async () => {
     startCronJobs();
 
     app.listen(port, () => {
-        console.log(`\n🥦 FreshBox Server running on http://localhost:${port}`);
+        console.log(`\n🥦 RamBhaji Server running on http://localhost:${port}`);
         console.log(`   Health: http://localhost:${port}/health\n`);
     });
 };

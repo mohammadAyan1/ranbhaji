@@ -15,7 +15,7 @@ const PHONEPE_STATUS_URL = process.env.PHONEPE_STATUS_URL || "https://api-prepro
 export const initiatePhonePePayment = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { type, package_id, billing_type, address_id, items, redirectUrl } = req.body;
+        const { type, package_id, billing_type, address_id, batch_id, items, redirectUrl } = req.body;
         const user_id = req.user.id;
 
         if (!type || (type !== 'package' && type !== 'retail')) {
@@ -116,7 +116,7 @@ export const initiatePhonePePayment = async (req, res) => {
 
         let customTxnId = "";
         if (type === 'package') {
-            customTxnId = `PKG_${package_id}_${billing_type}_${address_id}_${Date.now()}`;
+            customTxnId = `PKG_${package_id}_${billing_type}_${address_id}_${batch_id}_${Date.now()}`;
         } else {
             customTxnId = `RTL_${retailOrder.id}_${Date.now()}`;
         }
@@ -261,6 +261,7 @@ export const getPhonePeStatus = async (req, res) => {
                 const package_id = parseInt(parts[1]);
                 const type = parts[2];
                 const address_id = parseInt(parts[3]);
+                const batch_id = parseInt(parts[4]);
 
                 const pkg = await Package.findByPk(package_id, {
                     include: [
@@ -352,6 +353,7 @@ export const getPhonePeStatus = async (req, res) => {
                     yearly_amount_paid,
                     total_services,
                     address_id,
+                    batch_id,
                     renewal_count,
                     locked_price
                 }, { transaction: t });

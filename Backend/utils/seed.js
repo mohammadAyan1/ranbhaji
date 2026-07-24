@@ -25,10 +25,10 @@ export const seedDatabase = async () => {
 
         // Users
         await User.bulkCreate([
-            { name: "Admin User", phone: "9000000001", email: "admin@freshbox.com", password_hash: await hash("Admin@123"), role: "admin", wallet_balance: 0 },
+            { name: "Admin User", phone: "9000000001", email: "admin@rambhaji.com", password_hash: await hash("Admin@123"), role: "admin", wallet_balance: 0 },
             { name: "Raju Kumar", phone: "9000000002", email: "raju@example.com", password_hash: await hash("User@123"), role: "user", wallet_balance: 5000 },
             { name: "Priya Singh", phone: "9000000003", email: "priya@example.com", password_hash: await hash("User@123"), role: "user", wallet_balance: 2500 },
-            { name: "Delivery Boy", phone: "9000000004", email: "delivery@freshbox.com", password_hash: await hash("Delivery@123"), role: "delivery", wallet_balance: 0 }
+            { name: "Delivery Boy", phone: "9000000004", email: "delivery@rambhaji.com", password_hash: await hash("Delivery@123"), role: "delivery", wallet_balance: 0 }
         ]);
 
         // Products

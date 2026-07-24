@@ -11,7 +11,7 @@ import { generateDeliveryDates } from "../utils/scheduleEngine.js";
 export const subscribe = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { package_id, type, payment_method, address_id } = req.body;
+        const { package_id, type, payment_method, address_id, batch_id } = req.body;
         const user_id = req.user.id;
 
         const pkg = await Package.findByPk(package_id, {
@@ -155,6 +155,7 @@ export const subscribe = async (req, res) => {
             yearly_amount_paid,
             total_services,
             address_id: finalAddressId,
+            batch_id,
             renewal_count,
             locked_price
         }, { transaction: t });
@@ -257,7 +258,8 @@ export const confirmStartDate = async (req, res) => {
         const scheduleRows = deliveryDates.map(date => ({
             subscription_id,
             scheduled_date: date,
-            status: 'pending'
+            status: 'pending',
+            batch_id: subscription.batch_id
         }));
 
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
@@ -614,7 +616,7 @@ export const restartSubscription = async (req, res) => {
             }
         }
 
-        const scheduleRows = newDates.map(date => ({ subscription_id: subscription.id, scheduled_date: date, status: 'pending' }));
+        const scheduleRows = newDates.map(date => ({ subscription_id: subscription.id, scheduled_date: date, status: 'pending', batch_id: subscription.batch_id }));
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
 
         const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : subscription.end_date;
@@ -1420,3 +1422,31 @@ export const renewPackageByAdmin = async (req, res) => {
     }
 };
 
+// PATCH /api/admin/subscriptions/:id/batch
+export const updateSubscriptionBatch = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { batch_id } = req.body;
+
+        if (!batch_id) {
+            return res.status(400).json({ success: false, message: "batch_id is required" });
+        }
+
+        const subscription = await Subscription.findByPk(id);
+        if (!subscription) {
+            return res.status(404).json({ success: false, message: "Subscription not found" });
+        }
+
+        await subscription.update({ batch_id });
+
+        // Update all pending delivery schedules for this subscription
+        await DeliverySchedule.update(
+            { batch_id },
+            { where: { subscription_id: id, status: 'pending' } }
+        );
+
+        res.status(200).json({ success: true, message: "Batch updated successfully", subscription });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

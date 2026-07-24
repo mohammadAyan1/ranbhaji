@@ -62,7 +62,7 @@ const runNightlyJob = async () => {
                         }
                     }
 
-                    const scheduleRows = newDates.map(date => ({ subscription_id: subscription.id, scheduled_date: date, status: 'pending' }));
+                    const scheduleRows = newDates.map(date => ({ subscription_id: subscription.id, scheduled_date: date, status: 'pending', batch_id: subscription.batch_id }));
                     await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
 
                     const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : subscription.end_date;
@@ -95,7 +95,8 @@ const runNightlyJob = async () => {
                     const scheduleRows = newDates.map(date => ({
                         water_subscription_id: sub.id,
                         scheduled_date: date,
-                        status: 'pending'
+                        status: 'pending',
+                        batch_id: sub.batch_id
                     }));
                     await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
 

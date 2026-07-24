@@ -27,7 +27,7 @@ export default function Layout() {
         <header className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200/50 bg-white/80 backdrop-blur-md z-30 sticky top-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-fresh-400 to-fresh-600 shadow-lg shadow-fresh-500/20 rounded-lg flex items-center justify-center text-sm">🥦</div>
-            <span className="font-bold text-lg tracking-tight text-gray-900">FreshBox</span>
+            <span className="font-bold text-lg tracking-tight text-gray-900">RamBhaji</span>
           </div>
           <button 
             onClick={() => setSidebarOpen(true)}

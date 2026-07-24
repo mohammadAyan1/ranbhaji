@@ -1,4 +1,4 @@
-import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection } from "../models/index.js";
+import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch } from "../models/index.js";
 import { Op } from "sequelize";
 
 // GET /api/admin/user-analytics/users
@@ -32,13 +32,15 @@ export const getUserAnalytics = async (req, res) => {
             },
             include: [
                 { model: Package },
-                { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] }
+                { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
+                { model: Batch }
             ]
         });
 
         // 2. Fetch Water Subscriptions
         const waterSubscriptions = await WaterSubscription.findAll({
-            where: { user_id: userId }
+            where: { user_id: userId },
+            include: [{ model: Batch }]
         });
 
         // 3. Fetch Retail Orders
@@ -82,13 +84,23 @@ export const getUserAnalytics = async (req, res) => {
             if (pkg) {
                 if (!packageStats[pkg.id]) {
                     packageStats[pkg.id] = {
+                        sub_id: sub.id,
                         id: pkg.id,
                         name: pkg.name,
                         type: 'Veg/Fruit Package',
                         renewals: 0,
                         status: sub.status,
+                        batch: sub.Batch ? sub.Batch.name : null,
+                        batch_id: sub.batch_id,
+                        is_water: false,
                         items: {}
                     };
+                }
+                if (sub.status === 'active' || sub.status === 'paused') {
+                    packageStats[pkg.id].status = sub.status;
+                    packageStats[pkg.id].sub_id = sub.id;
+                    packageStats[pkg.id].batch = sub.Batch ? sub.Batch.name : null;
+                    packageStats[pkg.id].batch_id = sub.batch_id;
                 }
                 packageStats[pkg.id].renewals += 1;
 
@@ -120,10 +132,15 @@ export const getUserAnalytics = async (req, res) => {
             const key = 'water_' + wSub.water_type;
             if (!packageStats[key]) {
                 packageStats[key] = {
+                    sub_id: wSub.id,
                     id: key,
                     name: `Water Subscription (${wSub.water_type})`,
                     type: 'Water',
                     renewals: 0,
+                    status: wSub.status,
+                    batch: wSub.Batch ? wSub.Batch.name : null,
+                    batch_id: wSub.batch_id,
+                    is_water: true,
                     items: {
                         [wSub.id]: {
                             name: `${wSub.water_type} Water`,
@@ -132,6 +149,12 @@ export const getUserAnalytics = async (req, res) => {
                         }
                     }
                 };
+            }
+            if (wSub.status === 'active' || wSub.status === 'paused') {
+                packageStats[key].status = wSub.status;
+                packageStats[key].sub_id = wSub.id;
+                packageStats[key].batch = wSub.Batch ? wSub.Batch.name : null;
+                packageStats[key].batch_id = wSub.batch_id;
             }
             packageStats[key].renewals += 1;
         });

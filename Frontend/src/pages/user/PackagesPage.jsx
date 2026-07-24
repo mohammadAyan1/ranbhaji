@@ -41,6 +41,8 @@ export default function PackagesPage() {
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [activeBatches, setActiveBatches] = useState([]);
+  const [selectedBatchId, setSelectedBatchId] = useState("");
 
   // PhonePe Checkout states
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
@@ -75,6 +77,14 @@ export default function PackagesPage() {
       .finally(() => setLoading(false));
 
     fetchAddresses();
+
+    api.get("/user/batches")
+      .then(r => {
+        const b = r.data.batches || [];
+        setActiveBatches(b);
+        if (b.length > 0) setSelectedBatchId(b[0].id);
+      })
+      .catch(() => {});
 
     // Fetch user's current subscriptions to detect duplicates
     api.get("/my-subscriptions")
@@ -146,6 +156,10 @@ export default function PackagesPage() {
       setMsg("❌ Please add or select a delivery address first.");
       return;
     }
+    if (!selectedBatchId) {
+      setMsg("❌ Please select a delivery batch.");
+      return;
+    }
     setInitiatingPayment(true);
     setMsg("");
     try {
@@ -153,7 +167,8 @@ export default function PackagesPage() {
         type: "package",
         package_id: checkoutPkg.id,
         billing_type: selectedType,
-        address_id: parseInt(selectedAddressId)
+        address_id: parseInt(selectedAddressId),
+        batch_id: parseInt(selectedBatchId)
       });
       if (res.data.redirectUrl) {
         window.location.href = res.data.redirectUrl;
@@ -210,7 +225,8 @@ export default function PackagesPage() {
         package_id: razorpayPkg.id,
         type: selectedType,
         payment_method: "razorpay",
-        address_id: parseInt(selectedAddressId)
+        address_id: parseInt(selectedAddressId),
+        batch_id: parseInt(selectedBatchId)
       });
       const sub_id = res.data.subscription_id;
       setCurrentSub({ subscription_id: sub_id, package_id: razorpayPkg.id, package_name: razorpayPkg.name });
@@ -799,19 +815,46 @@ export default function PackagesPage() {
                   <span className="text-gray-900 font-medium">Deliver to a new address</span>
                 </div>
               </label>
+
+              <div className="space-y-1.5 mt-2">
+                <label className="text-gray-600 text-xs font-bold uppercase tracking-wider">⏱ Delivery Batch</label>
+                {activeBatches.length === 0 ? (
+                  <div className="bg-yellow-950/15 border border-yellow-800/30 rounded-xl p-3 text-center">
+                    <p className="text-yellow-400 text-xs font-medium">⚠️ No batches available.</p>
+                  </div>
+                ) : (
+                  <select
+                    className="input py-2 text-sm w-full"
+                    value={selectedBatchId}
+                    onChange={e => setSelectedBatchId(e.target.value)}
+                  >
+                    <option value="" disabled>-- Select a batch --</option>
+                    {activeBatches.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.time_range})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
 
             <div className="mt-8 flex gap-3">
               <button 
                 onClick={() => {
-                  setShowAddressChoiceModal(false);
                   if (addressChoiceMode === 'new') {
+                    setShowAddressChoiceModal(false);
                     setShowInlineAddressModal(true);
                   } else {
                     if (addresses.length === 0) {
                        setMsg("❌ Please add an address first.");
                        return;
                     }
+                    if (!selectedBatchId) {
+                       setMsg("❌ Please select a delivery batch.");
+                       return;
+                    }
+                    setShowAddressChoiceModal(false);
                     setShowCheckoutModal(true);
                   }
                 }}
@@ -866,43 +909,20 @@ export default function PackagesPage() {
                 </div>
               </div>
 
-              {/* Address selector inside modal */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-gray-600 text-xs font-bold uppercase tracking-wider">📍 Delivery Address</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowInlineAddressModal(true)}
-                    className="text-[10px] text-fresh-600 hover:underline"
-                  >
-                    + Add New Address
-                  </button>
+              {/* Address & Batch Summary inside modal */}
+              <div className="space-y-1.5 mt-2 mb-4 bg-white/50 rounded-xl p-3 border border-gray-200">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-gray-600 font-medium">Delivering to:</span>
+                  <span className="text-gray-900 text-right">
+                    {addresses.find(a => a.id === parseInt(selectedAddressId))?.city || "New Address"}
+                  </span>
                 </div>
-
-                {addresses.length === 0 ? (
-                  <div className="bg-yellow-950/15 border border-yellow-800/30 rounded-xl p-3 text-center space-y-2">
-                    <p className="text-yellow-400 text-xs font-medium">⚠️ No addresses saved. Please create one to proceed.</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowInlineAddressModal(true)}
-                      className="w-full btn-secondary py-1 text-xs"
-                    >
-                      + Create Address
-                    </button>
-                  </div>
-                ) : (
-                  <select
-                    className="input py-2 text-xs"
-                    value={selectedAddressId}
-                    onChange={e => setSelectedAddressId(e.target.value)}
-                  >
-                    {addresses.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.address_line}, {a.city} {a.is_default ? "(Default)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-600 font-medium">Batch:</span>
+                  <span className="text-gray-900 font-semibold">
+                    {activeBatches.find(b => b.id === parseInt(selectedBatchId))?.name || "Not selected"}
+                  </span>
+                </div>
               </div>
 
               <div className="flex flex-col gap-2 pt-2">
