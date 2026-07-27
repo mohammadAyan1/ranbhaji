@@ -19,29 +19,29 @@ export default function AdminReturns() {
       let params = {};
       if (orderId) params.order_id = orderId;
       if (fromDate && toDate) {
-          params.from_date = fromDate;
-          params.to_date = toDate;
+        params.from_date = fromDate;
+        params.to_date = toDate;
       }
       if (allTime) params.all_time = true;
 
       const res = await api.get("/admin/returns", { params });
-      
+
       // Group returns by order
       const grouped = {};
       (res.data.returns || []).forEach(r => {
-          const scheduleId = r.DeliverySchedule?.id || "unknown";
-          if (!grouped[scheduleId]) {
-              grouped[scheduleId] = {
-                  schedule: r.DeliverySchedule,
-                  items: []
-              };
-          }
-          grouped[scheduleId].items.push(r);
+        const scheduleId = r.DeliverySchedule?.id || "unknown";
+        if (!grouped[scheduleId]) {
+          grouped[scheduleId] = {
+            schedule: r.DeliverySchedule,
+            items: []
+          };
+        }
+        grouped[scheduleId].items.push(r);
       });
-      
-      const groupedArray = Object.values(grouped).sort((a,b) => {
-          if (!a.schedule || !b.schedule) return 0;
-          return new Date(b.schedule.actual_delivery_date) - new Date(a.schedule.actual_delivery_date) || b.schedule.id - a.schedule.id;
+
+      const groupedArray = Object.values(grouped).sort((a, b) => {
+        if (!a.schedule || !b.schedule) return 0;
+        return new Date(b.schedule.actual_delivery_date) - new Date(a.schedule.actual_delivery_date) || b.schedule.id - a.schedule.id;
       });
 
       setReturns(groupedArray);
@@ -96,32 +96,32 @@ export default function AdminReturns() {
 
       <div className="card p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div>
-                <label className="label">Order ID</label>
-                <input type="text" className="input" placeholder="e.g. 102" value={orderId} onChange={e => setOrderId(e.target.value)} />
-            </div>
-            <div>
-                <label className="label">From Date</label>
-                <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={allTime || orderId} />
-            </div>
-            <div>
-                <label className="label">To Date</label>
-                <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
-            </div>
-            <div className="flex gap-2">
-                <button className="btn-primary flex-1" onClick={fetchReturns}>Filter</button>
-                <button 
-                    className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`} 
-                    onClick={() => {
-                        setAllTime(!allTime);
-                        setOrderId("");
-                        setFromDate("");
-                        setToDate("");
-                    }}
-                >
-                    {allTime ? "All Time: ON" : "All Time"}
-                </button>
-            </div>
+          <div>
+            <label className="label">Order ID</label>
+            <input type="text" className="input" placeholder="e.g. 102" value={orderId} onChange={e => setOrderId(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">From Date</label>
+            <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={allTime || orderId} />
+          </div>
+          <div>
+            <label className="label">To Date</label>
+            <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-primary flex-1" onClick={fetchReturns}>Filter</button>
+            <button
+              className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+              onClick={() => {
+                setAllTime(!allTime);
+                setOrderId("");
+                setFromDate("");
+                setToDate("");
+              }}
+            >
+              {allTime ? "All Time: ON" : "All Time"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -148,7 +148,7 @@ export default function AdminReturns() {
               &times;
             </button>
             <img
-              src={`http://localhost:3000${selectedPhoto}`}
+              src={`${import.meta.env.VITE_API_URL}${selectedPhoto}`}
               alt="Return verification zoom"
               className="object-contain max-h-[75vh]"
             />
@@ -171,10 +171,10 @@ export default function AdminReturns() {
           {returns.map(group => {
             const schedule = group.schedule || {};
             const customer = schedule.Subscription?.User || schedule.WaterSubscription?.User || {};
-            const orderSource = schedule.Subscription 
+            const orderSource = schedule.Subscription
               ? `Package: ${schedule.Subscription.Package?.name}`
               : `Water Subscription`;
-            const formattedDate = schedule.actual_delivery_date 
+            const formattedDate = schedule.actual_delivery_date
               ? new Date(schedule.actual_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
               : "Unknown Date";
 
@@ -189,85 +189,85 @@ export default function AdminReturns() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm mt-2">
-                        <thead>
-                            <tr className="table-header">
-                                <th className="text-left p-3 rounded-tl-xl">Product</th>
-                                <th className="text-left p-3">Return Reason</th>
-                                <th className="text-left p-3">Proof Photo</th>
-                                <th className="text-left p-3">Status</th>
-                                <th className="text-right p-3 rounded-tr-xl">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {group.items.map(r => (
-                                <tr key={r.id} className="table-row">
-                                    <td className="p-3">
-                                        <p className="text-gray-900 font-medium">{r.Product?.name}</p>
-                                        <p className="text-gray-600 text-xs">
-                                        Return: <span className="text-yellow-400 font-medium">{parseFloat(r.return_qty).toFixed(0)}{r.Product?.unit || 'g'}</span>
-                                        </p>
-                                        <p className="text-gray-600 text-[10px]">Delivered: {parseFloat(r.qty_gm).toFixed(0)}{r.Product?.unit || 'g'}</p>
-                                        {r.next_schedule_date && (
-                                            <p className="mt-1 text-xs text-fresh-500 font-medium">
-                                                Next Delivery: {new Date(r.next_schedule_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
-                                            </p>
-                                        )}
-                                    </td>
-                                    <td className="p-3 text-gray-700 italic max-w-[200px] break-words">
-                                        "{r.return_reason || "No reason specified"}"
-                                    </td>
-                                    <td className="p-3">
-                                        {r.return_photo_url ? (
-                                        <button
-                                            onClick={() => setSelectedPhoto(r.return_photo_url)}
-                                            className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-750 hover:border-fresh-500 transition-all bg-gray-50"
-                                        >
-                                            <img
-                                            src={`http://localhost:3000${r.return_photo_url}`}
-                                            alt="Return confirmation proof"
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-all"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-gray-900 font-medium transition-all">
-                                            Zoom 🔍
-                                            </div>
-                                        </button>
-                                        ) : (
-                                        <span className="text-gray-600 text-xs italic">No photo</span>
-                                        )}
-                                    </td>
-                                    <td className="p-3">
-                                        {getStatusBadge(r.return_status)}
-                                        {r.returned_by && (
-                                        <div className="mt-2 text-[10px] text-gray-500 font-medium uppercase">
-                                            By: {r.returned_by.replace('_', ' ')}
-                                        </div>
-                                        )}
-                                    </td>
-                                    <td className="p-3 text-right">
-                                        {r.return_status === "requested" ? (
-                                        <div className="flex justify-end gap-2">
-                                            <button
-                                            onClick={() => handleReview(r.id, "approved")}
-                                            className="bg-green-600 hover:bg-green-500 text-gray-900 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-md hover:shadow-lg transition-all"
-                                            >
-                                            Approve
-                                            </button>
-                                            <button
-                                            onClick={() => handleReview(r.id, "rejected")}
-                                            className="bg-red-650 hover:bg-red-550 text-gray-900 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-md hover:shadow-lg transition-all"
-                                            >
-                                            Reject
-                                            </button>
-                                        </div>
-                                        ) : (
-                                        <span className="text-gray-600 text-xs italic">-</span>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                  <table className="w-full text-sm mt-2">
+                    <thead>
+                      <tr className="table-header">
+                        <th className="text-left p-3 rounded-tl-xl">Product</th>
+                        <th className="text-left p-3">Return Reason</th>
+                        <th className="text-left p-3">Proof Photo</th>
+                        <th className="text-left p-3">Status</th>
+                        <th className="text-right p-3 rounded-tr-xl">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map(r => (
+                        <tr key={r.id} className="table-row">
+                          <td className="p-3">
+                            <p className="text-gray-900 font-medium">{r.Product?.name}</p>
+                            <p className="text-gray-600 text-xs">
+                              Return: <span className="text-yellow-400 font-medium">{parseFloat(r.return_qty).toFixed(0)}{r.Product?.unit || 'g'}</span>
+                            </p>
+                            <p className="text-gray-600 text-[10px]">Delivered: {parseFloat(r.qty_gm).toFixed(0)}{r.Product?.unit || 'g'}</p>
+                            {r.next_schedule_date && (
+                              <p className="mt-1 text-xs text-fresh-500 font-medium">
+                                Next Delivery: {new Date(r.next_schedule_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
+                              </p>
+                            )}
+                          </td>
+                          <td className="p-3 text-gray-700 italic max-w-[200px] break-words">
+                            "{r.return_reason || "No reason specified"}"
+                          </td>
+                          <td className="p-3">
+                            {r.return_photo_url ? (
+                              <button
+                                onClick={() => setSelectedPhoto(r.return_photo_url)}
+                                className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-750 hover:border-fresh-500 transition-all bg-gray-50"
+                              >
+                                <img
+                                  src={`${import.meta.env.VITE_API_URL}${r.return_photo_url}`}
+                                  alt="Return confirmation proof"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-all"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-gray-900 font-medium transition-all">
+                                  Zoom 🔍
+                                </div>
+                              </button>
+                            ) : (
+                              <span className="text-gray-600 text-xs italic">No photo</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {getStatusBadge(r.return_status)}
+                            {r.returned_by && (
+                              <div className="mt-2 text-[10px] text-gray-500 font-medium uppercase">
+                                By: {r.returned_by.replace('_', ' ')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-right">
+                            {r.return_status === "requested" ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => handleReview(r.id, "approved")}
+                                  className="bg-green-600 hover:bg-green-500 text-gray-900 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-md hover:shadow-lg transition-all"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleReview(r.id, "rejected")}
+                                  className="bg-red-650 hover:bg-red-550 text-gray-900 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-md hover:shadow-lg transition-all"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-gray-600 text-xs italic">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             );

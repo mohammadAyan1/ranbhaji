@@ -5,7 +5,7 @@ export default function AdminDeliveries() {
   const [deliveries, setDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState(null); // for zoom view modal
-  
+
   // Filters
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -28,8 +28,8 @@ export default function AdminDeliveries() {
     let params = {};
     if (orderId) params.order_id = orderId;
     if (fromDate && toDate) {
-        params.from_date = fromDate;
-        params.to_date = toDate;
+      params.from_date = fromDate;
+      params.to_date = toDate;
     }
     if (allTime) params.all_time = true;
 
@@ -78,7 +78,7 @@ export default function AdminDeliveries() {
     e.preventDefault();
     setSubmittingReturn(true);
     setMsg("");
-    
+
     try {
       await api.post("/admin/return-order", {
         schedule_id: returningOrder.id,
@@ -87,7 +87,7 @@ export default function AdminDeliveries() {
       setMsg("✅ Full order returned successfully and pushed to next schedule.");
       setReturningOrder(null);
       setOrderReturnRemark("");
-      fetchDeliveries(); 
+      fetchDeliveries();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || "Return failed"}`);
     } finally {
@@ -106,32 +106,32 @@ export default function AdminDeliveries() {
 
       <div className="card p-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div>
-                <label className="label">Order ID</label>
-                <input type="text" className="input" placeholder="e.g. 102" value={orderId} onChange={e => setOrderId(e.target.value)} />
-            </div>
-            <div>
-                <label className="label">From Date</label>
-                <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={allTime || orderId} />
-            </div>
-            <div>
-                <label className="label">To Date</label>
-                <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
-            </div>
-            <div className="flex gap-2">
-                <button className="btn-primary flex-1" onClick={fetchDeliveries}>Filter</button>
-                <button 
-                    className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`} 
-                    onClick={() => {
-                        setAllTime(!allTime);
-                        setOrderId("");
-                        setFromDate("");
-                        setToDate("");
-                    }}
-                >
-                    {allTime ? "All Time: ON" : "All Time"}
-                </button>
-            </div>
+          <div>
+            <label className="label">Order ID</label>
+            <input type="text" className="input" placeholder="e.g. 102" value={orderId} onChange={e => setOrderId(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">From Date</label>
+            <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={allTime || orderId} />
+          </div>
+          <div>
+            <label className="label">To Date</label>
+            <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-primary flex-1" onClick={fetchDeliveries}>Filter</button>
+            <button
+              className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+              onClick={() => {
+                setAllTime(!allTime);
+                setOrderId("");
+                setFromDate("");
+                setToDate("");
+              }}
+            >
+              {allTime ? "All Time: ON" : "All Time"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -158,7 +158,7 @@ export default function AdminDeliveries() {
               &times;
             </button>
             <img
-              src={`http://localhost:3000${selectedPhoto}`}
+              src={`${import.meta.env.VITE_API_URL}${selectedPhoto}`}
               alt="Delivery confirmation zoom"
               className="object-contain max-h-[75vh]"
             />
@@ -190,13 +190,13 @@ export default function AdminDeliveries() {
               <tbody>
                 {deliveries.map(d => {
                   const customer = d.Subscription?.User || d.WaterSubscription?.User || {};
-                  const packageName = d.Subscription?.Package?.name || 
+                  const packageName = d.Subscription?.Package?.name ||
                     (d.WaterSubscription ? `${d.WaterSubscription.water_type} Water (${d.WaterSubscription.container})` : "Water Plan");
 
-                  const formattedDate = d.actual_delivery_date 
+                  const formattedDate = d.actual_delivery_date
                     ? new Date(d.actual_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
                     : "No date";
-                  
+
                   const items = d.DeliveryItems || [];
                   const hasUnreturnedItems = items.some(i => i.return_status === 'none' && parseFloat(i.packed_qty ?? i.delivered_qty ?? i.qty_gm) > 0);
 
@@ -253,10 +253,10 @@ export default function AdminDeliveries() {
                                   )}
                                 </div>
                                 {item.return_status && item.return_status !== 'none' && (
-                                    <p className="text-orange-600 text-xs font-semibold mt-1 bg-orange-100/50 px-1.5 py-0.5 rounded inline-block">
-                                        Returned {item.return_qty ? `${parseFloat(item.return_qty).toFixed(0)}${item.Product?.unit || 'g'}` : ''} <span className="uppercase text-[10px]">({item.return_status})</span> 
-                                        {item.returned_by && <span className="text-[10px]"> by {item.returned_by.replace('_', ' ')}</span>}
-                                    </p>
+                                  <p className="text-orange-600 text-xs font-semibold mt-1 bg-orange-100/50 px-1.5 py-0.5 rounded inline-block">
+                                    Returned {item.return_qty ? `${parseFloat(item.return_qty).toFixed(0)}${item.Product?.unit || 'g'}` : ''} <span className="uppercase text-[10px]">({item.return_status})</span>
+                                    {item.returned_by && <span className="text-[10px]"> by {item.returned_by.replace('_', ' ')}</span>}
+                                  </p>
                                 )}
                                 {canReturn && (
                                   <button
@@ -288,7 +288,7 @@ export default function AdminDeliveries() {
                               className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-750 hover:border-fresh-500 transition-all bg-gray-50"
                             >
                               <img
-                                src={`http://localhost:3000${d.delivery_photo_url}`}
+                                src={`${import.meta.env.VITE_API_URL}${d.delivery_photo_url}`}
                                 alt="Delivery confirmation"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-all"
                               />
@@ -303,18 +303,18 @@ export default function AdminDeliveries() {
                       </td>
                       <td className="p-3 text-right text-gray-500">
                         <div className="flex flex-col items-end gap-2">
-                            <span>#{d.id}</span>
-                            {hasUnreturnedItems && (
-                                <button 
-                                    onClick={() => {
-                                        setReturningOrder(d);
-                                        setOrderReturnRemark("");
-                                    }}
-                                    className="px-3 py-1.5 bg-red-50 text-red-600 font-medium text-xs rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
-                                >
-                                    Return Order
-                                </button>
-                            )}
+                          <span>#{d.id}</span>
+                          {hasUnreturnedItems && (
+                            <button
+                              onClick={() => {
+                                setReturningOrder(d);
+                                setOrderReturnRemark("");
+                              }}
+                              className="px-3 py-1.5 bg-red-50 text-red-600 font-medium text-xs rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
+                            >
+                              Return Order
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -334,7 +334,7 @@ export default function AdminDeliveries() {
               <h3 className="font-bold text-gray-900">Admin Return: {returningItem.Product?.name}</h3>
               <button onClick={() => setReturningItem(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            
+
             <form onSubmit={handleAdminReturn} className="p-4 space-y-4">
               <div>
                 <label className="label text-xs">Return Quantity ({returningItem.Product?.unit || 'g'})</label>
@@ -381,7 +381,7 @@ export default function AdminDeliveries() {
               <h3 className="font-bold text-red-900">Return Entire Order #{returningOrder.id}</h3>
               <button onClick={() => setReturningOrder(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            
+
             <form onSubmit={handleReturnOrderSubmit} className="p-4 space-y-4">
               <p className="text-sm text-gray-600">This will mark all unreturned items in this order as returned by Admin, and schedule a new delivery.</p>
 
