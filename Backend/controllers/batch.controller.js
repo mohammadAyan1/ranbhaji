@@ -212,13 +212,15 @@ export const getBatchDemands = async (req, res) => {
             
             if (remaining_quantity > 0) {
                 // Calculate time
-                const timePer100 = parseFloat(pData.product.soaking_time || 0) +
-                                   parseFloat(pData.product.cleaning_time || 0) +
-                                   parseFloat(pData.product.cutting_time || 0) +
-                                   parseFloat(pData.product.drying_time || 0) +
-                                   parseFloat(pData.product.weighting_time || 0);
-                                   
-                const total_time_minutes = (remaining_quantity / 100) * timePer100;
+                const factor = remaining_quantity / 100;
+                
+                const soakingTime = parseFloat(pData.product.soaking_time || 0) * factor;
+                const cleaningTime = parseFloat(pData.product.cleaning_time || 0) * factor;
+                const cuttingTime = parseFloat(pData.product.cutting_time || 0) * factor;
+                const dryingTime = parseFloat(pData.product.drying_time || 0) * factor;
+                const weightingTime = parseFloat(pData.product.weighting_time || 0) * factor;
+                
+                const total_time_minutes = soakingTime + cleaningTime + cuttingTime + dryingTime + weightingTime;
 
                 demandsArray.push({
                     product_id: parseInt(productId),
@@ -227,6 +229,11 @@ export const getBatchDemands = async (req, res) => {
                     processed_qty: processed,
                     remaining_quantity: remaining_quantity,
                     unit: pData.unit,
+                    total_soaking_time: parseFloat(soakingTime.toFixed(2)),
+                    total_cleaning_time: parseFloat(cleaningTime.toFixed(2)),
+                    total_cutting_time: parseFloat(cuttingTime.toFixed(2)),
+                    total_drying_time: parseFloat(dryingTime.toFixed(2)),
+                    total_weighting_time: parseFloat(weightingTime.toFixed(2)),
                     total_time_minutes: parseFloat(total_time_minutes.toFixed(2))
                 });
             }
