@@ -440,7 +440,9 @@ Product.hasMany(ReturnedProductLog, { foreignKey: 'product_id' });
 const BatchProcessingLog = sequelize.define('BatchProcessingLog', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   date: { type: DataTypes.DATEONLY, allowNull: false },
-  processed_qty_gm: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 }
+  processed_qty_gm: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  process_type: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'soaking' },
+  time_taken_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }
 }, { tableName: 'batch_processing_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 BatchProcessingLog.belongsTo(Batch, { foreignKey: 'batch_id' });

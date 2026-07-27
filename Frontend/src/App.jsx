@@ -45,6 +45,7 @@ import AdminUserHistory from "./pages/admin/AdminUserHistory";
 import AdminUnits from "./pages/admin/AdminUnits";
 import AdminReverseCalculator from "./pages/admin/AdminReverseCalculator";
 import AdminUserPreferences from "./pages/admin/AdminUserPreferences";
+import WorkingLogs from "./pages/admin/WorkingLogs";
 import Landing from "./pages/Landing/Landing";
 
 // Delivery pages
@@ -114,6 +115,7 @@ function App() {
           <Route path="/admin/product-sales" element={<AdminProductSales />} />
           <Route path="/admin/units" element={<AdminUnits />} />
           <Route path="/admin/user-preferences" element={<AdminUserPreferences />} />
+          <Route path="/admin/working-logs" element={<WorkingLogs />} />
         </Route>
 
         {/* 🚚 DELIVERY Routes 🚚 */}

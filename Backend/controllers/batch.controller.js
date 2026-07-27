@@ -249,10 +249,10 @@ export const getBatchDemands = async (req, res) => {
 export const processBatchDemand = async (req, res) => {
     try {
         const { id: batch_id } = req.params;
-        const { date, product_id, processed_qty } = req.body;
+        const { date, product_id, processed_qty, process_type } = req.body;
 
-        if (!date || !product_id || processed_qty === undefined) {
-            return res.status(400).json({ success: false, message: "date, product_id, and processed_qty are required" });
+        if (!date || !product_id || processed_qty === undefined || !process_type) {
+            return res.status(400).json({ success: false, message: "date, product_id, process_type, and processed_qty are required" });
         }
 
         const qty = parseFloat(processed_qty);
@@ -260,23 +260,84 @@ export const processBatchDemand = async (req, res) => {
             return res.status(400).json({ success: false, message: "processed_qty must be greater than 0" });
         }
 
-        let log = await BatchProcessingLog.findOne({
-            where: { batch_id, date, product_id }
-        });
-
-        if (log) {
-            log.processed_qty_gm = parseFloat(log.processed_qty_gm) + qty;
-            await log.save();
-        } else {
-            log = await BatchProcessingLog.create({
-                batch_id,
-                date,
-                product_id,
-                processed_qty_gm: qty
-            });
+        const product = await Product.findByPk(product_id);
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
         }
 
-        res.status(200).json({ success: true, message: "Processed quantity updated", log });
+        // Calculate time based on process_type
+        let timePer100gm = 0;
+        if (process_type === 'soaking') timePer100gm = parseFloat(product.soaking_time || 0);
+        else if (process_type === 'cleaning') timePer100gm = parseFloat(product.cleaning_time || 0);
+        else if (process_type === 'cutting') timePer100gm = parseFloat(product.cutting_time || 0);
+        else if (process_type === 'drying') timePer100gm = parseFloat(product.drying_time || 0);
+        else if (process_type === 'weighting') timePer100gm = parseFloat(product.weighting_time || 0);
+
+        const time_taken_minutes = (qty / 100) * timePer100gm;
+
+        // Create a new log for every session to maintain history
+        const log = await BatchProcessingLog.create({
+            batch_id,
+            date,
+            product_id,
+            process_type,
+            processed_qty_gm: qty,
+            time_taken_minutes: parseFloat(time_taken_minutes.toFixed(2))
+        });
+
+        res.status(200).json({ success: true, message: "Processed quantity logged", log });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/admin/processing-logs
+export const getProcessingLogs = async (req, res) => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ success: false, message: "Date is required" });
+        }
+
+        const logs = await BatchProcessingLog.findAll({
+            where: { date },
+            include: [
+                { model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] },
+                { model: Batch, attributes: ['id', 'name'] }
+            ],
+            order: [['created_at', 'ASC']]
+        });
+
+        const productMap = {};
+
+        logs.forEach(log => {
+            const pid = log.product_id;
+            if (!productMap[pid]) {
+                productMap[pid] = {
+                    product_id: pid,
+                    product_name: log.Product ? log.Product.name : 'Unknown',
+                    unit: log.Product ? log.Product.unit : 'gm',
+                    processes: {}
+                };
+            }
+
+            const ptype = log.process_type || 'unknown';
+            if (!productMap[pid].processes[ptype]) {
+                productMap[pid].processes[ptype] = [];
+            }
+
+            productMap[pid].processes[ptype].push({
+                id: log.id,
+                batch_name: log.Batch ? log.Batch.name : 'Unknown',
+                qty_gm: log.processed_qty_gm,
+                time_taken_minutes: log.time_taken_minutes,
+                created_at: log.created_at
+            });
+        });
+
+        const formattedLogs = Object.values(productMap);
+
+        res.status(200).json({ success: true, date, data: formattedLogs });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

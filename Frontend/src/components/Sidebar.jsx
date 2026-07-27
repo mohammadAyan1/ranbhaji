@@ -3,7 +3,7 @@ import useAuthStore from "../store/authStore";
 import { 
   LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin, 
   Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator, 
-  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings, Activity
 } from "lucide-react";
 
 const adminLinks = [
@@ -25,6 +25,7 @@ const adminLinks = [
   { to: "/admin/reverse-calculator", label: "Reverse Calculator", icon: <Calculator size={20} /> },
   { to: "/admin/retail-orders", label: "Retail Orders", icon: <ShoppingCart size={20} /> },
   { to: "/admin/batches", label: "Batches", icon: <Layers size={20} /> },
+  { to: "/admin/working-logs", label: "Working Logs", icon: <Activity size={20} /> },
   { to: "/admin/all-orders", label: "All Orders", icon: <ListOrdered size={20} /> },
   { to: "/admin/missed-products", label: "Missed Products", icon: <Undo2 size={20} /> },
   { to: "/admin/user-preferences", label: "User Preferences", icon: <Settings size={20} /> },
