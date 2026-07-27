@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import api from "../../api/axios";
 
 export default function AdminUserHistory() {
+  const location = useLocation();
   const [users, setUsers] = useState([]);
   const [packages, setPackages] = useState([]);
-  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState(location.state?.selectedUserId || "");
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
@@ -47,6 +49,12 @@ export default function AdminUserHistory() {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (location.state?.selectedUserId) {
+      setSelectedUserId(location.state.selectedUserId);
+    }
+  }, [location.state]);
 
   // Fetch specific user analytics when a user is selected
   useEffect(() => {

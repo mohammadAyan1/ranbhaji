@@ -18,7 +18,8 @@ const User = sequelize.define('User', {
   otp_expiry: { type: DataTypes.DATE, allowNull: true },
   is_verified: { type: DataTypes.BOOLEAN, defaultValue: false },
   delivery_zones: { type: DataTypes.JSON, allowNull: true },
-  last_assigned_at: { type: DataTypes.DATE, allowNull: true }
+  last_assigned_at: { type: DataTypes.DATE, allowNull: true },
+  disliked_products: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }
 }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 1.5. UNITS
@@ -435,6 +436,18 @@ User.hasMany(ReturnedProductLog, { foreignKey: 'user_id' });
 ReturnedProductLog.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(ReturnedProductLog, { foreignKey: 'product_id' });
 
+// 26. BATCH_PROCESSING_LOG
+const BatchProcessingLog = sequelize.define('BatchProcessingLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  processed_qty_gm: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 }
+}, { tableName: 'batch_processing_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+BatchProcessingLog.belongsTo(Batch, { foreignKey: 'batch_id' });
+Batch.hasMany(BatchProcessingLog, { foreignKey: 'batch_id' });
+BatchProcessingLog.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(BatchProcessingLog, { foreignKey: 'product_id' });
+
 export {
   sequelize,
   User,
@@ -463,6 +476,7 @@ export {
   RetailOrderItem,
   Batch,
   MissedProductLog,
-  ReturnedProductLog
+  ReturnedProductLog,
+  BatchProcessingLog
 };
 

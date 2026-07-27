@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, X } from "lucide-react";
 import api from "../../api/axios";
 
 export default function AdminUsers() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -80,7 +82,14 @@ export default function AdminUsers() {
             <tbody>
               {users.map(u => (
                 <tr key={u.id} className="table-row">
-                  <td className="p-3 text-gray-900 font-medium">{u.name}</td>
+                  <td className="p-3 font-medium">
+                    <button 
+                      onClick={() => navigate("/admin/user-history", { state: { selectedUserId: u.id } })}
+                      className="text-gray-900 hover:text-fresh-600 hover:underline transition-colors text-left"
+                    >
+                      {u.name}
+                    </button>
+                  </td>
                   <td className="p-3 text-gray-600">{u.phone}</td>
                   <td className="p-3 text-gray-500 text-xs">{u.email || "—"}</td>
                   <td className="p-3">

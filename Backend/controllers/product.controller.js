@@ -58,6 +58,18 @@ export const getProducts = async (req, res) => {
     }
 };
 
+// GET /api/products/public/vegetables
+export const getPublicVegetables = async (req, res) => {
+    try {
+        const products = await Product.findAll({
+            where: { category: 'vegetable', status: 'active' },
+            attributes: ['id', 'name', 'hindi_name', 'sub_category', 'image_url']
+        });
+        res.status(200).json({ success: true, products });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 // PUT /api/products/:id  (admin)
 export const updateProduct = async (req, res) => {
     try {

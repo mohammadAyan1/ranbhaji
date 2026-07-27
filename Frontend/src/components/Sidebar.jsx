@@ -3,7 +3,7 @@ import useAuthStore from "../store/authStore";
 import { 
   LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin, 
   Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator, 
-  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings
 } from "lucide-react";
 
 const adminLinks = [
@@ -27,6 +27,7 @@ const adminLinks = [
   { to: "/admin/batches", label: "Batches", icon: <Layers size={20} /> },
   { to: "/admin/all-orders", label: "All Orders", icon: <ListOrdered size={20} /> },
   { to: "/admin/missed-products", label: "Missed Products", icon: <Undo2 size={20} /> },
+  { to: "/admin/user-preferences", label: "User Preferences", icon: <Settings size={20} /> },
 ];
 
 const userLinks = [
@@ -40,6 +41,7 @@ const userLinks = [
   { to: "/notifications", label: "Notifications", icon: <Bell size={20} /> },
   { to: "/retail-store", label: "Retail Store", icon: <ShoppingCart size={20} /> },
   { to: "/my-retail-orders", label: "My Retail Orders", icon: <ClipboardList size={20} /> },
+  { to: "/preferences", label: "Preferences", icon: <Settings size={20} /> },
 ];
 
 const deliveryLinks = [

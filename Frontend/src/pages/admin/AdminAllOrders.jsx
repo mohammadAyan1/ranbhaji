@@ -7,6 +7,7 @@ export default function AdminAllOrders() {
   const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [deliveryBoys, setDeliveryBoys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -61,7 +62,18 @@ export default function AdminAllOrders() {
 
   useEffect(() => {
     fetchBatches();
+    fetchDeliveryBoys();
   }, []);
+
+  const fetchDeliveryBoys = async () => {
+    try {
+      const res = await api.get('/admin/users');
+      const boys = (res.data.users || []).filter(u => u.role === 'delivery');
+      setDeliveryBoys(boys);
+    } catch (err) {
+      console.error('Failed to fetch delivery boys', err);
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -74,6 +86,16 @@ export default function AdminAllOrders() {
       fetchOrders();
     } catch (err) {
       alert('Failed to assign batch');
+    }
+  };
+
+  const handleAssignDeliveryBoy = async (scheduleIds, retailOrderIds, delivery_boy_id) => {
+    try {
+      await api.put('/admin/orders/assign-delivery-boy', { scheduleIds, retailOrderIds, delivery_boy_id: delivery_boy_id || null });
+      alert('Delivery boy assigned successfully');
+      fetchOrders();
+    } catch (err) {
+      alert('Failed to assign delivery boy');
     }
   };
 
@@ -209,17 +231,41 @@ export default function AdminAllOrders() {
                       </td>
                       <td className="p-4 text-right">
                         {currentUser?.role === 'admin' ? (
-                          <select
-                            value={u.batch_id || ''}
-                            onChange={(e) => handleAssignBatch(u.allScheduleIds, u.allRetailOrderIds, e.target.value)}
-                            className="input-field py-1.5 px-3 text-sm min-w-[150px] inline-block bg-gray-100"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <option value="">Unassigned</option>
-                            {batches.map(b => (
-                              <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                          </select>
+                          <div className="text-right flex flex-col items-end gap-2">
+                            <div>
+                                <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Batch</p>
+                                <select
+                                  className="input-field py-1 text-sm bg-gray-50 border-gray-200"
+                                  value={u.batch_id || ""}
+                                  onChange={(e) => handleAssignBatch(u.allScheduleIds, u.allRetailOrderIds, e.target.value)}
+                                >
+                                  <option value="">Unassigned</option>
+                                  {batches.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                  ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {u.batch_id ? batches.find(b => b.id === u.batch_id)?.name || 'Assigned' : 'Unassigned'}
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Boy</p>
+                                <select
+                                  className="input-field py-1 text-sm bg-gray-50 border-gray-200"
+                                  value={u.delivery_boy_id || ""}
+                                  onChange={(e) => handleAssignDeliveryBoy(u.allScheduleIds, u.allRetailOrderIds, e.target.value)}
+                                >
+                                  <option value="">Unassigned</option>
+                                  {deliveryBoys.map(boy => (
+                                    <option key={boy.id} value={boy.id}>{boy.name}</option>
+                                  ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {u.delivery_boy_id ? deliveryBoys.find(b => b.id === u.delivery_boy_id)?.name || 'Assigned' : 'Unassigned'}
+                                </p>
+                            </div>
+                          </div>
                         ) : (
                           <span className="text-gray-600 text-sm">
                             {u.batch_id ? batches.find(b => b.id === u.batch_id)?.name || 'Assigned' : 'Unassigned'}
@@ -260,24 +306,40 @@ export default function AdminAllOrders() {
                                         </div>
                                         <p className="font-medium text-gray-900">{addrGrp.address}</p>
                                       </div>
-                                      <div className="flex flex-col items-start sm:items-end w-full sm:w-auto">
-                                        <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Batch</p>
-                                        {currentUser?.role === 'admin' ? (
-                                          <select
-                                            value={addrGrp.batch_id || ''}
-                                            onChange={(e) => handleAssignBatch(addrGrp.scheduleIds, addrGrp.retailOrderIds, e.target.value)}
-                                            className="input-field py-1.5 px-3 text-sm bg-white border-gray-600 min-w-[150px]"
-                                          >
-                                            <option value="">Unassigned</option>
-                                            {batches.map(b => (
-                                              <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                          </select>
-                                        ) : (
-                                          <span className="text-gray-600 text-sm py-1.5 px-3 bg-white border border-gray-600 rounded">
-                                            {addrGrp.batch_id ? batches.find(b => b.id === addrGrp.batch_id)?.name || 'Assigned' : 'Unassigned'}
-                                          </span>
-                                        )}
+                                      <div className="text-right flex flex-col items-end gap-2">
+                                        <div>
+                                            <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Batch</p>
+                                            <select
+                                                className="input-field py-1 text-sm bg-gray-50 border-gray-200"
+                                                value={addrGrp.batch_id || ""}
+                                                onChange={(e) => handleAssignBatch(addrGrp.scheduleIds, addrGrp.retailOrderIds, e.target.value)}
+                                            >
+                                                <option value="">Unassigned</option>
+                                                {batches.map(b => (
+                                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {addrGrp.batch_id ? batches.find(b => b.id === addrGrp.batch_id)?.name || 'Assigned' : 'Unassigned'}
+                                            </p>
+                                        </div>
+                                        
+                                        <div>
+                                            <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Boy</p>
+                                            <select
+                                                className="input-field py-1 text-sm bg-gray-50 border-gray-200"
+                                                value={addrGrp.delivery_boy_id || ""}
+                                                onChange={(e) => handleAssignDeliveryBoy(addrGrp.scheduleIds, addrGrp.retailOrderIds, e.target.value)}
+                                            >
+                                                <option value="">Unassigned</option>
+                                                {deliveryBoys.map(boy => (
+                                                    <option key={boy.id} value={boy.id}>{boy.name}</option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {addrGrp.delivery_boy_id ? deliveryBoys.find(b => b.id === addrGrp.delivery_boy_id)?.name || 'Assigned' : 'Unassigned'}
+                                            </p>
+                                        </div>
                                       </div>
                                     </div>
 

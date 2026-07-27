@@ -184,10 +184,10 @@ const runNightlyJob = async () => {
                         });
                         const allowedProductIds = allowedPool.map(p => p.product_id);
 
-                        // Filter popular products to only those allowed in this package
+                        const dislikedProducts = sub.User?.disliked_products || [];
                         const sortedProducts = Object.keys(frequencyMap)
                             .map(id => parseInt(id))
-                            .filter(id => allowedProductIds.includes(id))
+                            .filter(id => allowedProductIds.includes(id) && !dislikedProducts.includes(id))
                             .map(id => ({
                                 product_id: id,
                                 frequency: frequencyMap[id]
@@ -196,14 +196,15 @@ const runNightlyJob = async () => {
                         const maxSelectCount = seasonalConfig.max_select_count || 3;
                         const topProducts = sortedProducts.slice(0, maxSelectCount);
 
-                        // Calculate budget
-                        const per_service_amount = parseFloat(sub.Package.price) / sub.Package.services_per_month;
+                        // Calculate budget with margin deduction (same as manual selection)
+                        const pkg = sub.Package;
+                        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
                         // Subscription fixed items
                         const fixedItems = sub.Items.filter(i => i.is_fixed);
                         let fixedCost = 0;
                         for (const fi of fixedItems) {
-                            fixedCost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.selling_price_per_gm);
+                            fixedCost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.purchase_price_per_gm || fi.Product.selling_price_per_gm);
                         }
                         const seasonalBudget = per_service_amount - fixedCost;
 
@@ -213,8 +214,8 @@ const runNightlyJob = async () => {
                             const rows = [];
                             for (const tp of topProducts) {
                                 const prod = await Product.findByPk(tp.product_id, { transaction: t });
-                                if (prod && parseFloat(prod.selling_price_per_gm) > 0) {
-                                    const qty = budgetPerProduct / parseFloat(prod.selling_price_per_gm);
+                                if (prod && parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm) > 0) {
+                                    const qty = budgetPerProduct / parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm);
                                     rows.push({
                                         schedule_id: schedule.id,
                                         product_id: tp.product_id,
@@ -236,13 +237,15 @@ const runNightlyJob = async () => {
 
                             if (pool.length > 0 && seasonalBudget > 0) {
                                 const maxSelectCount = seasonalConfig.max_select_count || 3;
-                                const selectedPoolItems = pool.slice(0, maxSelectCount);
-                                const budgetPerProduct = seasonalBudget / selectedPoolItems.length;
+                                const dislikedProducts = sub.User?.disliked_products || [];
+                                const filteredPool = pool.filter(item => !dislikedProducts.includes(item.product_id));
+                                const selectedPoolItems = filteredPool.slice(0, maxSelectCount);
+                                const budgetPerProduct = seasonalBudget / (selectedPoolItems.length || 1);
                                 const rows = [];
 
                                 for (const item of selectedPoolItems) {
-                                    if (item.Product && parseFloat(item.Product.selling_price_per_gm) > 0) {
-                                        const qty = budgetPerProduct / parseFloat(item.Product.selling_price_per_gm);
+                                    if (item.Product && parseFloat(item.Product.purchase_price_per_gm || item.Product.selling_price_per_gm) > 0) {
+                                        const qty = budgetPerProduct / parseFloat(item.Product.purchase_price_per_gm || item.Product.selling_price_per_gm);
                                         rows.push({
                                             schedule_id: schedule.id,
                                             product_id: item.product_id,

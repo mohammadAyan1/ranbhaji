@@ -19,6 +19,7 @@ import WaterPage from "./pages/user/WaterPage";
 import NotificationsPage from "./pages/user/NotificationsPage";
 import DeliveryHistory from "./pages/user/DeliveryHistory";
 import AddressPage from "./pages/user/AddressPage";
+import UserPreferences from "./pages/user/UserPreferences";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -43,6 +44,7 @@ import AdminProductSales from "./pages/admin/AdminProductSales";
 import AdminUserHistory from "./pages/admin/AdminUserHistory";
 import AdminUnits from "./pages/admin/AdminUnits";
 import AdminReverseCalculator from "./pages/admin/AdminReverseCalculator";
+import AdminUserPreferences from "./pages/admin/AdminUserPreferences";
 import Landing from "./pages/Landing/Landing";
 
 // Delivery pages
@@ -60,7 +62,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<Landing />} />
+        {/* <Route path="/" element={<Landing />} /> */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
         <Route path="/verify-otp" element={<PublicRoute><VerifyOTPPage /></PublicRoute>} />
@@ -86,6 +88,7 @@ function App() {
           <Route path="/retail-store" element={<RetailStore />} />
           <Route path="/my-retail-orders" element={<MyRetailOrders />} />
           <Route path="/payment-status" element={<PaymentStatusPage />} />
+          <Route path="/preferences" element={<UserPreferences />} />
         </Route>
 
         {/* ─── ADMIN Routes ────────────────────────────────────── */}
@@ -110,6 +113,7 @@ function App() {
           <Route path="/admin/missed-products" element={<AdminMissedProducts />} />
           <Route path="/admin/product-sales" element={<AdminProductSales />} />
           <Route path="/admin/units" element={<AdminUnits />} />
+          <Route path="/admin/user-preferences" element={<AdminUserPreferences />} />
         </Route>
 
         {/* 🚚 DELIVERY Routes 🚚 */}

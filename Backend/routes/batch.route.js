@@ -1,6 +1,6 @@
 import express from 'express';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware.js';
-import { createBatch, getBatches, updateBatch, deleteBatch, getActiveBatches, getBatchDemands } from '../controllers/batch.controller.js';
+import { createBatch, getBatches, updateBatch, deleteBatch, getActiveBatches, getBatchDemands, processBatchDemand } from '../controllers/batch.controller.js';
 
 const router = express.Router();
 
@@ -12,6 +12,7 @@ router.post('/admin/batches', requireAuth, requireRole(['admin']), createBatch);
 router.get('/admin/batches', requireAuth, requireRole(['admin']), getBatches);
 router.put('/admin/batches/:id', requireAuth, requireRole(['admin']), updateBatch);
 router.delete('/admin/batches/:id', requireAuth, requireRole(['admin']), deleteBatch);
-router.get('/admin/batches/:id/demands', requireAuth, requireRole(['admin']), getBatchDemands);
+router.get('/admin/batches/:id/demands', requireAuth, getBatchDemands);
+router.post('/admin/batches/:id/demands/process', requireAuth, processBatchDemand);
 
 export default router;

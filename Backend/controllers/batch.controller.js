@@ -1,7 +1,8 @@
 import { 
     Batch, DeliverySchedule, Subscription, SubscriptionItem, 
     Product, Package, PackageSeasonalConfig, WaterSubscription, 
-    DeliveryItem, ScheduleSeasonalSelection, RetailOrder, RetailOrderItem 
+    DeliveryItem, ScheduleSeasonalSelection, RetailOrder, RetailOrderItem,
+    BatchProcessingLog
 } from "../models/index.js";
 
 // POST /api/admin/batches
@@ -95,7 +96,8 @@ export const getBatchDemands = async (req, res) => {
                 demandMap[p.id] = {
                     product_name: p.name,
                     total_quantity: 0,
-                    unit: p.unit || 'gm'
+                    unit: p.unit || 'gm',
+                    product: p
                 };
             }
             demandMap[p.id].total_quantity += quantity;
@@ -192,7 +194,45 @@ export const getBatchDemands = async (req, res) => {
             }
         });
 
-        const demandsArray = Object.values(demandMap).sort((a, b) => b.total_quantity - a.total_quantity);
+        const processingLogs = await BatchProcessingLog.findAll({
+            where: { batch_id, date }
+        });
+
+        const processMap = {};
+        processingLogs.forEach(log => {
+            processMap[log.product_id] = (processMap[log.product_id] || 0) + parseFloat(log.processed_qty_gm);
+        });
+
+        const demandsArray = [];
+        
+        Object.keys(demandMap).forEach(productId => {
+            const pData = demandMap[productId];
+            const processed = processMap[productId] || 0;
+            const remaining_quantity = Math.max(0, pData.total_quantity - processed);
+            
+            if (remaining_quantity > 0) {
+                // Calculate time
+                const timePer100 = parseFloat(pData.product.soaking_time || 0) +
+                                   parseFloat(pData.product.cleaning_time || 0) +
+                                   parseFloat(pData.product.cutting_time || 0) +
+                                   parseFloat(pData.product.drying_time || 0) +
+                                   parseFloat(pData.product.weighting_time || 0);
+                                   
+                const total_time_minutes = (remaining_quantity / 100) * timePer100;
+
+                demandsArray.push({
+                    product_id: parseInt(productId),
+                    product_name: pData.product_name,
+                    total_demand: pData.total_quantity,
+                    processed_qty: processed,
+                    remaining_quantity: remaining_quantity,
+                    unit: pData.unit,
+                    total_time_minutes: parseFloat(total_time_minutes.toFixed(2))
+                });
+            }
+        });
+
+        demandsArray.sort((a, b) => b.remaining_quantity - a.remaining_quantity);
 
         res.status(200).json({
             success: true,
@@ -200,6 +240,43 @@ export const getBatchDemands = async (req, res) => {
             batch_id: parseInt(batch_id),
             demands: demandsArray
         });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/admin/batches/:id/demands/process
+export const processBatchDemand = async (req, res) => {
+    try {
+        const { id: batch_id } = req.params;
+        const { date, product_id, processed_qty } = req.body;
+
+        if (!date || !product_id || processed_qty === undefined) {
+            return res.status(400).json({ success: false, message: "date, product_id, and processed_qty are required" });
+        }
+
+        const qty = parseFloat(processed_qty);
+        if (qty <= 0) {
+            return res.status(400).json({ success: false, message: "processed_qty must be greater than 0" });
+        }
+
+        let log = await BatchProcessingLog.findOne({
+            where: { batch_id, date, product_id }
+        });
+
+        if (log) {
+            log.processed_qty_gm = parseFloat(log.processed_qty_gm) + qty;
+            await log.save();
+        } else {
+            log = await BatchProcessingLog.create({
+                batch_id,
+                date,
+                product_id,
+                processed_qty_gm: qty
+            });
+        }
+
+        res.status(200).json({ success: true, message: "Processed quantity updated", log });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

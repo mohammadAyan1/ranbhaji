@@ -15,7 +15,7 @@ const cookieOpts = {
 // POST /api/auth/register
 export const register = async (req, res) => {
     try {
-        const { name, phone, email, password, role, gender } = req.body;
+        const { name, phone, email, password, role, gender, disliked_products } = req.body;
         if (!name || !phone || !password) {
             return res.status(400).json({ success: false, message: "name, phone, and password are required" });
         }
@@ -37,7 +37,8 @@ export const register = async (req, res) => {
 
         const user = await User.create({
             name, phone, email: email || null, password_hash, role: userRole, gender: gender || null,
-            otp, otp_expiry, is_verified: false
+            otp, otp_expiry, is_verified: false,
+            disliked_products: Array.isArray(disliked_products) ? disliked_products : []
         });
 
         // Auto-assign any custom package targeting this mobile number
@@ -85,9 +86,24 @@ export const login = async (req, res) => {
 export const getMe = async (req, res) => {
     try {
         const user = await User.findByPk(req.user.id, {
-            attributes: { exclude: ['password_hash'] }
+            attributes: { exclude: ['password_hash', 'otp', 'otp_expiry'] }
         });
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
         res.status(200).json({ success: true, user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/auth/me/dislikes
+export const updateDislikes = async (req, res) => {
+    try {
+        const { disliked_products } = req.body;
+        const user = await User.findByPk(req.user.id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        await user.update({ disliked_products: Array.isArray(disliked_products) ? disliked_products : [] });
+        res.status(200).json({ success: true, message: "Preferences updated", disliked_products: user.disliked_products });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

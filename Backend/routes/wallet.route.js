@@ -1,5 +1,5 @@
 import express from "express";
-import { getWallet, addFunds, getTransactions, getTomorrowSummary, getUserSubscriptions, getAllUsers, createUser, overrideCredit, updateUserStatus, assignDeliveryZones } from "../controllers/wallet.controller.js";
+import { getWallet, addFunds, getTransactions, getTomorrowSummary, getUserSubscriptions, getAllUsers, createUser, overrideCredit, updateUserStatus, assignDeliveryZones, updateUserDislikes } from "../controllers/wallet.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
@@ -17,5 +17,6 @@ router.get("/admin/user/:id/all-subscriptions", requireAuth, requireRole(["admin
 router.patch("/admin/credit/:id/override", requireAuth, requireRole(["admin"]), overrideCredit);
 router.patch("/admin/users/:id/status", requireAuth, requireRole(["admin"]), updateUserStatus);
 router.patch("/admin/users/:id/delivery-zones", requireAuth, requireRole(["admin"]), assignDeliveryZones);
+router.put("/admin/users/:id/dislikes", requireAuth, requireRole(["admin"]), updateUserDislikes);
 
 export default router;

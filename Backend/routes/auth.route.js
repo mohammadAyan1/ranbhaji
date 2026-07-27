@@ -2,7 +2,7 @@ import express from "express";
 import { 
     register, login, getMe, logout, 
     verifyRegistrationOTP, resendOTP, 
-    forgotPassword, verifyForgotPasswordOTP, resetPassword 
+    forgotPassword, verifyForgotPasswordOTP, resetPassword, updateDislikes
 } from "../controllers/auth.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 
@@ -11,6 +11,7 @@ const router = express.Router();
 router.post("/register", register);
 router.post("/login", login);
 router.get("/me", requireAuth, getMe);
+router.put("/me/dislikes", requireAuth, updateDislikes);
 router.post("/logout", requireAuth, logout);
 
 router.post("/verify-registration-otp", verifyRegistrationOTP);

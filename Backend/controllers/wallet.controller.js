@@ -209,7 +209,21 @@ export const assignDeliveryZones = async (req, res) => {
         if (!user || user.role !== 'delivery') return res.status(404).json({ success: false, message: "Delivery boy not found" });
 
         await user.update({ delivery_zones: zones });
-        res.status(200).json({ success: true, message: "Delivery zones updated successfully", user });
+        res.status(200).json({ success: true, message: "Delivery zones updated" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PATCH /api/admin/users/:id/dislikes
+export const updateUserDislikes = async (req, res) => {
+    try {
+        const { disliked_products } = req.body;
+        const user = await User.findByPk(req.params.id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        await user.update({ disliked_products: Array.isArray(disliked_products) ? disliked_products : [] });
+        res.status(200).json({ success: true, message: "Preferences updated", disliked_products: user.disliked_products });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

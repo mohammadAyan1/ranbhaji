@@ -1,12 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import useAuthStore from "../store/authStore";
+import api from "../api/axios";
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ name: "", phone: "", email: "", password: "", gender: "male" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", password: "", gender: "male", disliked_products: [] });
   const [error, setError] = useState("");
+  const [vegetables, setVegetables] = useState([]);
   const { register, isLoading } = useAuthStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.get("/products/public/vegetables").then(res => {
+      setVegetables(res.data.products || []);
+    }).catch(console.error);
+  }, []);
+
+  const handleCheckboxChange = (id) => {
+    setForm(prev => {
+      const dislikes = prev.disliked_products.includes(id)
+        ? prev.disliked_products.filter(pId => pId !== id)
+        : [...prev.disliked_products, id];
+      return { ...prev, disliked_products: dislikes };
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,6 +81,28 @@ export default function RegisterPage() {
                 <option value="other">Other</option>
               </select>
             </div>
+            
+            {/* Disliked Vegetables Section */}
+            {vegetables.length > 0 && (
+              <div className="pt-2 border-t border-gray-100">
+                <label className="label">Select vegetables you don't like (Optional)</label>
+                <div className="text-xs text-gray-500 mb-2">We will not include these in your automated deliveries.</div>
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-lg border border-gray-100">
+                  {vegetables.map(veg => (
+                    <label key={veg.id} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300 text-fresh-600 focus:ring-fresh-500"
+                        checked={form.disliked_products.includes(veg.id)}
+                        onChange={() => handleCheckboxChange(veg.id)}
+                      />
+                      <span>{veg.name} <span className="text-gray-400 text-xs">({veg.hindi_name})</span></span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button type="submit" id="register-btn" disabled={isLoading} className="btn-primary w-full mt-2">
               {isLoading ? "Creating account..." : "Create Account"}
             </button>
