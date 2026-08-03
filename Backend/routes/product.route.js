@@ -1,12 +1,12 @@
 import express from "express";
 import { createProduct, getProducts, getPublicVegetables, updateProduct, deleteProduct, createPurchase, getPurchases, getStockSummary, getProductSales, updateRetailPrice } from "../controllers/product.controller.js";
-import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
+import { requireAuth, requireRole, optionalAuth } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
 
 const router = express.Router();
 
 router.get("/public/vegetables", getPublicVegetables);
-router.get("/", requireAuth, getProducts);
+router.get("/", optionalAuth, getProducts);
 router.post("/", requireAuth, requireRole(["admin"]), upload.single("image"), createProduct);
 router.put("/:id", requireAuth, requireRole(["admin"]), upload.single("image"), updateProduct);
 router.put("/:id/retail-price", requireAuth, requireRole(["admin"]), updateRetailPrice);

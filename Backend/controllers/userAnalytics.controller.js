@@ -1,4 +1,4 @@
-import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch } from "../models/index.js";
+import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction } from "../models/index.js";
 import { Op } from "sequelize";
 
 // GET /api/admin/user-analytics/users
@@ -247,6 +247,182 @@ export const getUserAnalytics = async (req, res) => {
 
     } catch (error) {
         console.error("User Analytics Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/admin/user-analytics/customers-filtered
+export const getFilteredCustomers = async (req, res) => {
+    try {
+        const { tab } = req.query; // 'active', 'subscribe', 'lost', 'retail', 'nonactive'
+        const users = await User.findAll({
+            where: { role: 'user' },
+            attributes: ['id', 'name', 'phone', 'wallet_balance', 'created_at']
+        });
+
+        const subscriptions = await Subscription.findAll({ attributes: ['user_id', 'status'] });
+        const retailOrders = await RetailOrder.findAll({ attributes: ['user_id'] });
+
+        const userMap = new Map();
+        users.forEach(u => userMap.set(u.id, { ...u.toJSON(), hasActiveSub: false, hasPastSub: false, retailCount: 0 }));
+
+        subscriptions.forEach(sub => {
+            if (userMap.has(sub.user_id)) {
+                if (sub.status === 'active' || sub.status === 'paused') userMap.get(sub.user_id).hasActiveSub = true;
+                else userMap.get(sub.user_id).hasPastSub = true;
+            }
+        });
+
+        retailOrders.forEach(order => {
+            if (userMap.has(order.user_id)) {
+                userMap.get(order.user_id).retailCount++;
+            }
+        });
+
+        let filtered = [];
+        for (const [id, data] of userMap) {
+            if (tab === 'active') {
+                // Active = ALL customers
+                filtered.push(data);
+            } else if (tab === 'subscribe') {
+                if (data.hasActiveSub && data.retailCount === 0) filtered.push(data);
+            } else if (tab === 'lost') {
+                if (!data.hasActiveSub && data.hasPastSub) filtered.push(data);
+            } else if (tab === 'retail') {
+                if (!data.hasActiveSub && !data.hasPastSub && data.retailCount > 0) filtered.push(data);
+            } else if (tab === 'nonactive') {
+                if (!data.hasActiveSub && !data.hasPastSub && data.retailCount === 0) filtered.push(data);
+            } else {
+                filtered.push(data);
+            }
+        }
+
+        res.status(200).json({ success: true, customers: filtered });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/admin/user-analytics/customer-profile/:id
+export const getCustomerProfile = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Basic User Info
+        const user = await User.findByPk(id, {
+            attributes: ['id', 'name', 'phone', 'email', 'gender', 'wallet_balance', 'created_at']
+        });
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        // 2. Addresses
+        const addresses = await Address.findAll({
+            where: { user_id: id },
+            order: [['id', 'DESC']]
+        });
+
+        // 3. Wallet Transactions
+        const wallet_transactions = await WalletTransaction.findAll({
+            where: { user_id: id },
+            order: [['created_at', 'DESC']]
+        });
+
+        // 4. Retail Orders Stats
+        const retailOrders = await RetailOrder.findAll({
+            where: { user_id: id },
+            order: [['created_at', 'ASC']]
+        });
+        const total_retail_orders = retailOrders.length;
+        const first_retail_date = retailOrders.length > 0 ? retailOrders[0].created_at : null;
+
+        // 5. Subscription Stats
+        const subscriptions = await Subscription.findAll({
+            where: { user_id: id },
+            order: [['created_at', 'ASC']]
+        });
+        const total_subscriptions = subscriptions.length;
+        const first_subscription_date = subscriptions.length > 0 ? subscriptions[0].created_at : null;
+
+        // 6. Deliveries (Servings)
+        const subIds = subscriptions.map(s => s.id);
+        const waterSubscriptions = await WaterSubscription.findAll({
+            where: { user_id: id }
+        });
+        const waterSubIds = waterSubscriptions.map(s => s.id);
+
+        const deliverySchedules = await DeliverySchedule.findAll({
+            where: { 
+                [Op.or]: [
+                    { subscription_id: subIds },
+                    { water_subscription_id: waterSubIds }
+                ],
+                status: 'delivered' 
+            },
+            include: [
+                {
+                    model: DeliveryItem,
+                    as: 'DeliveryItems',
+                    include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] }]
+                }
+            ]
+        });
+
+        const retailDeliveries = await RetailOrder.findAll({
+            where: { user_id: id, delivery_status: 'delivered' },
+            include: [
+                {
+                    model: RetailOrderItem,
+                    as: 'Items',
+                    include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] }]
+                }
+            ]
+        });
+
+        const mergedDeliveries = [
+            ...deliverySchedules.map(ds => ({
+                id: `ds_${ds.id}`,
+                scheduled_date: ds.scheduled_date,
+                type: ds.subscription_id ? 'package' : 'water',
+                DeliveryItems: ds.DeliveryItems.map(di => ({
+                    id: di.id,
+                    quantity: di.qty_gm,
+                    Product: di.Product
+                }))
+            })),
+            ...retailDeliveries.map(ro => ({
+                id: `ro_${ro.id}`,
+                scheduled_date: ro.delivery_date,
+                type: 'retail',
+                DeliveryItems: ro.Items.map(ri => ({
+                    id: ri.id,
+                    quantity: ri.quantity,
+                    Product: ri.Product
+                }))
+            }))
+        ];
+
+        mergedDeliveries.sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+
+        const first_serving_date = mergedDeliveries.length > 0 ? mergedDeliveries[0].scheduled_date : null;
+        const last_serving_date = mergedDeliveries.length > 0 ? mergedDeliveries[mergedDeliveries.length - 1].scheduled_date : null;
+
+        res.status(200).json({
+            success: true,
+            user,
+            addresses,
+            wallet_transactions,
+            stats: {
+                total_retail_orders,
+                first_retail_date,
+                total_subscriptions,
+                first_subscription_date,
+                first_serving_date,
+                last_serving_date
+            },
+            deliveries: mergedDeliveries // ordered by date ASC
+        });
+
+    } catch (error) {
+        console.error(error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

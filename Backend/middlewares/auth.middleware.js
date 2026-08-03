@@ -34,6 +34,34 @@ export const requireAuth = async (req, res, next) => {
     }
 };
 
+export const optionalAuth = async (req, res, next) => {
+    try {
+        let token;
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            token = authHeader.split(" ")[1];
+        } else if (req.cookies && req.cookies.token) {
+            token = req.cookies.token;
+        }
+
+        if (!token) {
+            return next();
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findByPk(decoded.id, {
+            attributes: { exclude: ['password_hash'] }
+        });
+
+        if (user && user.status === 'active') {
+            req.user = user;
+        }
+        next();
+    } catch (error) {
+        next();
+    }
+};
+
 export const requireRole = (roles) => (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({ success: false, message: "Not authenticated" });

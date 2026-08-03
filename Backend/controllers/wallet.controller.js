@@ -228,3 +228,85 @@ export const updateUserDislikes = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// POST /api/admin/users/:id/wallet/adjust
+export const adjustUserWallet = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { amount, type, reason } = req.body;
+        const user = await User.findByPk(req.params.id, { transaction: t });
+        
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+        
+        if (!amount || amount <= 0) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Valid amount required" });
+        }
+        
+        if (type !== 'credit' && type !== 'debit') {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Type must be credit or debit" });
+        }
+
+        let newBalance = parseFloat(user.wallet_balance || 0);
+        let newDue = parseFloat(user.due_amount || 0);
+        let val = parseFloat(amount);
+
+        if (type === 'credit') {
+            if (newDue > 0) {
+                if (val >= newDue) {
+                    val -= newDue;
+                    newDue = 0;
+                    newBalance += val;
+                } else {
+                    newDue -= val;
+                }
+            } else {
+                newBalance += val;
+            }
+        } else if (type === 'debit') {
+            newBalance -= val;
+            if (newBalance < 0) {
+                newDue += Math.abs(newBalance);
+                newBalance = 0;
+            }
+        }
+
+        await user.update({ wallet_balance: newBalance, due_amount: newDue }, { transaction: t });
+        
+        let photo_url = null;
+        if (req.file) {
+            photo_url = `/uploads/${req.file.filename}`;
+        }
+
+        const transaction = await WalletTransaction.create({ 
+            user_id: user.id, 
+            amount: parseFloat(amount), 
+            type, 
+            reason: reason || `Admin manual adjustment (${type})`,
+            photo_url
+        }, { transaction: t });
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Wallet adjusted successfully", transaction, wallet_balance: newBalance, due_amount: newDue });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/admin/users/:id/wallet/transactions
+export const getUserWalletTransactions = async (req, res) => {
+    try {
+        const transactions = await WalletTransaction.findAll({
+            where: { user_id: req.params.id },
+            order: [['created_at', 'DESC']]
+        });
+        res.status(200).json({ success: true, transactions });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

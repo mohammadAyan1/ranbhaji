@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
-import api from "../../api/axios";
+import api from "../../../api/axios";
 
-export default function AdminReverseCalculator() {
+export default function PackageCalculator() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("error"); // "success" | "error"
 
   // Simulator Settings
-  const [totalAmount, setTotalAmount] = useState(2000); // REVERSE: Total Package Price
+  const [marginPercent, setMarginPercent] = useState(50);
   const [servicesCount, setServicesCount] = useState(5);
   const [fixedCount, setFixedCount] = useState(2);
   const [seasonalCount, setSeasonalCount] = useState(3);
@@ -102,13 +102,17 @@ export default function AdminReverseCalculator() {
   // Totals
   const totalFixedPurchaseCost = calculatedFixed.reduce((sum, item) => sum + item.purchaseCost, 0);
   const totalSeasonalPurchaseCost = calculatedSeasonal.reduce((sum, item) => sum + item.purchaseCost, 0);
-  const totalBasePurchaseCost = totalFixedPurchaseCost + totalSeasonalPurchaseCost; // Per serving
+  const totalBasePurchaseCost = totalFixedPurchaseCost + totalSeasonalPurchaseCost;
 
-  // Reverse Margin Pricing
-  const totalCostForPackage = totalBasePurchaseCost * parseInt(servicesCount || 1);
-  const finalPackagePrice = parseFloat(totalAmount || 0);
-  const calculatedMarginAmount = finalPackagePrice - totalCostForPackage;
-  const calculatedMarginPercent = totalCostForPackage > 0 ? (calculatedMarginAmount / totalCostForPackage) * 100 : 0;
+  // Margin Pricing
+  // 1. Cost ko 2 se divide kiya
+  const dividedCost = totalBasePurchaseCost / 2;
+  // 2. Divided cost par margin nikala
+  const marginAmount = dividedCost * (parseFloat(marginPercent || 0) / 100);
+  // 3. Margin ko original cost me add kiya 
+  const pricePerService = totalBasePurchaseCost + marginAmount;
+  // 4. Deliveries (services) se multiply kiya
+  const finalPackagePrice = pricePerService * parseInt(servicesCount || 1);
 
   // Save Draft package simulation
   const saveDraft = async () => {
@@ -150,7 +154,7 @@ export default function AdminReverseCalculator() {
 
     const payload = {
       name: draftName,
-      margin_percent: parseFloat(calculatedMarginPercent.toFixed(2)),
+      margin_percent: parseFloat(marginPercent || 0),
       services_per_month: parseInt(servicesCount || 1),
       num_persons: parseInt(numPersons || 2),
       num_persons_max: personRangeModeCalc && numPersonsMax ? parseInt(numPersonsMax) : null,
@@ -177,8 +181,8 @@ export default function AdminReverseCalculator() {
     <div className="space-y-6 animate-fade-in pb-12">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="page-header">Reverse Margin Calculator 🔄</h1>
-          <p className="page-sub">Enter your target package price and calculate the margin you will earn based on base materials.</p>
+          <h1 className="page-header">Package Calculator 🧮</h1>
+          <p className="page-sub">Configure base materials, define fixed/seasonal slots, apply margin, and calculate draft package pricing.</p>
         </div>
         <div className="flex gap-3">
           <button onClick={clearCalculator} className="btn-secondary text-sm">
@@ -200,13 +204,14 @@ export default function AdminReverseCalculator() {
       {/* ─── SETTINGS PANEL ───────────────────────────────────────── */}
       <div className="card grid grid-cols-2 md:grid-cols-5 gap-4 border-gray-200 bg-white/50">
         <div>
-          <label className="label text-xs uppercase tracking-wider">Total Package Amount (₹)</label>
+          <label className="label text-xs uppercase tracking-wider">Margin Percent (%)</label>
           <input
             type="number"
             min="0"
-            className="input text-sm text-fresh-600 font-bold"
-            value={totalAmount}
-            onChange={(e) => setTotalAmount(e.target.value)}
+            max="200"
+            className="input text-sm"
+            value={marginPercent}
+            onChange={(e) => setMarginPercent(e.target.value)}
           />
         </div>
         <div>
@@ -338,34 +343,30 @@ export default function AdminReverseCalculator() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Base Cost */}
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
-          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Cost Per Service</p>
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Total Base Purchase Cost</p>
           <p className="text-2xl font-bold text-gray-900">₹{totalBasePurchaseCost.toFixed(2)}</p>
           <span className="text-[10px] text-gray-500">Fixed: ₹{totalFixedPurchaseCost.toFixed(2)} · Seasonal: ₹{totalSeasonalPurchaseCost.toFixed(2)}</span>
         </div>
 
+        {/* Per-Service Margin Price */}
+        <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Selling Price Per Service</p>
+          <p className="text-2xl font-bold text-yellow-400">₹{pricePerService.toFixed(2)}</p>
+          <span className="text-[10px] text-gray-500">Base Cost + {marginPercent}% Margin</span>
+        </div>
+
         {/* Deliveries */}
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
-          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Total Package Cost</p>
-          <p className="text-2xl font-bold text-red-500">₹{totalCostForPackage.toFixed(2)}</p>
-          <span className="text-[10px] text-gray-500">₹{totalBasePurchaseCost.toFixed(2)} * {servicesCount} deliveries</span>
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Deliveries Count</p>
+          <p className="text-2xl font-bold text-blue-400">{servicesCount}</p>
+          <span className="text-[10px] text-gray-500">Deliveries per package cycle</span>
         </div>
 
-        {/* Calculated Margin Amount */}
+        {/* Final Price */}
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
-          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculated Margin (₹)</p>
-          <p className={`text-2xl font-bold ${calculatedMarginAmount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            ₹{calculatedMarginAmount.toFixed(2)}
-          </p>
-          <span className="text-[10px] text-gray-500">Total Price - Total Package Cost</span>
-        </div>
-
-        {/* Calculated Margin Percent */}
-        <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
-          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculated Margin (%)</p>
-          <p className={`text-2xl font-bold ${calculatedMarginPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {calculatedMarginPercent.toFixed(2)}%
-          </p>
-          <span className="text-[10px] text-gray-500">(Margin / Total Package Cost) * 100</span>
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculated Package Price</p>
+          <p className="text-2xl font-bold text-fresh-600">₹{finalPackagePrice.toFixed(2)}</p>
+          <span className="text-[10px] text-gray-500">₹{pricePerService.toFixed(2)} * {servicesCount} services</span>
         </div>
       </div>
 

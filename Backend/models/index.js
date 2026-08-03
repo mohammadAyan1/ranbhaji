@@ -30,14 +30,31 @@ const Unit = sequelize.define('Unit', {
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
 }, { tableName: 'units', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
+// 1.6. CATEGORIES
+const Category = sequelize.define('Category', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(100), allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+}, { tableName: 'categories', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+// 1.7. SUB_CATEGORIES
+const SubCategory = sequelize.define('SubCategory', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(100), allowNull: false },
+  category_id: { type: DataTypes.INTEGER, allowNull: true }, // linking to Category.id
+  description: { type: DataTypes.TEXT, allowNull: true },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+}, { tableName: 'sub_categories', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
 // 2. PRODUCTS
 const Product = sequelize.define('Product', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(100) },
   hindi_name: { type: DataTypes.STRING(100), allowNull: true },
   image_url: { type: DataTypes.STRING(255), allowNull: true },
-  category: { type: DataTypes.ENUM('vegetable', 'fruit', 'water', 'exotic', 'salad') },
-  sub_category: { type: DataTypes.STRING(50) },
+  category: { type: DataTypes.STRING(100) },
+  sub_category: { type: DataTypes.STRING(100) },
   description: { type: DataTypes.TEXT, allowNull: true },
   purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
   selling_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
@@ -155,7 +172,8 @@ const WalletTransaction = sequelize.define('WalletTransaction', {
   amount: { type: DataTypes.DECIMAL(10, 2) },
   type: { type: DataTypes.ENUM('credit', 'debit') },
   reason: { type: DataTypes.STRING(255) },
-  reference_id: { type: DataTypes.INTEGER, allowNull: true }
+  reference_id: { type: DataTypes.INTEGER, allowNull: true },
+  photo_url: { type: DataTypes.STRING(255), allowNull: true }
 }, { tableName: 'wallet_transactions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 12. PAUSE_LOG
@@ -414,8 +432,11 @@ Batch.hasMany(WaterSubscription, { foreignKey: 'batch_id' });
 const MissedProductLog = sequelize.define('MissedProductLog', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   missed_date: { type: DataTypes.DATEONLY, allowNull: false },
-  missed_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-  next_schedule_date: { type: DataTypes.DATEONLY, allowNull: true }
+  missed_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true }, // Allow null for full orders
+  next_schedule_date: { type: DataTypes.DATEONLY, allowNull: true },
+  source_type: { type: DataTypes.ENUM('retail', 'subscription'), allowNull: true },
+  source_id: { type: DataTypes.INTEGER, allowNull: true },
+  is_full_order: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, { tableName: 'missed_product_logs', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 MissedProductLog.belongsTo(User, { foreignKey: 'user_id' });
@@ -442,7 +463,10 @@ const BatchProcessingLog = sequelize.define('BatchProcessingLog', {
   date: { type: DataTypes.DATEONLY, allowNull: false },
   processed_qty_gm: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
   process_type: { type: DataTypes.STRING(50), allowNull: true, defaultValue: 'soaking' },
-  time_taken_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }
+  expected_time_taken_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  time_taken_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  start_time: { type: DataTypes.DATE, allowNull: true },
+  end_time: { type: DataTypes.DATE, allowNull: true }
 }, { tableName: 'batch_processing_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 BatchProcessingLog.belongsTo(Batch, { foreignKey: 'batch_id' });
@@ -450,9 +474,32 @@ Batch.hasMany(BatchProcessingLog, { foreignKey: 'batch_id' });
 BatchProcessingLog.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(BatchProcessingLog, { foreignKey: 'product_id' });
 
+// 27. ZONE
+const Zone = sequelize.define('Zone', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(100), allowNull: false },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+}, { tableName: 'zones', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+// 28. LOSS_LOG
+const LossLog = sequelize.define('LossLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  loss_date: { type: DataTypes.DATEONLY, allowNull: false },
+  loss_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  loss_type: { type: DataTypes.ENUM('spoiled/unsold', 'extra_delivered'), allowNull: false },
+  purchase_price_at_loss: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  total_loss_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 }
+}, { tableName: 'loss_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+LossLog.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(LossLog, { foreignKey: 'product_id' });
+
 export {
   sequelize,
   User,
+  Category,
+  SubCategory,
   Unit,
   Product,
   Package,
@@ -479,6 +526,8 @@ export {
   Batch,
   MissedProductLog,
   ReturnedProductLog,
-  BatchProcessingLog
+  BatchProcessingLog,
+  Zone,
+  LossLog
 };
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import api from "../../api/axios";
+import AdjustWalletModal from "./AdjustWalletModal";
 
 export default function AdminUserHistory() {
   const location = useLocation();
@@ -8,12 +9,14 @@ export default function AdminUserHistory() {
   const [packages, setPackages] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(location.state?.selectedUserId || "");
   const [analytics, setAnalytics] = useState(null);
+  const [walletTransactions, setWalletTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [batches, setBatches] = useState([]);
@@ -67,8 +70,12 @@ export default function AdminUserHistory() {
       setLoading(true);
       setMsg("");
       try {
-        const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+        const [res, transRes] = await Promise.all([
+          api.get(`/admin/user-analytics/${selectedUserId}`),
+          api.get(`/admin/users/${selectedUserId}/wallet/transactions`)
+        ]);
         setAnalytics(res.data.analytics);
+        setWalletTransactions(transRes.data.transactions);
       } catch (err) {
         setMsg(`❌ Failed to load analytics for user: ${err.response?.data?.message || err.message}`);
       } finally {
@@ -182,6 +189,9 @@ export default function AdminUserHistory() {
           </button>
           <button onClick={() => setShowRenewModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-fresh-200 text-fresh-700 bg-fresh-50 hover:bg-fresh-100">
             <span>🔄</span> Renew Package
+          </button>
+          <button onClick={() => setShowWalletModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
+            <span>💰</span> Adjust Wallet
           </button>
         </div>
       )}
@@ -531,8 +541,73 @@ export default function AdminUserHistory() {
             )}
           </div>
 
+          {/* 4. Wallet Transactions */}
+          <div className="card lg:col-span-2">
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              💳 Wallet Transaction History
+            </h2>
+            {walletTransactions.length === 0 ? (
+              <p className="text-gray-500 text-sm italic py-4">No wallet transactions found.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead>
+                    <tr className="table-header">
+                      <th className="p-3 rounded-tl-xl">Date & Time</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Amount</th>
+                      <th className="p-3">Reason</th>
+                      <th className="p-3 rounded-tr-xl">Photo Attachment</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {walletTransactions.map((wt, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                        <td className="p-3 whitespace-nowrap text-xs text-gray-500 font-medium">
+                          {new Date(wt.created_at).toLocaleString("en-IN")}
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${wt.type === 'credit' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {wt.type === 'credit' ? '+ Credit' : '- Debit'}
+                          </span>
+                        </td>
+                        <td className={`p-3 font-bold ${wt.type === 'credit' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          ₹{parseFloat(wt.amount).toFixed(2)}
+                        </td>
+                        <td className="p-3 text-gray-700 max-w-xs truncate" title={wt.reason}>
+                          {wt.reason}
+                        </td>
+                        <td className="p-3">
+                          {wt.photo_url ? (
+                            <a href={`http://localhost:5000${wt.photo_url}`} target="_blank" rel="noreferrer" className="text-blue-500 underline text-xs">
+                              View Photo
+                            </a>
+                          ) : (
+                            <span className="text-gray-400 text-xs italic">N/A</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
         </div>
       )}
+
+      <AdjustWalletModal 
+        isOpen={showWalletModal} 
+        onClose={() => setShowWalletModal(false)}
+        user={selectedUser}
+        onSuccess={() => {
+          // Re-fetch transactions
+          api.get(`/admin/users/${selectedUserId}/wallet/transactions`).then(res => {
+            setWalletTransactions(res.data.transactions);
+          });
+        }}
+      />
     </div>
   );
 }

@@ -1,34 +1,108 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
 import useAuthStore from "../store/authStore";
-import { 
-  LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin, 
-  Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator, 
-  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings, Activity
+import {
+  LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin,
+  Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator,
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings, Activity, ChevronDown, Database, Briefcase
 } from "lucide-react";
 
 const adminLinks = [
   { to: "/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
-  { to: "/admin/products", label: "Products", icon: <ShoppingBag size={20} /> },
-  { to: "/admin/units", label: "Units Management", icon: <Scale size={20} /> },
-  { to: "/admin/packages", label: "Packages", icon: <Package size={20} /> },
-  { to: "/admin/subscriptions", label: "Subscriptions", icon: <RefreshCw size={20} /> },
-  { to: "/admin/users", label: "Users", icon: <Users size={20} /> },
-  { to: "/admin/user-history", label: "User History", icon: <UserCheck size={20} /> },
-  { to: "/admin/user-addresses", label: "User Addresses", icon: <MapPin size={20} /> },
-  { to: "/admin/deliveries", label: "Delivered Orders", icon: <Truck size={20} /> },
-  { to: "/admin/demands", label: "Stock Demands", icon: <BarChart3 size={20} /> },
-  { to: "/admin/product-sales", label: "Product Sales", icon: <TrendingUp size={20} /> },
-  { to: "/admin/seasonal-selections", label: "Seasonal Picks", icon: <Leaf size={20} /> },
-  { to: "/admin/returns", label: "Returns", icon: <Undo2 size={20} /> },
-  { to: "/admin/summary", label: "Daily Summary", icon: <ClipboardList size={20} /> },
-  { to: "/admin/calculator", label: "Price Calculator", icon: <Calculator size={20} /> },
-  { to: "/admin/reverse-calculator", label: "Reverse Calculator", icon: <Calculator size={20} /> },
-  { to: "/admin/retail-orders", label: "Retail Orders", icon: <ShoppingCart size={20} /> },
-  { to: "/admin/batches", label: "Batches", icon: <Layers size={20} /> },
-  { to: "/admin/working-logs", label: "Working Logs", icon: <Activity size={20} /> },
-  { to: "/admin/all-orders", label: "All Orders", icon: <ListOrdered size={20} /> },
-  { to: "/admin/missed-products", label: "Missed Products", icon: <Undo2 size={20} /> },
-  { to: "/admin/user-preferences", label: "User Preferences", icon: <Settings size={20} /> },
+  {
+    label: "Master",
+    icon: <Database size={20} />,
+    isCollapsible: true,
+    children: [
+      { to: "/admin/master/categories", label: "Category" },
+      { to: "/admin/master/sub-categories", label: "Sub Category" },
+      { to: "/admin/products?tab=catalog", label: "Products" },
+      { to: "/admin/batches", label: "Batch" },
+      { to: "/admin/packages", label: "Package" },
+      { to: "/admin/master/zones", label: "Zone" },
+      { to: "/admin/units", label: "Unit" },
+    ]
+  },
+  {
+    label: "Calculator",
+    icon: <Calculator size={20} />,
+    isCollapsible: true,
+    children: [
+      { to: "/admin/calculators/package", label: "Package Calculator" },
+      { to: "/admin/calculators/margin", label: "Margin Calculator" },
+    ]
+  },
+  {
+    label: "Package",
+    icon: <Package size={20} />,
+    isCollapsible: true,
+    children: [
+      { to: "/admin/package-management/draft", label: "Draft Package" },
+      { to: "/admin/package-management/active", label: "Total Active Package" },
+      { to: "/admin/package-management/inactive", label: "Non Active Package" },
+    ]
+  },
+  {
+    label: "Today Work",
+    icon: <Briefcase size={20} />,
+    isCollapsible: true,
+    children: [
+      { to: "/admin/products?tab=purchase", label: "Today Purchases" },
+      { to: "/admin/today-work/batch-assign", label: "Batch Assign" },
+      { to: "/admin/working-logs", label: "Current Process" },
+      { to: "/admin/today-work/missing", label: "Missing" },
+      { to: "/admin/today-work/ready", label: "Ready for Deliver" },
+      { to: "/admin/today-work/dispatch", label: "Dispatch" },
+      { to: "/admin/deliveries", label: "Delivered" },
+      { to: "/admin/today-work/return-item", label: "Return Item" },
+      { to: "/admin/returns", label: "Return Order" },
+    ]
+  },
+  {
+    label: "Customer",
+    icon: <Users size={20} />,
+    isCollapsible: true,
+    children: [
+      { to: "/admin/customers/active", label: "Active Customer" },
+      { to: "/admin/customers/subscribe", label: "Subscribe Customer" },
+      { to: "/admin/customers/lost", label: "Lost Customer" },
+      { to: "/admin/customers/retail", label: "Retails Customer" },
+      { to: "/admin/customers/non-active", label: "Non Active Customer" },
+      { to: "/admin/user-preferences", label: "User Preferences" },
+    ]
+  },
+  {
+    label: "Reports",
+    icon: <BarChart3 size={20} />,
+    isCollapsible: true,
+    children: [
+      { to: "/admin/reports/item-purchase", label: "Total Item Purchase" },
+      { to: "/admin/reports/item-delivery", label: "Total Item Delivery" },
+      { to: "/admin/reports/customer-register", label: "Customer Register" },
+      { to: "/admin/reports/subscription-converted", label: "Subscription Converted" },
+      { to: "/admin/reports/lost-customer", label: "Total Lost Customer" },
+      { to: "/admin/reports/loss", label: "Total Loss" },
+    ]
+  },
+  // {
+  //   label: "Others (Old Links)",
+  //   icon: <Settings size={20} />,
+  //   isCollapsible: true,
+  //   children: [
+  //     { to: "/admin/users", label: "Users" },
+  //     { to: "/admin/user-history", label: "User History" },
+  //     { to: "/admin/user-addresses", label: "User Addresses" },
+  //     { to: "/admin/subscriptions", label: "Subscriptions" },
+  //     { to: "/admin/demands", label: "Stock Demands" },
+  //     { to: "/admin/product-sales", label: "Product Sales" },
+  //     { to: "/admin/seasonal-selections", label: "Seasonal Picks" },
+  //     { to: "/admin/summary", label: "Daily Summary" },
+  //     { to: "/admin/retail-orders", label: "Retail Orders" },
+  //     { to: "/admin/all-orders", label: "All Orders" },
+  //     { to: "/admin/units", label: "Units Management" },
+  //     { to: "/admin/user-preferences", label: "User Preferences" },
+  //   ]
+  // }
 ];
 
 const userLinks = [
@@ -53,6 +127,12 @@ const deliveryLinks = [
 export default function Sidebar({ onClose }) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [expandedMenus, setExpandedMenus] = useState({ "Products": false });
+
+  const toggleMenu = (label) => {
+    setExpandedMenus(prev => ({ ...prev, [label]: !prev[label] }));
+  };
 
   const links = user?.role === "admin" ? adminLinks
     : user?.role === "delivery" ? deliveryLinks
@@ -83,6 +163,47 @@ export default function Sidebar({ onClose }) {
       {/* Nav links */}
       <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto scrollbar-thin">
         {links.map((link) => {
+          if (link.isCollapsible) {
+            const isOpen = expandedMenus[link.label];
+            const isActiveParent = link.children.some(child => location.pathname === child.to.split('?')[0]);
+
+            return (
+              <div key={link.label} className="space-y-1">
+                <button
+                  onClick={() => toggleMenu(link.label)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium ${isActiveParent && !isOpen ? 'bg-fresh-50 text-fresh-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={isActiveParent ? "text-fresh-600" : ""}>{link.icon}</div>
+                    <span>{link.label}</span>
+                  </div>
+                  <ChevronDown size={16} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isOpen && (
+                  <div className="pl-11 space-y-1 pb-1">
+                    {link.children.map(child => {
+                      const isExactTab = location.search === child.to.substring(child.to.indexOf('?')) || (!location.search && child.to.endsWith('?tab=catalog'));
+                      const isChildActive = (location.pathname === child.to.split('?')[0]) && (child.to.includes('?') ? isExactTab : true);
+
+                      return (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          onClick={() => onClose && onClose()}
+                          className={`block px-3 py-2 rounded-lg text-sm transition-all duration-200 ${isChildActive ? "bg-fresh-100 text-fresh-700 font-semibold" : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"}`}
+                        >
+                          {child.label}
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           const isAqua = link.to === "/water";
           return (
             <NavLink
@@ -115,7 +236,7 @@ export default function Sidebar({ onClose }) {
           </div>
         </div>
         <button onClick={handleLogout} className="w-full btn-secondary text-sm py-2.5 flex items-center justify-center gap-2 group border-red-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600">
-          <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" /> 
+          <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" />
           <span className="font-semibold tracking-wide">Logout</span>
         </button>
       </div>

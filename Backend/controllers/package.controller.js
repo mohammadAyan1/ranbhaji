@@ -89,7 +89,7 @@ export const getPackages = async (req, res) => {
         });
 
         // Strip price details for non-admins (only show package price, not per-item prices)
-        const data = filtered.map(p => {
+        let data = filtered.map(p => {
             const obj = p.toJSON();
             if (!isAdmin) {
                 delete obj.margin_percent;
@@ -132,6 +132,23 @@ export const getPackages = async (req, res) => {
                         obj.is_grandfathered_price = true; // flag for frontend if needed
                     }
                 }
+            }
+        }
+
+        if (isAdmin && req.query.adminTab) {
+            const allSubs = await Subscription.findAll({ where: { status: 'active' }, attributes: ['package_id'] });
+            const activePackageIds = new Set(allSubs.map(s => s.package_id));
+
+            if (req.query.adminTab === 'draft') {
+                data = data.filter(p => p.type === 'custom');
+            } else if (req.query.adminTab === 'active') {
+                data = data.filter(p => activePackageIds.has(p.id));
+                data = data.map(p => {
+                    p.active_subscribers_count = allSubs.filter(s => s.package_id === p.id).length;
+                    return p;
+                });
+            } else if (req.query.adminTab === 'inactive') {
+                data = data.filter(p => !activePackageIds.has(p.id));
             }
         }
 

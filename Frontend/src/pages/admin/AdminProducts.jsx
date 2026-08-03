@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 
-const CATEGORIES = ["vegetable", "fruit", "water", "exotic", "salad"];
 const UNITS = ["gm", "ml", "piece"];
 
 const emptyForm = {
-  name: "", hindi_name: "", category: "vegetable", sub_category: "",
+  name: "", hindi_name: "", category: "", sub_category: "",
   purchase_price_input: "", margin_percentage: "", unit: "gm", unit_id: "",
   description: "", min_retail_qty: "",
   soaking_time: "", cleaning_time: "", cutting_time: "", drying_time: "", weighting_time: "", image: null
@@ -21,14 +21,26 @@ export default function AdminProducts() {
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [priceUnit, setPriceUnit] = useState("kg");
   const [unitsList, setUnitsList] = useState([]);
+  const [dbCategories, setDbCategories] = useState([]);
+  const [dbSubCategories, setDbSubCategories] = useState([]);
 
+  const location = useLocation();
+  const navigate = useNavigate();
   // Tabs: "catalog" | "purchase" | "stock" | "logs"
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("tab") || "catalog";
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    if (tab) setActiveTab(tab);
+  }, [location.search]);
 
   // Purchase Entry Form State
   const [demands, setDemands] = useState([]);
@@ -82,12 +94,30 @@ export default function AdminProducts() {
     api.get(`/admin/demands?date=${today}`).then(r => setDemands(r.data.demands || [])).catch(err => console.error(err));
   };
 
+  const fetchCategories = () => {
+    api.get("/categories").then(r => {
+      const cats = (r.data.categories || []).filter(c => c.status === "active");
+      setDbCategories(cats);
+      if (cats.length > 0 && !emptyForm.category) {
+         emptyForm.category = cats[0].name;
+      }
+    });
+  };
+
+  const fetchSubCategories = () => {
+    api.get("/sub-categories").then(r => {
+      setDbSubCategories((r.data.subCategories || []).filter(sc => sc.status === "active"));
+    });
+  };
+
   useEffect(() => {
     fetchProducts();
     fetchPurchaseLogs();
     fetchStockSummary();
     fetchDemands();
     fetchUnits();
+    fetchCategories();
+    fetchSubCategories();
   }, []);
 
   useEffect(() => {
@@ -96,6 +126,16 @@ export default function AdminProducts() {
     if (activeTab === "catalog") fetchProducts();
     if (activeTab === "purchase") fetchDemands();
   }, [activeTab]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    } else if (!tab && activeTab !== "catalog") {
+      setActiveTab("catalog");
+    }
+  }, [location.search]);
 
   // Catalog Form Change
   const handleFormChange = (field, value) => {
@@ -109,6 +149,7 @@ export default function AdminProducts() {
       if (field === "category") {
         updated.purchase_price_input = "";
         updated.margin_percentage = "";
+        updated.sub_category = "";
       }
     }
     setForm(updated);
@@ -144,6 +185,7 @@ export default function AdminProducts() {
     payload.append("cutting_time", form.cutting_time || 0);
     payload.append("drying_time", form.drying_time || 0);
     payload.append("weighting_time", form.weighting_time || 0);
+
     if (form.image) {
       payload.append("image", form.image);
     }
@@ -163,6 +205,21 @@ export default function AdminProducts() {
       fetchStockSummary();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message}`);
+    }
+  };
+
+  const handleToggleStatus = async (p) => {
+    if (!confirm(`Are you sure you want to ${p.status === "active" ? "disable" : "enable"} ${p.name}?`)) return;
+    try {
+      const newStatus = p.status === "active" ? "inactive" : "active";
+      const payload = new FormData();
+      payload.append("status", newStatus);
+      await api.put(`/products/${p.id}`, payload, { headers: { "Content-Type": "multipart/form-data" } });
+      setMsg(`✅ Product ${p.name} is now ${newStatus}`);
+      fetchProducts();
+      fetchStockSummary();
+    } catch (err) {
+      setMsg(`❌ Failed to update status: ${err.response?.data?.message || err.message}`);
     }
   };
 
@@ -186,19 +243,28 @@ export default function AdminProducts() {
     const mode = canUseKg ? "kg" : "gm";
     setPriceUnit(mode);
 
+    const buyPrice = parseFloat(p.purchase_price_per_gm) || 0;
+    const sellPrice = parseFloat(p.selling_price_per_gm) || 0;
+    
+    let uId = p.unit_id;
+    if (!uId && unt) {
+      const matchedUnit = unitsList.find(u => u.abbreviation === unt || u.name === unt);
+      if (matchedUnit) uId = matchedUnit.id;
+    }
+
     setForm({
       name: p.name,
       hindi_name: p.hindi_name || "",
       category: cat,
       sub_category: p.sub_category || "",
-      purchase_price_input: canUseKg
-        ? (parseFloat(p.purchase_price_per_gm) * 1000).toFixed(2)
-        : p.purchase_price_per_gm,
-      margin_percentage: p.selling_price_per_gm && p.purchase_price_per_gm
-        ? (((parseFloat(p.selling_price_per_gm) - parseFloat(p.purchase_price_per_gm)) / parseFloat(p.purchase_price_per_gm)) * 100).toFixed(1)
+      purchase_price_input: buyPrice > 0 
+        ? (canUseKg ? (buyPrice * 1000).toFixed(2) : buyPrice)
         : "",
-      unit: unt,
-      unit_id: p.unit_id || "",
+      margin_percentage: buyPrice > 0 
+        ? (((sellPrice - buyPrice) / buyPrice) * 100).toFixed(1)
+        : "",
+      unit: unt || "",
+      unit_id: uId || "",
       description: p.description || "",
       min_retail_qty: p.min_retail_qty || "",
       soaking_time: p.soaking_time || "",
@@ -270,7 +336,13 @@ export default function AdminProducts() {
     }
   };
 
-  const filteredProducts = products.filter(p => filterCategory === "all" || p.category === filterCategory);
+  const filteredProducts = products.filter(p => {
+    const matchCategory = filterCategory === "all" || p.category === filterCategory;
+    const matchStatus = statusFilter === "all" || p.status === statusFilter;
+    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        (p.hindi_name && p.hindi_name.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchCategory && matchStatus && matchSearch;
+  });
 
   // Live preview values
   const purchaseInput = parseFloat(form.purchase_price_input) || 0;
@@ -331,7 +403,7 @@ export default function AdminProducts() {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setMsg(""); }}
+              onClick={() => { setActiveTab(tab.id); setMsg(""); navigate(`?tab=${tab.id}`, { replace: true }); }}
               className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === tab.id
                 ? "bg-fresh-600 text-gray-900 shadow-md shadow-fresh-900/20"
                 : "text-gray-600 hover:text-gray-900"
@@ -397,18 +469,27 @@ export default function AdminProducts() {
               <div>
                 <label className="label">Category</label>
                 <select className="input" value={form.category} onChange={e => handleFormChange("category", e.target.value)}>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">Select Category</option>
+                  {dbCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
               </div>
 
               <div>
                 <label className="label">Sub-Category</label>
-                <input
-                  className="input"
-                  placeholder={isWater ? "glass / plastic" : "leafy, root, tropical..."}
-                  value={form.sub_category}
+                <select 
+                  className="input" 
+                  value={form.sub_category} 
                   onChange={e => handleFormChange("sub_category", e.target.value)}
-                />
+                >
+                  <option value="">Select Sub-Category</option>
+                  {dbSubCategories
+                    .filter(sc => {
+                      const selectedCat = dbCategories.find(c => c.name === form.category);
+                      return selectedCat && sc.category_id === selectedCat.id;
+                    })
+                    .map(sc => <option key={sc.id} value={sc.name}>{sc.name}</option>)
+                  }
+                </select>
               </div>
 
               <div>
@@ -518,30 +599,32 @@ export default function AdminProducts() {
               <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-5 gap-4 pt-2 pb-2 border-y border-gray-100 mt-2">
                 <div>
                   <label className="label text-[11px] mb-1">Soaking (min/100g)</label>
-                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
                     value={form.soaking_time} onChange={e => handleFormChange("soaking_time", e.target.value)} />
                 </div>
                 <div>
                   <label className="label text-[11px] mb-1">Cleaning (min/100g)</label>
-                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 5"
+                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 5"
                     value={form.cleaning_time} onChange={e => handleFormChange("cleaning_time", e.target.value)} />
                 </div>
                 <div>
                   <label className="label text-[11px] mb-1">Cutting (min/100g)</label>
-                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 15"
+                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 15"
                     value={form.cutting_time} onChange={e => handleFormChange("cutting_time", e.target.value)} />
                 </div>
                 <div>
                   <label className="label text-[11px] mb-1">Drying (min/100g)</label>
-                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
                     value={form.drying_time} onChange={e => handleFormChange("drying_time", e.target.value)} />
                 </div>
                 <div>
                   <label className="label text-[11px] mb-1">Weighting (min/100g)</label>
-                  <input type="number" step="0.1" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
+                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
                     value={form.weighting_time} onChange={e => handleFormChange("weighting_time", e.target.value)} />
                 </div>
-              </div>
+                </div>
+
+
 
               <div className="md:col-span-2 lg:col-span-3 flex flex-wrap items-center gap-4 pt-3">
                 <button type="submit" className="btn-primary px-8">
@@ -569,17 +652,49 @@ export default function AdminProducts() {
           <div className="card">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-gray-200">
               <h3 className="font-semibold text-gray-900">Catalog Products ({filteredProducts.length})</h3>
-              <div className="flex flex-wrap gap-1 bg-gray-850 p-1 rounded-xl border border-gray-200">
-                {["all", "vegetable", "fruit", "water", "exotic", "salad"].map(c => (
+              <div className="flex flex-wrap items-center gap-3">
+                <input 
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-fresh-500 focus:border-fresh-500 outline-none w-full sm:w-48"
+                />
+                
+                <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-200">
                   <button
-                    key={c}
+                    onClick={() => setStatusFilter("all")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${statusFilter === "all" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  >All</button>
+                  <button
+                    onClick={() => setStatusFilter("active")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${statusFilter === "active" ? "bg-green-100 text-green-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  >Active</button>
+                  <button
+                    onClick={() => setStatusFilter("inactive")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${statusFilter === "inactive" ? "bg-red-100 text-red-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  >Disabled</button>
+                </div>
+
+                <div className="flex flex-wrap gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200">
+                  <button
                     type="button"
-                    onClick={() => setFilterCategory(c)}
-                    className={`px-3 py-1.5 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
+                    onClick={() => setFilterCategory("all")}
+                    className={`px-3 py-1.5 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === "all" ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
                   >
-                    {c === "all" ? "All" : c}
+                    All Cats
                   </button>
-                ))}
+                  {dbCategories.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setFilterCategory(c.name)}
+                      className={`px-3 py-1.5 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c.name ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -640,7 +755,17 @@ export default function AdminProducts() {
                         <td className="p-3 text-right text-fresh-600">{margin}%</td>
                         <td className="p-3 text-right text-gray-500">{p.unit}</td>
                         <td className="p-3 text-center">
-                          <span className={p.status === "active" ? "badge-green" : "badge-red"}>{p.status}</span>
+                          <button
+                            onClick={() => handleToggleStatus(p)}
+                            title={`Click to ${p.status === "active" ? "disable" : "enable"}`}
+                            className={`px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider transition-all shadow-sm ${
+                              p.status === "active"
+                                ? "bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
+                                : "bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
+                            }`}
+                          >
+                            {p.status === "active" ? "Active" : "Disabled"}
+                          </button>
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">

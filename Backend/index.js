@@ -28,7 +28,11 @@ import batchRoutes from "./routes/batch.route.js";
 import userAnalyticsRoutes from "./routes/userAnalytics.route.js";
 import dashboardRoutes from "./routes/dashboard.route.js";
 import unitRoutes from "./routes/unit.routes.js";
-
+import zoneRoutes from "./routes/zone.route.js";
+import categoryRoutes from "./routes/category.route.js";
+import subCategoryRoutes from "./routes/subCategory.route.js";
+import todayWorkRoutes from "./routes/todayWork.route.js";
+import reportRoutes from "./routes/report.route.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
@@ -85,7 +89,11 @@ app.use("/api", batchRoutes);
 app.use("/api/admin/user-analytics", userAnalyticsRoutes);
 app.use("/api/admin", dashboardRoutes);
 app.use("/api/units", unitRoutes);
-
+app.use("/api/zones", zoneRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/sub-categories", subCategoryRoutes);
+app.use("/api/today-work", todayWorkRoutes);
+app.use("/api/reports", reportRoutes);
 
 // 404 fallback
 app.use((req, res) => {

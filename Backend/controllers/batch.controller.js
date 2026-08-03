@@ -1,6 +1,6 @@
-import { 
-    Batch, DeliverySchedule, Subscription, SubscriptionItem, 
-    Product, Package, PackageSeasonalConfig, WaterSubscription, 
+import {
+    Batch, DeliverySchedule, Subscription, SubscriptionItem,
+    Product, Package, PackageSeasonalConfig, WaterSubscription,
     DeliveryItem, ScheduleSeasonalSelection, RetailOrder, RetailOrderItem,
     BatchProcessingLog
 } from "../models/index.js";
@@ -49,7 +49,7 @@ export const updateBatch = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, status } = req.body;
-        
+
         const batch = await Batch.findByPk(id);
         if (!batch || batch.is_deleted) return res.status(404).json({ success: false, message: "Batch not found" });
 
@@ -65,7 +65,7 @@ export const deleteBatch = async (req, res) => {
     try {
         const { id } = req.params;
         const batch = await Batch.findByPk(id);
-        
+
         if (!batch || batch.is_deleted) return res.status(404).json({ success: false, message: "Batch not found" });
 
         await batch.update({ is_deleted: true });
@@ -138,7 +138,7 @@ export const getBatchDemands = async (req, res) => {
             // Package Subscription
             if (schedule.Subscription) {
                 const sub = schedule.Subscription;
-                
+
                 // Fixed items
                 if (sub.Items) {
                     sub.Items.forEach(item => {
@@ -147,7 +147,7 @@ export const getBatchDemands = async (req, res) => {
                         }
                     });
                 }
-                
+
                 // Seasonal items
                 if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
                     schedule.SeasonalSelections.forEach(sel => {
@@ -164,11 +164,11 @@ export const getBatchDemands = async (req, res) => {
                     });
                 }
             }
-            
+
             // Water Subscription
             if (schedule.WaterSubscription) {
                 const ws = schedule.WaterSubscription;
-                const qty = ws.container === 'glass' ? 20 : 20; 
+                const qty = ws.container === 'glass' ? 20 : 20;
                 const p = ws.water_type === 'health' ? defaultHealthWater : defaultMiracleWater;
                 if (p) {
                     addDemand(p, qty);
@@ -204,27 +204,29 @@ export const getBatchDemands = async (req, res) => {
         });
 
         const demandsArray = [];
-        
+
         Object.keys(demandMap).forEach(productId => {
             const pData = demandMap[productId];
             const processed = processMap[productId] || 0;
             const remaining_quantity = Math.max(0, pData.total_quantity - processed);
-            
+
             if (remaining_quantity > 0) {
                 // Calculate time
                 const factor = remaining_quantity / 100;
-                
+
                 const soakingTime = parseFloat(pData.product.soaking_time || 0) * factor;
                 const cleaningTime = parseFloat(pData.product.cleaning_time || 0) * factor;
                 const cuttingTime = parseFloat(pData.product.cutting_time || 0) * factor;
                 const dryingTime = parseFloat(pData.product.drying_time || 0) * factor;
                 const weightingTime = parseFloat(pData.product.weighting_time || 0) * factor;
-                
+
                 const total_time_minutes = soakingTime + cleaningTime + cuttingTime + dryingTime + weightingTime;
 
                 demandsArray.push({
                     product_id: parseInt(productId),
                     product_name: pData.product_name,
+                    product_image: pData.product.image_url,
+                    hindi_name: pData.product.hindi_name,
                     total_demand: pData.total_quantity,
                     processed_qty: processed,
                     remaining_quantity: remaining_quantity,
@@ -256,7 +258,7 @@ export const getBatchDemands = async (req, res) => {
 export const processBatchDemand = async (req, res) => {
     try {
         const { id: batch_id } = req.params;
-        const { date, product_id, processed_qty, process_type } = req.body;
+        const { date, product_id, processed_qty, process_type, type } = req.body;
 
         if (!date || !product_id || processed_qty === undefined || !process_type) {
             return res.status(400).json({ success: false, message: "date, product_id, process_type, and processed_qty are required" });
@@ -272,7 +274,77 @@ export const processBatchDemand = async (req, res) => {
             return res.status(404).json({ success: false, message: "Product not found" });
         }
 
-        // Calculate time based on process_type
+        if (type === 'start') {
+            let timePer100gm = 0;
+            if (process_type === 'soaking') timePer100gm = parseFloat(product.soaking_time || 0);
+            else if (process_type === 'cleaning') timePer100gm = parseFloat(product.cleaning_time || 0);
+            else if (process_type === 'cutting') timePer100gm = parseFloat(product.cutting_time || 0);
+            else if (process_type === 'drying') timePer100gm = parseFloat(product.drying_time || 0);
+            else if (process_type === 'weighting') timePer100gm = parseFloat(product.weighting_time || 0);
+
+            const expected_time_taken_minutes = (qty / 100) * timePer100gm;
+
+            const log = await BatchProcessingLog.create({
+                batch_id,
+                date,
+                product_id,
+                process_type,
+                processed_qty_gm: qty,
+                expected_time_taken_minutes: parseFloat(expected_time_taken_minutes.toFixed(2)),
+                time_taken_minutes: 0,
+                start_time: new Date()
+            });
+            return res.status(200).json({
+                success: true,
+                message: "Process started",
+                product_image: product.image_url,
+                hindi_name: product.hindi_name,
+                expected_time_taken_minutes: parseFloat(expected_time_taken_minutes.toFixed(2)),
+                start_time: log.start_time,
+                is_ended: false,
+                log
+            });
+        } else if (type === 'end') {
+            const log = await BatchProcessingLog.findOne({
+                where: {
+                    batch_id,
+                    date,
+                    product_id,
+                    process_type,
+                    end_time: null
+                },
+                order: [['created_at', 'DESC']]
+            });
+
+            if (!log) {
+                return res.status(404).json({ success: false, message: "No active process found to end" });
+            }
+
+            const endTime = new Date();
+            const timeDiffMs = endTime - new Date(log.start_time);
+            const timeTakenMinutes = timeDiffMs / 60000;
+            const timeTakenSeconds = timeDiffMs / 1000;
+
+            await log.update({
+                end_time: endTime,
+                time_taken_minutes: parseFloat(timeTakenMinutes.toFixed(2))
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: "Process ended",
+                product_image: product.image_url,
+                hindi_name: product.hindi_name,
+                expected_time_taken_minutes: log.expected_time_taken_minutes,
+                start_time: log.start_time,
+                end_time: log.end_time,
+                time_taken_seconds: parseFloat(timeTakenSeconds.toFixed(2)),
+                is_ended: true,
+                log
+            });
+        }
+
+        // Fallback for auto/manual calculation if type is not start or end
         let timePer100gm = 0;
         if (process_type === 'soaking') timePer100gm = parseFloat(product.soaking_time || 0);
         else if (process_type === 'cleaning') timePer100gm = parseFloat(product.cleaning_time || 0);
@@ -282,7 +354,6 @@ export const processBatchDemand = async (req, res) => {
 
         const time_taken_minutes = (qty / 100) * timePer100gm;
 
-        // Create a new log for every session to maintain history
         const log = await BatchProcessingLog.create({
             batch_id,
             date,
@@ -309,8 +380,8 @@ export const getProcessingLogs = async (req, res) => {
         const logs = await BatchProcessingLog.findAll({
             where: { date },
             include: [
-                { model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] },
-                { model: Batch, attributes: ['id', 'name'] }
+                { model: Product },
+                { model: Batch }
             ],
             order: [['created_at', 'ASC']]
         });
@@ -323,7 +394,10 @@ export const getProcessingLogs = async (req, res) => {
                 productMap[pid] = {
                     product_id: pid,
                     product_name: log.Product ? log.Product.name : 'Unknown',
+                    hindi_name: log.Product ? log.Product.hindi_name : null,
+                    image_url: log.Product ? log.Product.image_url : null,
                     unit: log.Product ? log.Product.unit : 'gm',
+                    product_details: log.Product, // full joined product
                     processes: {}
                 };
             }
@@ -333,12 +407,11 @@ export const getProcessingLogs = async (req, res) => {
                 productMap[pid].processes[ptype] = [];
             }
 
+            const logData = log.toJSON();
             productMap[pid].processes[ptype].push({
-                id: log.id,
+                ...logData,
                 batch_name: log.Batch ? log.Batch.name : 'Unknown',
-                qty_gm: log.processed_qty_gm,
-                time_taken_minutes: log.time_taken_minutes,
-                created_at: log.created_at
+                batch_details: log.Batch // full joined batch
             });
         });
 

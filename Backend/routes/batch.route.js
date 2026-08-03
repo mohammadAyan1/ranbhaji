@@ -14,6 +14,6 @@ router.put('/admin/batches/:id', requireAuth, requireRole(['admin']), updateBatc
 router.delete('/admin/batches/:id', requireAuth, requireRole(['admin']), deleteBatch);
 router.get('/admin/batches/:id/demands', requireAuth, getBatchDemands);
 router.post('/admin/batches/:id/demands/process', requireAuth, processBatchDemand);
-router.get('/admin/processing-logs', requireAuth, requireRole(['admin']), getProcessingLogs);
+router.get('/admin/processing-logs', requireAuth, getProcessingLogs);
 
 export default router;

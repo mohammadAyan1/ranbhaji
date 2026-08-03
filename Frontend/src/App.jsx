@@ -29,7 +29,6 @@ import AdminUserAddresses from "./pages/admin/AdminUserAddresses";
 import AdminPackages from "./pages/admin/AdminPackages";
 import AdminSubscriptions from "./pages/admin/AdminSubscriptions";
 import AdminReturns from "./pages/admin/AdminReturns";
-import AdminCalculator from "./pages/admin/AdminCalculator";
 import AdminDeliveries from "./pages/admin/AdminDeliveries";
 import AdminDemands from "./pages/admin/AdminDemands";
 import AdminSeasonalSelections from "./pages/admin/AdminSeasonalSelections";
@@ -43,10 +42,48 @@ import AdminMissedProducts from "./pages/admin/AdminMissedProducts";
 import AdminProductSales from "./pages/admin/AdminProductSales";
 import AdminUserHistory from "./pages/admin/AdminUserHistory";
 import AdminUnits from "./pages/admin/AdminUnits";
-import AdminReverseCalculator from "./pages/admin/AdminReverseCalculator";
 import AdminUserPreferences from "./pages/admin/AdminUserPreferences";
+
+// Reports
+import ItemPurchaseReport from "./pages/admin/Reports/ItemPurchaseReport";
+import ItemDeliveryReport from "./pages/admin/Reports/ItemDeliveryReport";
+import CustomerRegisterReport from "./pages/admin/Reports/CustomerRegisterReport";
+import SubscriptionConvertedReport from "./pages/admin/Reports/SubscriptionConvertedReport";
+import LostCustomerReport from "./pages/admin/Reports/LostCustomerReport";
+import LossReport from "./pages/admin/Reports/LossReport";
+import LossDetail from "./pages/admin/Reports/LossDetail";
 import WorkingLogs from "./pages/admin/WorkingLogs";
 import Landing from "./pages/Landing/Landing";
+
+// Master
+import AdminCategories from "./pages/admin/Master/AdminCategories";
+import AdminSubCategories from "./pages/admin/Master/AdminSubCategories";
+import AdminZones from "./pages/admin/Master/AdminZones";
+
+// Calculators
+import PackageCalculator from "./pages/admin/Calculators/PackageCalculator";
+import MarginCalculator from "./pages/admin/Calculators/MarginCalculator";
+import BatchAssign from "./pages/admin/TodayWork/BatchAssign";
+import Missing from "./pages/admin/TodayWork/Missing";
+
+// Package Management
+import DraftPackages from "./pages/admin/PackageManagement/DraftPackages";
+import ActivePackages from "./pages/admin/PackageManagement/ActivePackages";
+import InactivePackages from "./pages/admin/PackageManagement/InactivePackages";
+
+// Today Work
+import ReadyForDeliver from "./pages/admin/TodayWork/ReadyForDeliver";
+import DispatchOrders from "./pages/admin/TodayWork/DispatchOrders";
+import ReturnItem from "./pages/admin/TodayWork/ReturnItem";
+
+// Customers
+import ActiveCustomers from "./pages/admin/Customers/ActiveCustomers";
+import SubscribeCustomers from "./pages/admin/Customers/SubscribeCustomers";
+import LostCustomers from "./pages/admin/Customers/LostCustomers";
+import RetailCustomers from "./pages/admin/Customers/RetailCustomers";
+import NonActiveCustomers from "./pages/admin/Customers/NonActiveCustomers";
+import CustomerProfile from "./pages/admin/Customers/CustomerProfile";
+
 
 // Delivery pages
 import DeliveryHome from "./pages/delivery/DeliveryHome";
@@ -63,7 +100,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<Landing />} />
+        {/* <Route path="/" element={<Landing />} /> */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
         <Route path="/verify-otp" element={<PublicRoute><VerifyOTPPage /></PublicRoute>} />
@@ -106,8 +143,8 @@ function App() {
           <Route path="/admin/demands" element={<AdminDemands />} />
           <Route path="/admin/seasonal-selections" element={<AdminSeasonalSelections />} />
           <Route path="/admin/summary" element={<AdminDashboard />} />
-          <Route path="/admin/calculator" element={<AdminCalculator />} />
-          <Route path="/admin/reverse-calculator" element={<AdminReverseCalculator />} />
+          <Route path="/admin/calculators/package" element={<PackageCalculator />} />
+          <Route path="/admin/calculators/margin" element={<MarginCalculator />} />
           <Route path="/admin/retail-orders" element={<AdminRetailOrders />} />
           <Route path="/admin/batches" element={<AdminBatches />} />
           <Route path="/admin/all-orders" element={<AdminAllOrders />} />
@@ -115,7 +152,43 @@ function App() {
           <Route path="/admin/product-sales" element={<AdminProductSales />} />
           <Route path="/admin/units" element={<AdminUnits />} />
           <Route path="/admin/user-preferences" element={<AdminUserPreferences />} />
+          
+          {/* Working Logs */}
           <Route path="/admin/working-logs" element={<WorkingLogs />} />
+          <Route path="/admin/master/sub-categories" element={<AdminSubCategories />} />
+          <Route path="/admin/master/zones" element={<AdminZones />} />
+
+          {/* Master */}
+          <Route path="/admin/master/categories" element={<AdminCategories />} />
+
+          {/* Package Management */}
+          <Route path="/admin/package-management/draft" element={<DraftPackages />} />
+          <Route path="/admin/package-management/active" element={<ActivePackages />} />
+          <Route path="/admin/package-management/inactive" element={<InactivePackages />} />
+
+          {/* Today Work */}
+          <Route path="/admin/today-work/batch-assign" element={<BatchAssign />} />
+          <Route path="/admin/today-work/missing" element={<Missing />} />
+          <Route path="/admin/today-work/ready" element={<ReadyForDeliver />} />
+          <Route path="/admin/today-work/dispatch" element={<DispatchOrders />} />
+          <Route path="/admin/today-work/return-item" element={<ReturnItem />} />
+
+          {/* Customers */}
+          <Route path="/admin/customers/active" element={<ActiveCustomers />} />
+          <Route path="/admin/customers/subscribe" element={<SubscribeCustomers />} />
+          <Route path="/admin/customers/lost" element={<LostCustomers />} />
+          <Route path="/admin/customers/retail" element={<RetailCustomers />} />
+          <Route path="/admin/customers/non-active" element={<NonActiveCustomers />} />
+          <Route path="/admin/customers/profile/:id" element={<CustomerProfile />} />
+
+          {/* Reports */}
+          <Route path="/admin/reports/item-purchase" element={<ItemPurchaseReport />} />
+          <Route path="/admin/reports/item-delivery" element={<ItemDeliveryReport />} />
+          <Route path="/admin/reports/customer-register" element={<CustomerRegisterReport />} />
+          <Route path="/admin/reports/subscription-converted" element={<SubscriptionConvertedReport />} />
+          <Route path="/admin/reports/lost-customer" element={<LostCustomerReport />} />
+          <Route path="/admin/reports/loss" element={<LossReport />} />
+          <Route path="/admin/reports/loss/:productId" element={<LossDetail />} />
         </Route>
 
         {/* 🚚 DELIVERY Routes 🚚 */}

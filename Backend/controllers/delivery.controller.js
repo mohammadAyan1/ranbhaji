@@ -4,7 +4,8 @@ import {
     DeliverySchedule, DeliveryItem, Subscription, SubscriptionItem, User, Product,
     WalletTransaction, Notification, WaterSubscription, Package, Address,
     ScheduleSeasonalSelection, PackageSeasonalConfig,
-    RetailOrder, RetailOrderItem, Batch, MissedProductLog, ReturnedProductLog
+    RetailOrder, RetailOrderItem, Batch, MissedProductLog, ReturnedProductLog,
+    LossLog, PurchaseLog
 } from "../models/index.js";
 import path from "path";
 
@@ -917,6 +918,33 @@ export const getReturns = async (req, res) => {
             }
         }
 
+        // Enrich with is_full_return
+        const scheduleIds = [...new Set(returnsData.map(r => r.schedule_id))];
+        if (scheduleIds.length > 0) {
+            const allItems = await DeliveryItem.findAll({
+                where: { schedule_id: { [Op.in]: scheduleIds } },
+                attributes: ['schedule_id', 'return_status']
+            });
+            const scheduleItemCounts = {};
+            allItems.forEach(item => {
+                if (!scheduleItemCounts[item.schedule_id]) {
+                    scheduleItemCounts[item.schedule_id] = { total: 0, returned: 0 };
+                }
+                scheduleItemCounts[item.schedule_id].total++;
+                if (item.return_status !== 'none') {
+                    scheduleItemCounts[item.schedule_id].returned++;
+                }
+            });
+            for (const r of returnsData) {
+                const counts = scheduleItemCounts[r.schedule_id];
+                if (counts && counts.total > 0 && counts.total === counts.returned) {
+                    r.is_full_return = true;
+                } else {
+                    r.is_full_return = false;
+                }
+            }
+        }
+
         res.status(200).json({ success: true, returns: returnsData });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -1330,11 +1358,12 @@ export const getAllOrdersForDate = async (req, res) => {
             return usersMap[user.id];
         };
 
-        const getOrInitAddressGroup = (uMap, addrStr, batchId, status) => {
+        const getOrInitAddressGroup = (uMap, addrStr, batchId, status, deliveryBoyId) => {
             if (!uMap.addressesMap[addrStr]) {
                 uMap.addressesMap[addrStr] = {
                     addressText: addrStr,
                     batch_id: batchId,
+                    delivery_boy_id: deliveryBoyId,
                     status: status, // Add status to track if it's ready_for_delivery
                     is_returned_serving: false,
                     scheduleIds: [],
@@ -1344,6 +1373,9 @@ export const getAllOrdersForDate = async (req, res) => {
             }
             if (batchId && !uMap.addressesMap[addrStr].batch_id) {
                 uMap.addressesMap[addrStr].batch_id = batchId;
+            }
+            if (deliveryBoyId && !uMap.addressesMap[addrStr].delivery_boy_id) {
+                uMap.addressesMap[addrStr].delivery_boy_id = deliveryBoyId;
             }
             if (status === 'ready_for_delivery') {
                 uMap.addressesMap[addrStr].status = 'ready_for_delivery';
@@ -1403,7 +1435,7 @@ export const getAllOrdersForDate = async (req, res) => {
             if (!uMap.commonBatchId && s.batch_id) uMap.commonBatchId = s.batch_id;
 
             const addrStr = formatAddress(address);
-            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id, s.status);
+            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id, s.status, s.delivery_boy_id);
             addrGrp.scheduleIds.push(s.id);
             if (s.is_returned_serving) addrGrp.is_returned_serving = true;
 
@@ -1486,7 +1518,7 @@ export const getAllOrdersForDate = async (req, res) => {
             if (!uMap.commonBatchId && r.batch_id) uMap.commonBatchId = r.batch_id;
 
             const addrStr = formatAddress(address);
-            const addrGrp = getOrInitAddressGroup(uMap, addrStr, r.batch_id, r.delivery_status);
+            const addrGrp = getOrInitAddressGroup(uMap, addrStr, r.batch_id, r.delivery_status, r.delivery_boy_id);
             addrGrp.retailOrderIds.push(r.id);
 
             const items = r.Items || [];
@@ -1511,6 +1543,7 @@ export const getAllOrdersForDate = async (req, res) => {
             const addresses = Object.values(u.addressesMap).map(a => ({
                 address: a.addressText,
                 batch_id: a.batch_id,
+                delivery_boy_id: a.delivery_boy_id,
                 status: a.status,
                 scheduleIds: a.scheduleIds,
                 retailOrderIds: a.retailOrderIds,
@@ -1649,6 +1682,40 @@ export const packOrders = async (req, res) => {
 
                         await item.update({ packed_qty: alloc });
                         remainingPacked[productId] = Math.max(0, rem - alloc);
+
+                        // If we packed more than demanded, log the extra as loss
+                        if (alloc > demanded) {
+                            const extra = alloc - demanded;
+                            
+                            // Find recent purchase price
+                            const lastPurchase = await PurchaseLog.findOne({
+                                where: { 
+                                    product_id: productId, 
+                                    purchase_date: { [Op.lte]: new Date() }
+                                },
+                                order: [['purchase_date', 'DESC']]
+                            });
+
+                            let baseRate = 0;
+                            if (lastPurchase) {
+                                baseRate = parseFloat(lastPurchase.purchase_price_per_kg); // or per piece if piece
+                            } else {
+                                const p = await Product.findByPk(productId);
+                                if (p) baseRate = parseFloat(p.purchase_price_per_gm) * (p.unit === 'piece' ? 1 : 1000); // Wait, if purchase_price_per_gm is used for kg calculation, let's just use purchase_price_per_gm directly.
+                            }
+                            
+                            const p = await Product.findByPk(productId);
+                            let safeRate = p ? parseFloat(p.purchase_price_per_gm) : 0;
+                            
+                            await LossLog.create({
+                                product_id: productId,
+                                loss_date: new Date().toISOString().split('T')[0],
+                                loss_qty: extra,
+                                loss_type: 'extra_delivered',
+                                purchase_price_at_loss: safeRate,
+                                total_loss_amount: extra * safeRate
+                            });
+                        }
                     }
                 } else {
                     // Unchecked

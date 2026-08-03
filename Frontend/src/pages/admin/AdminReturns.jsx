@@ -29,6 +29,7 @@ export default function AdminReturns() {
       // Group returns by order
       const grouped = {};
       (res.data.returns || []).forEach(r => {
+        if (!r.is_full_return) return; // Only show FULL returns here
         const scheduleId = r.DeliverySchedule?.id || "unknown";
         if (!grouped[scheduleId]) {
           grouped[scheduleId] = {

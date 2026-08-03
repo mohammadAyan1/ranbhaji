@@ -7,8 +7,8 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, D
 export const createProduct = async (req, res) => {
     try {
         const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time } = req.body;
-        if (!name || !category || !purchase_price_per_gm || !selling_price_per_gm || (!unit && !unit_id)) {
-            return res.status(400).json({ success: false, message: "name, category, purchase_price_per_gm, selling_price_per_gm and unit/unit_id are required" });
+        if (!name || !category || (!unit && !unit_id)) {
+            return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
         
         let image_url = null;
@@ -17,7 +17,10 @@ export const createProduct = async (req, res) => {
         }
 
         const product = await Product.create({ 
-            name, hindi_name, image_url, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description,
+            name, hindi_name, image_url, category, sub_category, 
+            purchase_price_per_gm: purchase_price_per_gm || 0, 
+            selling_price_per_gm: selling_price_per_gm || 0, 
+            unit, unit_id, description,
             min_retail_qty: min_retail_qty || 0,
             soaking_time: soaking_time || 0,
             cleaning_time: cleaning_time || 0,
@@ -25,6 +28,9 @@ export const createProduct = async (req, res) => {
             drying_time: drying_time || 0,
             weighting_time: weighting_time || 0
         });
+
+
+
         res.status(201).json({ success: true, product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -42,7 +48,9 @@ export const getProducts = async (req, res) => {
         const isAdmin = req.user?.role === 'admin';
         if (!isAdmin) where.status = 'active';
 
-        const products = await Product.findAll({ where });
+        const products = await Product.findAll({ 
+            where
+        });
 
         // Strip cost price info for non-admins
         const data = products.map(p => {
@@ -91,6 +99,9 @@ export const updateProduct = async (req, res) => {
         }
 
         await product.update(updateData);
+        
+
+
         res.status(200).json({ success: true, product });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
