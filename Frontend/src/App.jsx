@@ -74,6 +74,7 @@ import InactivePackages from "./pages/admin/PackageManagement/InactivePackages";
 // Today Work
 import ReadyForDeliver from "./pages/admin/TodayWork/ReadyForDeliver";
 import DispatchOrders from "./pages/admin/TodayWork/DispatchOrders";
+import AssignDeliveryBoy from "./pages/admin/TodayWork/AssignDeliveryBoy";
 import ReturnItem from "./pages/admin/TodayWork/ReturnItem";
 
 // Customers
@@ -170,6 +171,7 @@ function App() {
           <Route path="/admin/today-work/batch-assign" element={<BatchAssign />} />
           <Route path="/admin/today-work/missing" element={<Missing />} />
           <Route path="/admin/today-work/ready" element={<ReadyForDeliver />} />
+          <Route path="/admin/today-work/assign-delivery" element={<AssignDeliveryBoy />} />
           <Route path="/admin/today-work/dispatch" element={<DispatchOrders />} />
           <Route path="/admin/today-work/return-item" element={<ReturnItem />} />
 

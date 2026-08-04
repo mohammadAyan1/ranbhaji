@@ -160,6 +160,7 @@ export const createUser = async (req, res) => {
             phone,
             email: email || null,
             password_hash,
+            actual_password: password,
             role: role || 'user',
             is_verified: true, // Already verified if admin creates
             status: 'active'

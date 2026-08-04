@@ -36,7 +36,7 @@ export const register = async (req, res) => {
         const otp_expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
         const user = await User.create({
-            name, phone, email: email || null, password_hash, role: userRole, gender: gender || null,
+            name, phone, email: email || null, password_hash, actual_password: password, role: userRole, gender: gender || null,
             otp, otp_expiry, is_verified: false,
             disliked_products: Array.isArray(disliked_products) ? disliked_products : []
         });
@@ -225,6 +225,7 @@ export const resetPassword = async (req, res) => {
 
         const password_hash = await bcrypt.hash(password, 10);
         user.password_hash = password_hash;
+        user.actual_password = password;
         user.otp = null;
         user.otp_expiry = null;
         await user.save();

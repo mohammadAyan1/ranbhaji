@@ -2,7 +2,7 @@ import {
     Batch, DeliverySchedule, Subscription, SubscriptionItem,
     Product, Package, PackageSeasonalConfig, WaterSubscription,
     DeliveryItem, ScheduleSeasonalSelection, RetailOrder, RetailOrderItem,
-    BatchProcessingLog, User
+    BatchProcessingLog, User, PackageSeasonalPool
 } from "../models/index.js";
 
 // POST /api/admin/batches
@@ -114,7 +114,8 @@ export const getBatchDemands = async (req, res) => {
                     required: false,
                     include: [
                         { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
-                        { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] }
+                        { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }, { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }] },
+                        { model: User, attributes: ['id', 'disliked_products'] }
                     ]
                 },
                 {
@@ -135,6 +136,16 @@ export const getBatchDemands = async (req, res) => {
             if (!defaultHealthWater) defaultHealthWater = waterProducts[0];
             if (!defaultMiracleWater) defaultMiracleWater = waterProducts[0];
         }
+
+        // Pre-calculate global demand map from all existing seasonal selections
+        const globalDemandMap = {};
+        schedules.forEach(schedule => {
+            if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
+                schedule.SeasonalSelections.forEach(sel => {
+                    globalDemandMap[sel.product_id] = (globalDemandMap[sel.product_id] || 0) + parseFloat(sel.qty_gm || 0);
+                });
+            }
+        });
 
         schedules.forEach(schedule => {
             const dbItems = schedule.DeliveryItems || [];
@@ -168,6 +179,62 @@ export const getBatchDemands = async (req, res) => {
                             addDemand(sel.Product, sel.qty_gm);
                         }
                     });
+                } else if (sub.Package?.SeasonalConfig) {
+                    const seasonalConfig = sub.Package.SeasonalConfig;
+                    const maxSelectCount = seasonalConfig.max_select_count || 3;
+                    const pool = sub.Package.SeasonalPool || [];
+                    const allowedProductIds = pool.map(p => p.product_id);
+                    const dislikedProducts = sub.User?.disliked_products || [];
+
+                    const sortedProducts = Object.keys(globalDemandMap)
+                        .map(id => parseInt(id))
+                        .filter(id => allowedProductIds.includes(id) && !dislikedProducts.includes(id))
+                        .map(id => ({
+                            product_id: id,
+                            demand: globalDemandMap[id]
+                        })).sort((a, b) => b.demand - a.demand);
+
+                    const topProducts = sortedProducts.slice(0, maxSelectCount);
+
+                    const pkg = sub.Package;
+                    const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
+                    const fixedItems = sub.Items.filter(i => i.is_fixed);
+                    let fixedCost = 0;
+                    for (const fi of fixedItems) {
+                        fixedCost += parseFloat(fi.qty_gm) * parseFloat(fi.Product?.purchase_price_per_gm || fi.Product?.selling_price_per_gm || 0);
+                    }
+                    const seasonalBudget = per_service_amount - fixedCost;
+
+                    if (topProducts.length > 0 && seasonalBudget > 0) {
+                        const budgetPerProduct = seasonalBudget / topProducts.length;
+                        for (const tp of topProducts) {
+                            const poolItem = pool.find(p => p.product_id === tp.product_id);
+                            if (poolItem && poolItem.Product) {
+                                const prod = poolItem.Product;
+                                const price = parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
+                                const qty = budgetPerProduct / price;
+                                addDemand(prod, parseFloat(qty.toFixed(2)));
+                            }
+                        }
+                    } else if (pool.length > 0 && seasonalBudget > 0) {
+                        const filteredPool = pool.filter(item => !dislikedProducts.includes(item.product_id));
+                        const selectedPoolItems = filteredPool.slice(0, maxSelectCount);
+                        const budgetPerProduct = seasonalBudget / (selectedPoolItems.length || 1);
+                        for (const item of selectedPoolItems) {
+                            if (item.Product) {
+                                const prod = item.Product;
+                                const price = parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
+                                const qty = budgetPerProduct / price;
+                                addDemand(prod, parseFloat(qty.toFixed(2)));
+                            }
+                        }
+                    } else if (sub.Items) {
+                        sub.Items.forEach(item => {
+                            if (item.is_seasonal && item.is_active && item.Product) {
+                                addDemand(item.Product, item.qty_gm);
+                            }
+                        });
+                    }
                 } else if (sub.Items) {
                     // Fallback to active seasonal items from sub if no selections for this schedule yet
                     sub.Items.forEach(item => {

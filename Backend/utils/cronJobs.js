@@ -166,14 +166,14 @@ const runNightlyJob = async () => {
 
                         const globalSelections = await ScheduleSeasonalSelection.findAll({
                             where: { schedule_id: { [Op.in]: tomorrowScheduleIds } },
-                            attributes: ['product_id'],
+                            attributes: ['product_id', 'qty_gm'],
                             transaction: t
                         });
 
-                        // Count frequencies globally
-                        const frequencyMap = {};
+                        // Calculate total weight (demand) globally
+                        const demandMap = {};
                         globalSelections.forEach(sel => {
-                            frequencyMap[sel.product_id] = (frequencyMap[sel.product_id] || 0) + 1;
+                            demandMap[sel.product_id] = (demandMap[sel.product_id] || 0) + parseFloat(sel.qty_gm || 0);
                         });
 
                         // Get allowed seasonal products for this specific package
@@ -185,13 +185,13 @@ const runNightlyJob = async () => {
                         const allowedProductIds = allowedPool.map(p => p.product_id);
 
                         const dislikedProducts = sub.User?.disliked_products || [];
-                        const sortedProducts = Object.keys(frequencyMap)
+                        const sortedProducts = Object.keys(demandMap)
                             .map(id => parseInt(id))
                             .filter(id => allowedProductIds.includes(id) && !dislikedProducts.includes(id))
                             .map(id => ({
                                 product_id: id,
-                                frequency: frequencyMap[id]
-                            })).sort((a, b) => b.frequency - a.frequency);
+                                demand: demandMap[id]
+                            })).sort((a, b) => b.demand - a.demand);
 
                         const maxSelectCount = seasonalConfig.max_select_count || 3;
                         const topProducts = sortedProducts.slice(0, maxSelectCount);

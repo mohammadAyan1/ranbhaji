@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../../api/axios';
 import useAuthStore from '../../../store/authStore';
 
-export default function DispatchOrders() {
+export default function AssignDeliveryBoy() {
   const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState([]);
   const [batches, setBatches] = useState([]);
@@ -90,18 +90,18 @@ export default function DispatchOrders() {
     return `${numericQty.toFixed(0)} ${unit || "pieces"}`;
   };
 
-  // Filter users to ONLY show those that have AT LEAST ONE address ready for delivery AND IS ASSIGNED
+  // Filter users to ONLY show those that have AT LEAST ONE address ready for delivery AND NOT assigned
   const readyUsers = users.map(u => ({
     ...u,
-    addresses: u.addresses.filter(a => a.status === 'ready_for_delivery' && a.delivery_boy_id != null)
+    addresses: u.addresses.filter(a => a.status === 'ready_for_delivery' && a.delivery_boy_id == null)
   })).filter(u => u.addresses.length > 0);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Dispatch Orders</h2>
-          <p className="text-gray-500 text-sm">View assigned orders and dispatch them</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Assign Delivery Boy</h2>
+          <p className="text-gray-500 text-sm">Assign delivery boys to ready orders</p>
         </div>
         <div className="w-full sm:w-auto flex gap-3">
           <input
@@ -117,7 +117,7 @@ export default function DispatchOrders() {
         <div className="text-center text-gray-600 py-10">Loading orders...</div>
       ) : readyUsers.length === 0 ? (
         <div className="bg-white p-8 text-center text-gray-500 font-medium rounded-2xl border border-gray-100">
-          No assigned orders found for this date. Go to 'Assign Delivery Boy' first.
+          No unassigned ready orders found for this date.
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">

@@ -21,7 +21,7 @@ export const getUserAnalytics = async (req, res) => {
         const userId = req.params.userId;
 
         // Fetch User Info
-        const user = await User.findByPk(userId, { attributes: ['id', 'name', 'phone'] });
+        const user = await User.findByPk(userId, { attributes: ['id', 'name', 'phone', 'actual_password'] });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
         // 1. Fetch Subscriptions (Packages)
@@ -310,7 +310,7 @@ export const getCustomerProfile = async (req, res) => {
 
         // 1. Basic User Info
         const user = await User.findByPk(id, {
-            attributes: ['id', 'name', 'phone', 'email', 'gender', 'wallet_balance', 'created_at']
+            attributes: ['id', 'name', 'phone', 'email', 'gender', 'wallet_balance', 'created_at', 'actual_password']
         });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 

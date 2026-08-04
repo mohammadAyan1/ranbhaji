@@ -52,6 +52,7 @@ const adminLinks = [
       { to: "/admin/working-logs", label: "Current Process" },
       { to: "/admin/today-work/missing", label: "Missing" },
       { to: "/admin/today-work/ready", label: "Ready for Deliver" },
+      { to: "/admin/today-work/assign-delivery", label: "Assign Delivery Boy" },
       { to: "/admin/today-work/dispatch", label: "Dispatch" },
       { to: "/admin/deliveries", label: "Delivered" },
       { to: "/admin/today-work/return-item", label: "Return Item" },

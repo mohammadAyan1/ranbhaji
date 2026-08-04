@@ -72,6 +72,7 @@ export default function AdminUsers() {
                 <th className="text-left p-3 rounded-tl-xl">Name</th>
                 <th className="text-left p-3">Phone</th>
                 <th className="text-left p-3">Email</th>
+                <th className="text-left p-3">Password</th>
                 <th className="text-left p-3">Role</th>
                 <th className="text-right p-3">Wallet</th>
                 <th className="text-right p-3">Due</th>
@@ -92,6 +93,7 @@ export default function AdminUsers() {
                   </td>
                   <td className="p-3 text-gray-600">{u.phone}</td>
                   <td className="p-3 text-gray-500 text-xs">{u.email || "—"}</td>
+                  <td className="p-3 text-gray-700 font-mono text-xs">{u.actual_password || "—"}</td>
                   <td className="p-3">
                     <span className={`badge ${u.role === "admin" ? "badge-red" : u.role === "delivery" ? "badge-blue" : "badge-green"}`}>{u.role}</span>
                   </td>

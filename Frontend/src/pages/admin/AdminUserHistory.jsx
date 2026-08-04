@@ -12,6 +12,7 @@ export default function AdminUserHistory() {
   const [walletTransactions, setWalletTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  const [currentUserInfo, setCurrentUserInfo] = useState(null);
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
@@ -75,6 +76,7 @@ export default function AdminUserHistory() {
           api.get(`/admin/users/${selectedUserId}/wallet/transactions`)
         ]);
         setAnalytics(res.data.analytics);
+        setCurrentUserInfo(res.data.user);
         setWalletTransactions(transRes.data.transactions);
       } catch (err) {
         setMsg(`❌ Failed to load analytics for user: ${err.response?.data?.message || err.message}`);
@@ -193,6 +195,21 @@ export default function AdminUserHistory() {
           <button onClick={() => setShowWalletModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
             <span>💰</span> Adjust Wallet
           </button>
+        </div>
+      )}
+
+      {selectedUserId && currentUserInfo && (
+        <div className="card bg-gray-50 border border-gray-200 mb-6 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-gray-900">{currentUserInfo.name}</h3>
+            <p className="text-sm text-gray-600">{currentUserInfo.phone} {currentUserInfo.email && `| ${currentUserInfo.email}`}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">User Password</p>
+            <p className="font-mono text-sm font-semibold text-gray-900 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm">
+              {currentUserInfo.actual_password || "Not Available"}
+            </p>
+          </div>
         </div>
       )}
 

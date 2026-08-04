@@ -45,6 +45,12 @@ export default function CustomerProfile() {
                         <span className="flex items-center gap-1"><Calendar size={14} /> Registered: {new Date(user.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
+                <div className="text-right">
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">User Password</p>
+                    <p className="font-mono text-sm font-semibold text-gray-900 bg-gray-50 border border-gray-200 px-3 py-1 rounded-lg shadow-sm">
+                        {user.actual_password || "Not Available"}
+                    </p>
+                </div>
             </div>
 
             {/* Highlights Grid */}
