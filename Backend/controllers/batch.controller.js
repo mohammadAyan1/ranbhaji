@@ -186,9 +186,10 @@ export const getBatchDemands = async (req, res) => {
                     const allowedProductIds = pool.map(p => p.product_id);
                     const dislikedProducts = sub.User?.disliked_products || [];
 
+                    const fixedItemsForFilter = sub.Items ? sub.Items.filter(i => i.is_fixed).map(i => i.product_id) : [];
                     const sortedProducts = Object.keys(globalDemandMap)
                         .map(id => parseInt(id))
-                        .filter(id => allowedProductIds.includes(id) && !dislikedProducts.includes(id))
+                        .filter(id => allowedProductIds.includes(id) && !dislikedProducts.includes(id) && !fixedItemsForFilter.includes(id))
                         .map(id => ({
                             product_id: id,
                             demand: globalDemandMap[id]
@@ -217,7 +218,8 @@ export const getBatchDemands = async (req, res) => {
                             }
                         }
                     } else if (pool.length > 0 && seasonalBudget > 0) {
-                        const filteredPool = pool.filter(item => !dislikedProducts.includes(item.product_id));
+                        const fixedItemsForFilter = sub.Items ? sub.Items.filter(i => i.is_fixed).map(i => i.product_id) : [];
+                        const filteredPool = pool.filter(item => !dislikedProducts.includes(item.product_id) && !fixedItemsForFilter.includes(item.product_id));
                         const selectedPoolItems = filteredPool.slice(0, maxSelectCount);
                         const budgetPerProduct = seasonalBudget / (selectedPoolItems.length || 1);
                         for (const item of selectedPoolItems) {

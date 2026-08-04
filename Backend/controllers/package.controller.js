@@ -74,8 +74,8 @@ export const getPackages = async (req, res) => {
         const packages = await Package.findAll({
             where,
             include: [
-                { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }] },
-                { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }] },
+                { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'status'] }] },
+                { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'status'] }] },
                 { model: PackageSeasonalConfig, as: 'SeasonalConfig' }
             ]
         });
@@ -93,14 +93,17 @@ export const getPackages = async (req, res) => {
             const obj = p.toJSON();
             if (!isAdmin) {
                 delete obj.margin_percent;
-                // Remove item-level prices from the response
-                obj.FixedItems = obj.FixedItems?.map(fi => {
-                    if (fi.Product) {
+                // Remove item-level prices and inactive products from the response
+                if (obj.FixedItems) {
+                    obj.FixedItems = obj.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => {
                         delete fi.Product.purchase_price_per_gm;
                         delete fi.Product.selling_price_per_gm;
-                    }
-                    return fi;
-                });
+                        return fi;
+                    });
+                }
+                if (obj.SeasonalPool) {
+                    obj.SeasonalPool = obj.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active');
+                }
             }
             return obj;
         });
@@ -174,10 +177,12 @@ export const getPackageById = async (req, res) => {
         const obj = pkg.toJSON();
         if (!isAdmin) {
             delete obj.margin_percent;
-            obj.FixedItems = obj.FixedItems?.map(fi => {
-                if (fi.Product) { delete fi.Product.purchase_price_per_gm; delete fi.Product.selling_price_per_gm; }
+            obj.FixedItems = obj.FixedItems?.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => {
+                delete fi.Product.purchase_price_per_gm;
+                delete fi.Product.selling_price_per_gm;
                 return fi;
             });
+            obj.SeasonalPool = obj.SeasonalPool?.filter(sp => sp.Product && sp.Product.status === 'active');
         }
         res.status(200).json({ success: true, package: obj });
     } catch (error) {

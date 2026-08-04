@@ -804,7 +804,9 @@ export default function AdminProducts() {
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button onClick={() => startEdit(p)} className="text-xs text-fresh-600 hover:text-fresh-700 font-medium">Edit</button>
-                            <button onClick={() => handleDelete(p.id)} className="text-xs text-red-600 hover:text-red-300 font-medium">Delete</button>
+                            <button onClick={() => handleToggleStatus(p)} className={`text-xs font-medium ${p.status === "active" ? "text-red-600 hover:text-red-400" : "text-green-600 hover:text-green-400"}`}>
+                              {p.status === "active" ? "Disable" : "Enable"}
+                            </button>
                           </div>
                         </td>
                       </tr>

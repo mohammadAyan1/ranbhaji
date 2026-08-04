@@ -1776,41 +1776,53 @@ export const packOrders = async (req, res) => {
 
                         if (type === 'package') {
                             const schedule = parent;
-                            // Carry over logic
-                            const nextSchedule = await DeliverySchedule.findOne({
+                            // Next-day delivery logic
+                            const scheduleDateObj = new Date(schedule.scheduled_date);
+                            scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
+                            const tomorrowStr = scheduleDateObj.toISOString().split('T')[0];
+
+                            let nextSchedule = await DeliverySchedule.findOne({
                                 where: {
                                     subscription_id: schedule.subscription_id,
-                                    scheduled_date: { [Op.gt]: schedule.scheduled_date }
-                                },
-                                order: [['scheduled_date', 'ASC']]
+                                    scheduled_date: tomorrowStr
+                                }
                             });
 
-                            if (nextSchedule) {
-                                const existingNextItem = await DeliveryItem.findOne({
-                                    where: { schedule_id: nextSchedule.id, product_id: item.product_id }
-                                });
-                                if (existingNextItem) {
-                                    await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + parseFloat(item.qty_gm) });
-                                } else {
-                                    await DeliveryItem.create({
-                                        schedule_id: nextSchedule.id,
-                                        product_id: item.product_id,
-                                        qty_gm: item.qty_gm,
-                                        packed_qty: null
-                                    });
-                                }
-
-                                // Log the missed product carry-over
-                                await MissedProductLog.create({
-                                    user_id: schedule.subscription_id ? (await Subscription.findByPk(schedule.subscription_id)).user_id : null,
-                                    product_id: item.product_id,
-                                    missed_date: schedule.scheduled_date,
-                                    missed_qty: item.qty_gm,
-                                    next_schedule_date: nextSchedule.scheduled_date,
-                                    source_type: 'subscription',
-                                    source_id: schedule.id
+                            if (!nextSchedule) {
+                                nextSchedule = await DeliverySchedule.create({
+                                    subscription_id: schedule.subscription_id,
+                                    scheduled_date: tomorrowStr,
+                                    status: 'pending',
+                                    is_locked: false,
+                                    is_returned_serving: false
                                 });
                             }
+
+                            const existingNextItem = await DeliveryItem.findOne({
+                                where: { schedule_id: nextSchedule.id, product_id: item.product_id }
+                            });
+                            if (existingNextItem) {
+                                await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + parseFloat(item.qty_gm) });
+                            } else {
+                                await DeliveryItem.create({
+                                    schedule_id: nextSchedule.id,
+                                    product_id: item.product_id,
+                                    qty_gm: item.qty_gm,
+                                    packed_qty: null
+                                });
+                            }
+
+                            // Log the missed product carry-over
+                            const subForLog = schedule.subscription_id ? await Subscription.findByPk(schedule.subscription_id) : null;
+                            await MissedProductLog.create({
+                                user_id: subForLog ? subForLog.user_id : null,
+                                product_id: item.product_id,
+                                missed_date: schedule.scheduled_date,
+                                missed_qty: item.qty_gm,
+                                next_schedule_date: tomorrowStr,
+                                source_type: 'subscription',
+                                source_id: schedule.id
+                            });
                         }
                     }
                 }

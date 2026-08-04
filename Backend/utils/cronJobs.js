@@ -4,7 +4,8 @@ import { sequelize } from "../confiq/db.js";
 import {
     DeliverySchedule, Subscription, SubscriptionItem, Notification, User, Package,
     WalletTransaction, CreditLog, Product, DeliveryItem, WaterSubscription,
-    ScheduleSeasonalSelection, PackageSeasonalConfig, PauseLog, PackageSeasonalPool
+    ScheduleSeasonalSelection, PackageSeasonalConfig, PauseLog, PackageSeasonalPool,
+    RetailOrder, RetailOrderItem
 } from "../models/index.js";
 
 /**
@@ -24,6 +25,34 @@ const runNightlyJob = async () => {
 
     const t = await sequelize.transaction();
     try {
+        // Step 0.5: RetailOrder Cleanup
+        const pendingRetailOrders = await RetailOrder.findAll({
+            where: { delivery_status: 'pending', delivery_date: tomorrowStr },
+            include: [{ model: RetailOrderItem, as: 'RetailOrderItems', include: [{ model: Product }] }],
+            transaction: t
+        });
+
+        for (const order of pendingRetailOrders) {
+            let orderChanged = false;
+            let totalAmount = 0;
+            
+            for (const item of order.RetailOrderItems) {
+                if (item.Product && item.Product.status !== 'active') {
+                    await item.destroy({ transaction: t });
+                    orderChanged = true;
+                } else {
+                    totalAmount += parseFloat(item.total_price);
+                }
+            }
+            
+            if (orderChanged) {
+                if (totalAmount === 0) {
+                    await order.update({ delivery_status: 'cancelled', payment_status: 'failed' }, { transaction: t });
+                } else {
+                    await order.update({ total_amount: totalAmount + parseFloat(order.delivery_charge || 0) }, { transaction: t });
+                }
+            }
+        }
         // Step 0: Process auto-restarts for expired pauses
         const todayStr = new Date().toISOString().split('T')[0];
         const expiredPauses = await PauseLog.findAll({
@@ -185,9 +214,10 @@ const runNightlyJob = async () => {
                         const allowedProductIds = allowedPool.map(p => p.product_id);
 
                         const dislikedProducts = sub.User?.disliked_products || [];
+                        const fixedItemsForFilter = sub.Items ? sub.Items.filter(i => i.is_fixed).map(i => i.product_id) : [];
                         const sortedProducts = Object.keys(demandMap)
                             .map(id => parseInt(id))
-                            .filter(id => allowedProductIds.includes(id) && !dislikedProducts.includes(id))
+                            .filter(id => allowedProductIds.includes(id) && !dislikedProducts.includes(id) && !fixedItemsForFilter.includes(id))
                             .map(id => ({
                                 product_id: id,
                                 demand: demandMap[id]
@@ -290,10 +320,36 @@ const runNightlyJob = async () => {
 
                     // Seasonal items
                     if (sub.Package.SeasonalConfig) {
-                        const selections = await ScheduleSeasonalSelection.findAll({
+                        let selections = await ScheduleSeasonalSelection.findAll({
                             where: { schedule_id: schedule.id },
+                            include: [{ model: Product }],
                             transaction: t
                         });
+
+                        // Logic for disabled product redistribution
+                        const activeSelections = selections.filter(s => s.Product && s.Product.status === 'active');
+                        const disabledSelections = selections.filter(s => !s.Product || s.Product.status !== 'active');
+                        
+                        if (disabledSelections.length > 0 && activeSelections.length > 0) {
+                            let redistributedBudget = 0;
+                            for (const ds of disabledSelections) {
+                                const prod = ds.Product;
+                                if (prod) redistributedBudget += parseFloat(ds.qty_gm) * parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 0);
+                            }
+                            
+                            const budgetPerActive = redistributedBudget / activeSelections.length;
+                            for (const as of activeSelections) {
+                                const prod = as.Product;
+                                const extraQty = budgetPerActive / parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
+                                as.qty_gm = parseFloat(as.qty_gm) + parseFloat(extraQty.toFixed(2));
+                                await as.save({ transaction: t });
+                            }
+                            
+                            for (const ds of disabledSelections) {
+                                await ds.destroy({ transaction: t });
+                            }
+                            selections = activeSelections;
+                        }
 
                         if (selections.length > 0) {
                             deliveryItems.push(...selections.map(sel => ({
@@ -497,6 +553,69 @@ const runNightlyJob = async () => {
     }
 };
 
+// 2-Hourly Notification Job
+const notifyDisabledProductsJob = async () => {
+    console.log("[CRON] Starting 2-hourly disabled products check...");
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    
+    try {
+        const affectedUsers = new Set();
+        
+        // Check Retail Orders
+        const retailOrders = await RetailOrder.findAll({
+            where: { delivery_status: 'pending', delivery_date: tomorrowStr },
+            include: [{ model: RetailOrderItem, as: 'RetailOrderItems', include: [{ model: Product }] }]
+        });
+        
+        for (const order of retailOrders) {
+            const hasDisabled = order.RetailOrderItems.some(item => item.Product && item.Product.status !== 'active');
+            if (hasDisabled) affectedUsers.add(order.user_id);
+        }
+        
+        // Check Package Selections
+        const schedules = await DeliverySchedule.findAll({
+            where: { scheduled_date: tomorrowStr, status: 'pending' },
+            include: [
+                { model: Subscription, as: 'Subscription' }
+            ]
+        });
+        
+        const scheduleIds = schedules.map(s => s.id);
+        const selections = await ScheduleSeasonalSelection.findAll({
+            where: { schedule_id: { [Op.in]: scheduleIds } },
+            include: [{ model: Product }]
+        });
+        
+        for (const sel of selections) {
+            if (sel.Product && sel.Product.status !== 'active') {
+                const schedule = schedules.find(s => s.id === sel.schedule_id);
+                if (schedule && schedule.Subscription) {
+                    affectedUsers.add(schedule.Subscription.user_id);
+                }
+            }
+        }
+        
+        // Send notifications
+        for (const userId of affectedUsers) {
+            await Notification.create({
+                user_id: userId,
+                title: 'Action Required: Product Unavailable',
+                message: 'One or more products in your upcoming order or package selection have been disabled. Please update your selection before 8 PM tonight.',
+                type: 'alert',
+                scheduled_at: new Date(),
+                sent_at: new Date()
+            });
+        }
+        if (affectedUsers.size > 0) {
+            console.log(`[CRON] Sent disabled product notifications to ${affectedUsers.size} users.`);
+        }
+    } catch (error) {
+        console.error("[CRON] Disabled products check failed:", error.message);
+    }
+};
+
 // Schedule daily at 8 PM
 export const startCronJobs = () => {
     cron.schedule("0 20 * * *", runNightlyJob, {
@@ -504,7 +623,13 @@ export const startCronJobs = () => {
         timezone: "Asia/Kolkata"
     });
     console.log("[CRON] Scheduled nightly job at 8 PM IST");
+    
+    cron.schedule("0 */2 * * *", notifyDisabledProductsJob, {
+        scheduled: true,
+        timezone: "Asia/Kolkata"
+    });
+    console.log("[CRON] Scheduled 2-hourly disabled product check");
 };
 
 // Export for manual trigger (testing)
-export { runNightlyJob };
+export { runNightlyJob, notifyDisabledProductsJob };

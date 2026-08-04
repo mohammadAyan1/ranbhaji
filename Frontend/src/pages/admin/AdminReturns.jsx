@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import api from "../../api/axios";
 
 export default function AdminReturns() {
@@ -6,6 +6,11 @@ export default function AdminReturns() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState(null); // zoom modal
+  const [expandedId, setExpandedId] = useState(null);
+
+  const toggleRow = (id) => {
+    setExpandedId(expandedId === id ? null : id);
+  };
 
   // Filters
   const [fromDate, setFromDate] = useState("");
@@ -172,111 +177,150 @@ export default function AdminReturns() {
           <p>No return requests are in the queue.</p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {returns.map(group => {
-            const schedule = group.schedule || {};
-            const customer = schedule.Subscription?.User || schedule.WaterSubscription?.User || {};
-            const orderSource = schedule.Subscription
-              ? `Package: ${schedule.Subscription.Package?.name}`
-              : `Water Subscription`;
-            const formattedDate = schedule.actual_delivery_date
-              ? new Date(schedule.actual_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-              : "Unknown Date";
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[700px]">
+              <thead className="bg-gray-50/50 text-gray-600 border-b border-gray-100">
+                <tr>
+                  <th className="p-4 w-12 font-medium"></th>
+                  <th className="p-4 font-semibold text-sm">Order ID</th>
+                  <th className="p-4 font-semibold text-sm">Customer</th>
+                  <th className="p-4 font-semibold text-sm text-right">Items Returned</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-700">
+                {returns.map(group => {
+                  const schedule = group.schedule || {};
+                  const customer = schedule.Subscription?.User || schedule.WaterSubscription?.User || {};
+                  const orderSource = schedule.Subscription
+                    ? `Package: ${schedule.Subscription.Package?.name}`
+                    : `Water Subscription`;
+                  const formattedDate = schedule.actual_delivery_date
+                    ? new Date(schedule.actual_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                    : "Unknown Date";
+                  const scheduleId = schedule.id || Math.random();
+                  const isExpanded = expandedId === scheduleId;
 
-            return (
-              <div key={schedule.id || Math.random()} className="card p-5 border border-gray-200">
-                <div className="flex justify-between items-start mb-4 border-b pb-4">
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg">Order #{schedule.id} ({orderSource})</h3>
-                    <p className="text-sm text-gray-500">Delivered on: {formattedDate}</p>
-                    <p className="text-sm font-medium text-gray-700 mt-1">{customer.name} • {customer.phone}</p>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm mt-2">
-                    <thead>
-                      <tr className="table-header">
-                        <th className="text-left p-3 rounded-tl-xl">Product</th>
-                        <th className="text-left p-3">Return Reason</th>
-                        <th className="text-left p-3">Proof Photo</th>
-                        <th className="text-left p-3">Status</th>
-                        <th className="text-right p-3 rounded-tr-xl">Actions</th>
+                  return (
+                    <React.Fragment key={scheduleId}>
+                      <tr className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => toggleRow(scheduleId)}>
+                        <td className="p-4 text-gray-400">
+                          {isExpanded ? '▼' : '▶'}
+                        </td>
+                        <td className="p-4">
+                          <div className="font-bold text-gray-900 text-base">Order #{schedule.id}</div>
+                          <div className="text-xs text-gray-500 font-medium">Delivered: {formattedDate}</div>
+                        </td>
+                        <td className="p-4">
+                          <div className="font-medium text-gray-900">{customer.name}</div>
+                          <div className="text-xs text-gray-500">{customer.phone}</div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-xs font-bold border border-red-100">
+                            {group.items.length} items
+                          </span>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {group.items.map(r => (
-                        <tr key={r.id} className="table-row">
-                          <td className="p-3">
-                            <p className="text-gray-900 font-medium">{r.Product?.name}</p>
-                            <p className="text-gray-600 text-xs">
-                              Return: <span className="text-yellow-400 font-medium">{parseFloat(r.return_qty).toFixed(0)}{r.Product?.unit || 'g'}</span>
-                            </p>
-                            <p className="text-gray-600 text-[10px]">Delivered: {parseFloat(r.qty_gm).toFixed(0)}{r.Product?.unit || 'g'}</p>
-                            {r.next_schedule_date && (
-                              <p className="mt-1 text-xs text-fresh-500 font-medium">
-                                Next Delivery: {new Date(r.next_schedule_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
-                              </p>
-                            )}
-                          </td>
-                          <td className="p-3 text-gray-700 italic max-w-[200px] break-words">
-                            "{r.return_reason || "No reason specified"}"
-                          </td>
-                          <td className="p-3">
-                            {r.return_photo_url ? (
-                              <button
-                                onClick={() => setSelectedPhoto(r.return_photo_url)}
-                                className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-750 hover:border-fresh-500 transition-all bg-gray-50"
-                              >
-                                <img
-                                  src={`${import.meta.env.VITE_API_URL}${r.return_photo_url}`}
-                                  alt="Return confirmation proof"
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-all"
-                                />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-gray-900 font-medium transition-all">
-                                  Zoom 🔍
-                                </div>
-                              </button>
-                            ) : (
-                              <span className="text-gray-600 text-xs italic">No photo</span>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            {getStatusBadge(r.return_status)}
-                            {r.returned_by && (
-                              <div className="mt-2 text-[10px] text-gray-500 font-medium uppercase">
-                                By: {r.returned_by.replace('_', ' ')}
+
+                      {isExpanded && (
+                        <tr className="bg-gray-50/30">
+                          <td colSpan="4" className="p-0 border-l-2 border-red-500">
+                            <div className="p-6">
+                              <h4 className="text-sm font-bold text-gray-700 flex items-center mb-4">
+                                <span className="bg-red-100 text-red-600 p-1.5 rounded-lg mr-2">📦</span>
+                                Full Order Return ({orderSource})
+                              </h4>
+                              <div className="overflow-x-auto rounded-lg border border-gray-100">
+                                <table className="w-full text-sm mt-2 bg-white">
+                                  <thead>
+                                    <tr className="bg-gray-50/50 text-gray-600 text-xs border-b border-gray-100">
+                                      <th className="text-left p-3 pl-4">Product</th>
+                                      <th className="text-left p-3">Return Reason</th>
+                                      <th className="text-left p-3">Proof Photo</th>
+                                      <th className="text-left p-3">Status</th>
+                                      <th className="text-right p-3 pr-4">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-50">
+                                    {group.items.map(r => (
+                                      <tr key={r.id} className="hover:bg-gray-50 transition-colors text-gray-700">
+                                        <td className="p-3 pl-4">
+                                          <p className="text-gray-900 font-bold">{r.Product?.name}</p>
+                                          <p className="text-gray-600 text-xs mt-0.5">
+                                            Return: <span className="text-red-500 font-bold">{parseFloat(r.return_qty).toFixed(0)}{r.Product?.unit || 'g'}</span>
+                                          </p>
+                                          <p className="text-gray-500 text-[10px]">Delivered: {parseFloat(r.qty_gm).toFixed(0)}{r.Product?.unit || 'g'}</p>
+                                          {r.next_schedule_date && (
+                                            <p className="mt-1 text-xs text-fresh-600 font-medium">
+                                              Next Delivery: {new Date(r.next_schedule_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
+                                            </p>
+                                          )}
+                                        </td>
+                                        <td className="p-3 text-gray-700 italic max-w-[200px] break-words text-xs">
+                                          "{r.return_reason || "No reason specified"}"
+                                        </td>
+                                        <td className="p-3">
+                                          {r.return_photo_url ? (
+                                            <button
+                                              onClick={() => setSelectedPhoto(r.return_photo_url)}
+                                              className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-200 hover:border-fresh-500 transition-all bg-gray-100"
+                                            >
+                                              <img
+                                                src={`${import.meta.env.VITE_API_URL}${r.return_photo_url}`}
+                                                alt="Return confirmation proof"
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-all"
+                                              />
+                                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-medium transition-all">
+                                                Zoom
+                                              </div>
+                                            </button>
+                                          ) : (
+                                            <span className="text-gray-400 text-xs italic">No photo</span>
+                                          )}
+                                        </td>
+                                        <td className="p-3">
+                                          {getStatusBadge(r.return_status)}
+                                          {r.returned_by && (
+                                            <div className="mt-1.5 text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                                              By: {r.returned_by.replace('_', ' ')}
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="p-3 text-right pr-4">
+                                          {r.return_status === "requested" ? (
+                                            <div className="flex justify-end gap-2">
+                                              <button
+                                                onClick={() => handleReview(r.id, "approved")}
+                                                className="bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800 text-xs font-bold py-1.5 px-3 rounded-lg border border-green-200 transition-all"
+                                              >
+                                                Approve
+                                              </button>
+                                              <button
+                                                onClick={() => handleReview(r.id, "rejected")}
+                                                className="bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 text-xs font-bold py-1.5 px-3 rounded-lg border border-red-200 transition-all"
+                                              >
+                                                Reject
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <span className="text-gray-400 text-xs italic">-</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
-                            )}
-                          </td>
-                          <td className="p-3 text-right">
-                            {r.return_status === "requested" ? (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => handleReview(r.id, "approved")}
-                                  className="bg-green-600 hover:bg-green-500 text-gray-900 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-md hover:shadow-lg transition-all"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() => handleReview(r.id, "rejected")}
-                                  className="bg-red-650 hover:bg-red-550 text-gray-900 text-xs font-semibold py-1.5 px-3 rounded-lg shadow-md hover:shadow-lg transition-all"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-gray-600 text-xs italic">-</span>
-                            )}
+                            </div>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

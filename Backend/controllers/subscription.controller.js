@@ -161,7 +161,8 @@ export const subscribe = async (req, res) => {
         }, { transaction: t });
 
         // Create subscription items (fixed)
-        const fixedItemRows = pkg.FixedItems.map(fi => ({
+        const activeFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active');
+        const fixedItemRows = activeFixedItems.map(fi => ({
             subscription_id: subscription.id,
             product_id: fi.product_id,
             qty_gm: fi.default_qty_gm,
@@ -245,6 +246,32 @@ export const confirmStartDate = async (req, res) => {
 
         if (!subscription) { await t.rollback(); return res.status(404).json({ success: false, message: "Subscription not found" }); }
         if (subscription.start_date) { await t.rollback(); return res.status(400).json({ success: false, message: "Start date already confirmed" }); }
+
+        // Enforce Minimum Start Date Rule (Server Side)
+        const [sYear, sMonth, sDay] = start_date.split('-').map(Number);
+        const selectedDate = new Date(sYear, sMonth - 1, sDay);
+        
+        const now = new Date();
+        // Convert 'now' to IST time for comparison
+        const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        
+        const minAllowedDate = new Date(istTime);
+        if (istTime.getHours() < 20) {
+            minAllowedDate.setDate(minAllowedDate.getDate() + 1); // Tomorrow
+        } else {
+            minAllowedDate.setDate(minAllowedDate.getDate() + 2); // Day after tomorrow
+        }
+        
+        minAllowedDate.setHours(0, 0, 0, 0);
+        selectedDate.setHours(0, 0, 0, 0);
+
+        if (selectedDate < minAllowedDate) {
+            await t.rollback();
+            return res.status(400).json({ 
+                success: false, 
+                message: `Start date must be at least ${minAllowedDate.toISOString().split('T')[0]} (after 8 PM cutoff rule).` 
+            });
+        }
 
         const pkg = subscription.Package;
         const daysInCycle = subscription.type === 'yearly' ? 360 : 30;
@@ -655,7 +682,7 @@ export const getSeasonalOptions = async (req, res) => {
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
                         { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] }
                     ]
@@ -665,7 +692,7 @@ export const getSeasonalOptions = async (req, res) => {
         if (!subscription) return res.status(404).json({ success: false, message: "Subscription not found" });
 
         const pkg = subscription.Package;
-        const pool = pkg.SeasonalPool;
+        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active');
         const maxCount = pkg.SeasonalConfig?.max_select_count;
 
         // Calculate package price details

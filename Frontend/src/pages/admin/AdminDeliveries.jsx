@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import api from "../../api/axios";
 
 export default function AdminDeliveries() {
@@ -22,6 +22,9 @@ export default function AdminDeliveries() {
   // Return Modal State (Order)
   const [returningOrder, setReturningOrder] = useState(null);
   const [orderReturnRemark, setOrderReturnRemark] = useState("");
+
+  // Accordion State
+  const [expandedId, setExpandedId] = useState(null);
 
   const fetchDeliveries = () => {
     setLoading(true);
@@ -182,8 +185,6 @@ export default function AdminDeliveries() {
                   <th className="text-left p-3">Customer</th>
                   <th className="text-left p-3">Delivery Person</th>
                   <th className="text-left p-3">Package / Plan</th>
-                  <th className="text-left p-3">Items Details</th>
-                  <th className="text-left p-3">Photo & Remark</th>
                   <th className="text-right p-3 rounded-tr-xl">Actions</th>
                 </tr>
               </thead>
@@ -200,124 +201,174 @@ export default function AdminDeliveries() {
                   const items = d.DeliveryItems || [];
                   const hasUnreturnedItems = items.some(i => i.return_status === 'none' && parseFloat(i.packed_qty ?? i.delivered_qty ?? i.qty_gm) > 0);
 
-                  return (
-                    <tr key={d.id} className="table-row">
-                      <td className="p-3">
-                        <span className="font-semibold text-gray-900">{formattedDate}</span>
-                      </td>
-                      <td className="p-3">
-                        <p className="text-gray-900 font-medium">{customer.name}</p>
-                        <p className="text-gray-500 text-xs">📞 {customer.phone}</p>
-                      </td>
-                      <td className="p-3">
-                        {d.DeliveryBoy ? (
-                          <>
-                            <p className="text-gray-900 font-medium">{d.DeliveryBoy.name}</p>
-                            <p className="text-gray-500 text-xs">📞 {d.DeliveryBoy.phone}</p>
-                          </>
-                        ) : (
-                          <span className="text-gray-500 text-xs italic">Not assigned</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-gray-700 font-medium">
-                        {packageName}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex flex-col gap-2 max-w-[280px]">
-                          {items.map((item, idx) => {
-                            const demanded = parseFloat(item.qty_gm) || 0;
-                            const delivered = parseFloat(item.packed_qty ?? item.delivered_qty ?? item.qty_gm) || 0;
-                            const isMissed = delivered === 0 && demanded > 0;
-                            const canReturn = !isMissed && delivered > 0 && item.return_status !== 'approved';
+                  const isExpanded = expandedId === d.id;
 
-                            return (
-                              <div key={idx} className={`text-[11px] px-2 py-1.5 rounded border flex flex-col ${isMissed ? 'bg-red-900/20 border-red-800/50 text-red-300' : 'bg-gray-100/80 border-gray-300 text-gray-700'}`}>
-                                <span className="font-semibold text-gray-900 mb-0.5">
-                                  {item.Product?.name} {item.Product?.hindi_name ? <span className="text-gray-500 font-normal">({item.Product.hindi_name})</span> : ""}
-                                </span>
-                                <div className="flex justify-between items-center">
-                                  {isMissed ? (
-                                    <>
-                                      <span className="text-red-600 font-bold">Missed</span>
-                                      <span className="opacity-70 text-[10px]">
-                                        Demanded: {item.carried_over_qty ? `${(demanded - item.carried_over_qty).toFixed(0)} + ${parseFloat(item.carried_over_qty).toFixed(0)} (Carry)` : demanded.toFixed(0)}{item.Product?.unit || 'g'}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-fresh-600 font-medium">Delivered: {delivered.toFixed(0)}{item.Product?.unit || 'g'}</span>
-                                      <span className="text-gray-500 text-[10px]">
-                                        Req: {item.carried_over_qty ? `${(demanded - item.carried_over_qty).toFixed(0)} + ${parseFloat(item.carried_over_qty).toFixed(0)} (Carry)` : demanded.toFixed(0)}{item.Product?.unit || 'g'}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                                {item.return_status && item.return_status !== 'none' && (
-                                  <p className="text-orange-600 text-xs font-semibold mt-1 bg-orange-100/50 px-1.5 py-0.5 rounded inline-block">
-                                    Returned {item.return_qty ? `${parseFloat(item.return_qty).toFixed(0)}${item.Product?.unit || 'g'}` : ''} <span className="uppercase text-[10px]">({item.return_status})</span>
-                                    {item.returned_by && <span className="text-[10px]"> by {item.returned_by.replace('_', ' ')}</span>}
-                                  </p>
-                                )}
-                                {canReturn && (
-                                  <button
-                                    onClick={() => {
-                                      setReturningItem(item);
-                                      setReturnQty(delivered);
-                                      setReturnRemark("");
-                                    }}
-                                    className="mt-2 text-[10px] text-orange-600 border border-orange-300 bg-orange-50 hover:bg-orange-100 py-1 px-2 rounded font-medium transition-colors"
-                                  >
-                                    Return Item
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <div className="space-y-1">
-                          {d.delivery_remark && (
-                            <p className="text-gray-700 text-xs bg-gray-100/40 border border-gray-200/60 p-2 rounded-lg max-w-[180px] italic">
-                              "{d.delivery_remark}"
-                            </p>
-                          )}
-                          {d.delivery_photo_url ? (
-                            <button
-                              onClick={() => setSelectedPhoto(d.delivery_photo_url)}
-                              className="group block relative w-16 h-12 rounded-lg overflow-hidden border border-gray-750 hover:border-fresh-500 transition-all bg-gray-50"
-                            >
-                              <img
-                                src={`${import.meta.env.VITE_API_URL}${d.delivery_photo_url}`}
-                                alt="Delivery confirmation"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-all"
-                              />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-gray-900 font-medium transition-all">
-                                Zoom 🔍
-                              </div>
-                            </button>
+                  return (
+                    <React.Fragment key={d.id}>
+                      <tr 
+                        className="table-row cursor-pointer transition-colors hover:bg-gray-50"
+                        onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                      >
+                        <td className="p-3">
+                          <span className="font-semibold text-gray-900">{formattedDate}</span>
+                        </td>
+                        <td className="p-3">
+                          <p className="text-gray-900 font-medium">{customer.name}</p>
+                          <p className="text-gray-500 text-xs">📞 {customer.phone}</p>
+                        </td>
+                        <td className="p-3">
+                          {d.DeliveryBoy ? (
+                            <>
+                              <p className="text-gray-900 font-medium">{d.DeliveryBoy.name}</p>
+                              <p className="text-gray-500 text-xs">📞 {d.DeliveryBoy.phone}</p>
+                            </>
                           ) : (
-                            <span className="text-gray-600 text-xs italic">No photo</span>
+                            <span className="text-gray-500 text-xs italic">Not assigned</span>
                           )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-right text-gray-500">
-                        <div className="flex flex-col items-end gap-2">
-                          <span>#{d.id}</span>
-                          {hasUnreturnedItems && (
-                            <button
-                              onClick={() => {
-                                setReturningOrder(d);
-                                setOrderReturnRemark("");
-                              }}
-                              className="px-3 py-1.5 bg-red-50 text-red-600 font-medium text-xs rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
-                            >
-                              Return Order
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="p-3 text-gray-700 font-medium">
+                          {packageName}
+                        </td>
+                        <td className="p-3 text-right text-gray-500" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-col items-end gap-2">
+                            <span>#{d.id}</span>
+                            <div className="flex items-center gap-2">
+                              {hasUnreturnedItems && (
+                                <button
+                                  onClick={() => {
+                                    setReturningOrder(d);
+                                    setOrderReturnRemark("");
+                                  }}
+                                  className="px-3 py-1.5 bg-red-50 text-red-600 font-medium text-xs rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
+                                >
+                                  Return Order
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                                className="p-1 text-gray-500 hover:text-fresh-600 transition-colors rounded-full hover:bg-fresh-50"
+                              >
+                                {isExpanded ? (
+                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                          <td colSpan="5" className="p-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                              {/* Items List */}
+                              <div className="lg:col-span-2">
+                                <h4 className="text-sm font-semibold text-gray-900 mb-3 border-b pb-2">Delivered Items</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {items.map((item, idx) => {
+                                    const demanded = parseFloat(item.qty_gm) || 0;
+                                    const delivered = parseFloat(item.packed_qty ?? item.delivered_qty ?? item.qty_gm) || 0;
+                                    const isMissed = delivered === 0 && demanded > 0;
+                                    const canReturn = !isMissed && delivered > 0 && item.return_status !== 'approved';
+
+                                    return (
+                                      <div key={idx} className={`text-[11px] px-3 py-2 rounded-lg border flex flex-col ${isMissed ? 'bg-red-900/20 border-red-800/50 text-red-300' : 'bg-gray-100/80 border-gray-300 text-gray-700'}`}>
+                                        <span className="font-semibold text-gray-900 mb-1">
+                                          {item.Product?.name} {item.Product?.hindi_name ? <span className="text-gray-500 font-normal">({item.Product.hindi_name})</span> : ""}
+                                        </span>
+                                        <div className="flex justify-between items-center mt-1">
+                                          {isMissed ? (
+                                            <>
+                                              <span className="text-red-600 font-bold">Missed</span>
+                                              <span className="opacity-70 text-[10px]">
+                                                Demanded: {item.carried_over_qty ? `${(demanded - item.carried_over_qty).toFixed(0)} + ${parseFloat(item.carried_over_qty).toFixed(0)} (Carry)` : demanded.toFixed(0)}{item.Product?.unit || 'g'}
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <span className="text-fresh-600 font-medium">Delivered: {delivered.toFixed(0)}{item.Product?.unit || 'g'}</span>
+                                              <span className="text-gray-500 text-[10px]">
+                                                Req: {item.carried_over_qty ? `${(demanded - item.carried_over_qty).toFixed(0)} + ${parseFloat(item.carried_over_qty).toFixed(0)} (Carry)` : demanded.toFixed(0)}{item.Product?.unit || 'g'}
+                                              </span>
+                                            </>
+                                          )}
+                                        </div>
+                                        {item.return_status && item.return_status !== 'none' && (
+                                          <p className="text-orange-600 text-xs font-semibold mt-2 bg-orange-100/50 px-2 py-1 rounded inline-block w-fit">
+                                            Returned {item.return_qty ? `${parseFloat(item.return_qty).toFixed(0)}${item.Product?.unit || 'g'}` : ''} <span className="uppercase text-[10px]">({item.return_status})</span>
+                                            {item.returned_by && <span className="text-[10px]"> by {item.returned_by.replace('_', ' ')}</span>}
+                                          </p>
+                                        )}
+                                        {canReturn && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setReturningItem(item);
+                                              setReturnQty(delivered);
+                                              setReturnRemark("");
+                                            }}
+                                            className="mt-2 text-[10px] w-fit text-orange-600 border border-orange-300 bg-orange-50 hover:bg-orange-100 py-1 px-3 rounded font-medium transition-colors"
+                                          >
+                                            Return Item
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Photo & Remark */}
+                              <div>
+                                <h4 className="text-sm font-semibold text-gray-900 mb-3 border-b pb-2">Delivery Proof & Remarks</h4>
+                                <div className="space-y-4">
+                                  {d.delivery_remark && (
+                                    <div>
+                                      <span className="block text-xs font-medium text-gray-500 mb-1">Remarks:</span>
+                                      <p className="text-gray-700 text-sm bg-gray-100/40 border border-gray-200/60 p-3 rounded-lg italic">
+                                        "{d.delivery_remark}"
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  <div>
+                                    <span className="block text-xs font-medium text-gray-500 mb-1">Photo:</span>
+                                    {d.delivery_photo_url ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedPhoto(d.delivery_photo_url);
+                                        }}
+                                        className="group block relative w-full h-32 rounded-xl overflow-hidden border border-gray-200 hover:border-fresh-500 transition-all bg-gray-50"
+                                      >
+                                        <img
+                                          src={`${import.meta.env.VITE_API_URL}${d.delivery_photo_url}`}
+                                          alt="Delivery confirmation"
+                                          className="w-full h-full object-cover group-hover:scale-105 transition-all"
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs text-gray-900 font-medium transition-all">
+                                          Zoom 🔍
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div className="w-full h-20 border border-dashed border-gray-300 rounded-xl bg-gray-50 flex items-center justify-center">
+                                        <span className="text-gray-500 text-sm italic">No photo attached</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
