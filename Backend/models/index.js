@@ -61,6 +61,7 @@ const Product = sequelize.define('Product', {
   unit: { type: DataTypes.STRING(20), allowNull: true }, // keeping as string for backward compatibility during migration
   unit_id: { type: DataTypes.INTEGER, allowNull: true },
   min_retail_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  default_margin_percentage: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
   total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
@@ -466,13 +467,16 @@ const BatchProcessingLog = sequelize.define('BatchProcessingLog', {
   expected_time_taken_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   time_taken_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   start_time: { type: DataTypes.DATE, allowNull: true },
-  end_time: { type: DataTypes.DATE, allowNull: true }
+  end_time: { type: DataTypes.DATE, allowNull: true },
+  completed_by_id: { type: DataTypes.INTEGER, allowNull: true }
 }, { tableName: 'batch_processing_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 BatchProcessingLog.belongsTo(Batch, { foreignKey: 'batch_id' });
 Batch.hasMany(BatchProcessingLog, { foreignKey: 'batch_id' });
 BatchProcessingLog.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(BatchProcessingLog, { foreignKey: 'product_id' });
+BatchProcessingLog.belongsTo(User, { foreignKey: 'completed_by_id', as: 'CompletedBy' });
+User.hasMany(BatchProcessingLog, { foreignKey: 'completed_by_id' });
 
 // 27. ZONE
 const Zone = sequelize.define('Zone', {

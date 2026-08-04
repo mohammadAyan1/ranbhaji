@@ -80,7 +80,7 @@ export const getOrdersForBatch = async (req, res) => {
                 batch: s.Batch,
                 batch_id: s.batch_id,
                 status: s.status,
-                description: `Package: ${s.Subscription.Package?.name || 'Unknown'}`,
+                description: s.is_returned_serving ? `Return Order (${s.Subscription.Package?.name || 'Unknown'})` : `Package: ${s.Subscription.Package?.name || 'Unknown'}`,
                 date: s.scheduled_date
             });
         });

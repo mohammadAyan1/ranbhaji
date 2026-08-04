@@ -68,8 +68,12 @@ export default function ReturnItem() {
 
   const handleReview = async (id, status) => {
     setMsg("");
+    let willPurchase = false;
+    if (status === 'approved') {
+      willPurchase = window.confirm("Kya aap is product ko dobara market se purchase karenge?");
+    }
     try {
-      await api.patch(`/return-item/${id}/review`, { status });
+      await api.patch(`/return-item/${id}/review`, { status, will_purchase: willPurchase });
       setMsg(`✅ Return request ${status} successfully.`);
       fetchReturns();
     } catch (err) {

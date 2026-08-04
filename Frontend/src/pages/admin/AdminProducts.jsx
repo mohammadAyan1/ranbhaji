@@ -59,6 +59,38 @@ export default function AdminProducts() {
   // Products awaiting retail price update
   const [pendingRetailPricing, setPendingRetailPricing] = useState([]);
 
+  useEffect(() => {
+    if (purchaseLogs.length === 0) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todaysLogs = purchaseLogs.filter(log => {
+      if (!log.purchase_date) return false;
+      return new Date(log.purchase_date).toISOString().split('T')[0] === todayStr;
+    });
+
+    const completedIds = todaysLogs.map(log => log.product_id);
+    setCompletedDemands(prev => [...new Set([...prev, ...completedIds])]);
+
+    const pending = todaysLogs
+      .filter(log => parseFloat(log.selling_price_per_kg) === 0)
+      .map(log => {
+        const product = products.find(p => p.id === log.product_id);
+        return {
+          product_id: log.product_id,
+          name: log.Product?.name || product?.name || "Unknown",
+          calculated_purchase_price: parseFloat(log.purchase_price_per_kg),
+          margin_percentage: product?.default_margin_percentage ? product.default_margin_percentage.toString() : "",
+          unit: log.Product?.unit || product?.unit || "gm",
+          log_id: log.id
+        };
+      });
+
+    setPendingRetailPricing(prev => {
+      const existingIds = prev.map(p => p.product_id);
+      const newPending = pending.filter(p => !existingIds.includes(p.product_id));
+      return [...prev, ...newPending];
+    });
+  }, [purchaseLogs, products]);
+
   const fetchProducts = () => {
     api.get("/products").then(r => setProducts(r.data.products || [])).finally(() => setLoading(false));
   };
@@ -185,6 +217,7 @@ export default function AdminProducts() {
     payload.append("cutting_time", form.cutting_time || 0);
     payload.append("drying_time", form.drying_time || 0);
     payload.append("weighting_time", form.weighting_time || 0);
+    payload.append("margin_percentage", marginPercentage);
 
     if (form.image) {
       payload.append("image", form.image);
@@ -260,9 +293,9 @@ export default function AdminProducts() {
       purchase_price_input: buyPrice > 0 
         ? (canUseKg ? (buyPrice * 1000).toFixed(2) : buyPrice)
         : "",
-      margin_percentage: buyPrice > 0 
-        ? (((sellPrice - buyPrice) / buyPrice) * 100).toFixed(1)
-        : "",
+      margin_percentage: p.default_margin_percentage !== undefined 
+        ? p.default_margin_percentage 
+        : (buyPrice > 0 ? (((sellPrice - buyPrice) / buyPrice) * 100).toFixed(1) : ""),
       unit: unt || "",
       unit_id: uId || "",
       description: p.description || "",
@@ -318,7 +351,8 @@ export default function AdminProducts() {
       setPendingRetailPricing([...pendingRetailPricing, {
         product_id: purchaseForm.product_id,
         name: productObj ? productObj.name : "Unknown",
-        calculated_purchase_price: calculated_purchase_price
+        calculated_purchase_price: calculated_purchase_price,
+        margin_percentage: productObj?.default_margin_percentage ? productObj.default_margin_percentage.toString() : ""
       }]);
 
       setPurchaseForm({

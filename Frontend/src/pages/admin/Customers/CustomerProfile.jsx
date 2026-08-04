@@ -122,9 +122,21 @@ export default function CustomerProfile() {
                             ) : (
                                 addresses.map(addr => (
                                     <div key={addr.id} className="p-3 border border-gray-100 rounded-xl bg-gray-50/30">
-                                        <p className="text-sm font-medium text-gray-800">{addr.address_line1}</p>
-                                        <p className="text-xs text-gray-600 mt-1">{addr.address_line2}, {addr.landmark}</p>
-                                        <p className="text-xs text-gray-500 mt-1">{addr.city}, {addr.state} - {addr.pincode}</p>
+                                        <p className="text-sm font-medium text-gray-800">{addr.address_line}</p>
+                                        {addr.landmark && <p className="text-xs text-gray-600 mt-1">Landmark: {addr.landmark}</p>}
+                                        {addr.zone && <p className="text-xs text-gray-600 mt-1">Zone: {addr.zone}</p>}
+                                        <p className="text-xs text-gray-500 mt-1">{addr.city} - {addr.pincode}</p>
+                                        {addr.latitude && addr.longitude && (
+                                            <a 
+                                                href={`https://www.google.com/maps?q=${addr.latitude},${addr.longitude}`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-blue-600 hover:text-blue-800 mt-2 flex items-center gap-1 font-medium transition-colors"
+                                            >
+                                                <MapPin size={12} />
+                                                View on Map ({addr.latitude}, {addr.longitude})
+                                            </a>
+                                        )}
                                     </div>
                                 ))
                             )}

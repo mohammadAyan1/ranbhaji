@@ -2,7 +2,7 @@ import {
     Batch, DeliverySchedule, Subscription, SubscriptionItem,
     Product, Package, PackageSeasonalConfig, WaterSubscription,
     DeliveryItem, ScheduleSeasonalSelection, RetailOrder, RetailOrderItem,
-    BatchProcessingLog
+    BatchProcessingLog, User
 } from "../models/index.js";
 
 // POST /api/admin/batches
@@ -17,6 +17,8 @@ export const createBatch = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// ... skipped down to getProcessingLogs ... (WAIT! I cannot replace a huge block like this. I will do it in two separate calls.)
 
 // GET /api/admin/batches
 export const getBatches = async (req, res) => {
@@ -135,8 +137,19 @@ export const getBatchDemands = async (req, res) => {
         }
 
         schedules.forEach(schedule => {
-            // Package Subscription
-            if (schedule.Subscription) {
+            const dbItems = schedule.DeliveryItems || [];
+            if (dbItems.length > 0) {
+                for (const item of dbItems) {
+                    if (!item.Product) continue;
+                    if (schedule.is_returned_serving) {
+                        if (item.will_purchase) {
+                            addDemand(item.Product, parseFloat(item.qty_gm || 0));
+                        }
+                    } else {
+                        addDemand(item.Product, parseFloat(item.qty_gm || 0));
+                    }
+                }
+            } else if (schedule.Subscription) {
                 const sub = schedule.Subscription;
 
                 // Fixed items
@@ -327,7 +340,8 @@ export const processBatchDemand = async (req, res) => {
 
             await log.update({
                 end_time: endTime,
-                time_taken_minutes: parseFloat(timeTakenMinutes.toFixed(2))
+                time_taken_minutes: parseFloat(timeTakenMinutes.toFixed(2)),
+                completed_by_id: req.user ? req.user.id : null
             });
 
             return res.status(200).json({
@@ -381,7 +395,8 @@ export const getProcessingLogs = async (req, res) => {
             where: { date },
             include: [
                 { model: Product },
-                { model: Batch }
+                { model: Batch },
+                { model: User, as: 'CompletedBy', attributes: ['name'] }
             ],
             order: [['created_at', 'ASC']]
         });

@@ -63,7 +63,7 @@ export const getTodayDeliveries = async (req, res) => {
 
             if (sched.Subscription) {
                 user = sched.Subscription.User;
-                package_name = sched.Subscription.Package.name;
+                package_name = sched.is_returned_serving ? `Return Order (${sched.Subscription.Package.name})` : sched.Subscription.Package.name;
                 if (sched.Subscription.Address) {
                     const addr = sched.Subscription.Address;
                     address_id = addr.id;
@@ -655,7 +655,7 @@ export const requestReturn = async (req, res) => {
 export const reviewReturn = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { status } = req.body; // 'approved' or 'rejected'
+        const { status, will_purchase } = req.body; // 'approved' or 'rejected'
         const item = await DeliveryItem.findByPk(req.params.id, {
             include: [{
                 model: DeliverySchedule,
@@ -686,28 +686,60 @@ export const reviewReturn = async (req, res) => {
                 total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - returnQty)
             }, { transaction: t });
 
-            // INSTEAD OF REFUND, ADD TO ReturnedProductLog to adjust in next serving
-            // Find next schedule date
-            const nextSchedule = await DeliverySchedule.findOne({
+            // INSTEAD OF REFUND, ADD TO ReturnedProductLog and next day schedule
+            const tomorrow = new Date(item.DeliverySchedule.scheduled_date);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const nextDateStr = tomorrow.toISOString().split('T')[0];
+
+            let nextSchedule = await DeliverySchedule.findOne({
                 where: {
                     subscription_id: item.DeliverySchedule.subscription_id,
-                    scheduled_date: { [Op.gt]: item.DeliverySchedule.scheduled_date }
+                    scheduled_date: nextDateStr
                 },
-                order: [['scheduled_date', 'ASC']]
+                transaction: t
             });
+
+            if (!nextSchedule) {
+                nextSchedule = await DeliverySchedule.create({
+                    subscription_id: item.DeliverySchedule.subscription_id,
+                    scheduled_date: nextDateStr,
+                    status: 'pending',
+                    is_returned_serving: true
+                }, { transaction: t });
+            }
+
+            const existingNextItem = await DeliveryItem.findOne({
+                where: { schedule_id: nextSchedule.id, product_id: item.product_id },
+                transaction: t
+            });
+
+            if (existingNextItem) {
+                await existingNextItem.update({ 
+                    qty_gm: parseFloat(existingNextItem.qty_gm) + returnQty,
+                    will_purchase: will_purchase || existingNextItem.will_purchase
+                }, { transaction: t });
+            } else {
+                await DeliveryItem.create({
+                    schedule_id: nextSchedule.id,
+                    product_id: item.product_id,
+                    qty_gm: returnQty,
+                    packed_qty: null,
+                    will_purchase: will_purchase || false
+                }, { transaction: t });
+            }
 
             await ReturnedProductLog.create({
                 user_id: user.id,
                 product_id: product.id,
-                returned_date: new Date(),
+                returned_date: item.DeliverySchedule.scheduled_date,
                 returned_qty: returnQty,
-                next_schedule_date: nextSchedule ? nextSchedule.scheduled_date : null
+                next_schedule_date: nextSchedule.scheduled_date
             }, { transaction: t });
 
             await Notification.create({
                 user_id: user.id,
                 title: 'Return Approved',
-                message: `Your return for ${product.name} has been approved. The item will be adjusted in your next serving.`,
+                message: `Your return for ${product.name} has been approved. The item will be delivered to you tomorrow.`,
                 type: 'alert',
                 scheduled_at: new Date()
             }, { transaction: t });
@@ -897,19 +929,19 @@ export const getReturns = async (req, res) => {
         const dates = returnsData.map(r => r.DeliverySchedule?.scheduled_date).filter(Boolean);
 
         if (userIds.length > 0 && dates.length > 0) {
-            const missedLogs = await MissedProductLog.findAll({
+            const returnedLogs = await ReturnedProductLog.findAll({
                 where: {
                     user_id: { [Op.in]: userIds },
-                    missed_date: { [Op.in]: dates }
+                    returned_date: { [Op.in]: dates }
                 }
             });
 
-            if (missedLogs.length > 0) {
+            if (returnedLogs.length > 0) {
                 for (const item of returnsData) {
                     const userId = item.DeliverySchedule?.Subscription?.user_id;
                     const date = item.DeliverySchedule?.scheduled_date;
                     if (userId && date) {
-                        const log = missedLogs.find(l => l.user_id === userId && l.missed_date === date && l.product_id === item.product_id);
+                        const log = returnedLogs.find(l => l.user_id === userId && l.returned_date === date && l.product_id === item.product_id);
                         if (log) {
                             item.next_schedule_date = log.next_schedule_date;
                         }
@@ -1010,8 +1042,10 @@ export const getProductDemands = async (req, res) => {
                     unit: p.unit,
                     total_package_qty: 0,
                     total_retail_qty: 0,
+                    total_return_qty: 0,
                     package_details: {},
-                    retail_details: {}
+                    retail_details: {},
+                    return_details: {}
                 };
             }
             if (source === 'package') {
@@ -1023,6 +1057,16 @@ export const getProductDemands = async (req, res) => {
                 demandMap[p.id].package_details[key].count += 1;
                 if (user) {
                     demandMap[p.id].package_details[key].orders.push({ userName: user.name, phone: user.phone });
+                }
+            } else if (source === 'return') {
+                demandMap[p.id].total_return_qty += qty;
+                const key = `${qty}_${batchName || 'Unassigned'}`;
+                if (!demandMap[p.id].return_details[key]) {
+                    demandMap[p.id].return_details[key] = { qty, batch: batchName || 'Unassigned', count: 0, orders: [] };
+                }
+                demandMap[p.id].return_details[key].count += 1;
+                if (user) {
+                    demandMap[p.id].return_details[key].orders.push({ userName: user.name, phone: user.phone });
                 }
             } else {
                 demandMap[p.id].total_retail_qty += qty;
@@ -1050,7 +1094,15 @@ export const getProductDemands = async (req, res) => {
             if (dbItems.length > 0) {
                 for (const item of dbItems) {
                     if (!item.Product) continue;
-                    addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
+                    
+                    if (schedule.is_returned_serving) {
+                        if (item.will_purchase) {
+                            addDemand(item.Product, parseFloat(item.qty_gm || 0), 'return', batchName, user);
+                        }
+                        // If not will_purchase, we don't add to demand (since we'll supply it from existing stock)
+                    } else {
+                        addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
+                    }
                 }
             } else {
                 if (schedule.Subscription) {
@@ -1754,7 +1806,9 @@ export const packOrders = async (req, res) => {
                                     product_id: item.product_id,
                                     missed_date: schedule.scheduled_date,
                                     missed_qty: item.qty_gm,
-                                    next_schedule_date: nextSchedule.scheduled_date
+                                    next_schedule_date: nextSchedule.scheduled_date,
+                                    source_type: 'subscription',
+                                    source_id: schedule.id
                                 });
                             }
                         }
@@ -2121,48 +2175,53 @@ export const adminReturnItem = async (req, res) => {
             returned_by: 'admin'
         }, { transaction: t });
 
-        // Carry-over logic
+        // Carry-over logic for next day
         if (item.DeliverySchedule?.Subscription) {
             const schedule = item.DeliverySchedule;
-            const nextSchedule = await DeliverySchedule.findOne({
+            const tomorrow = new Date(schedule.scheduled_date);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const nextDateStr = tomorrow.toISOString().split('T')[0];
+
+            let nextSchedule = await DeliverySchedule.findOne({
                 where: {
                     subscription_id: schedule.subscription_id,
-                    scheduled_date: { [Op.gt]: schedule.scheduled_date },
-                    status: ['pending', 'ready_for_delivery']
+                    scheduled_date: nextDateStr
                 },
-                order: [['scheduled_date', 'ASC']],
                 transaction: t
             });
 
-            if (nextSchedule) {
-                // We don't need to manually update DeliveryItem here if `getUpcomingSelections` handles ReturnedProductLog dynamically,
-                // but if we want to ensure it's physically in the DB for the next schedule, we can leave this or remove it.
-                // It's cleaner to let `getUpcomingSelections` dynamically aggregate it, BUT wait, other places expect `DeliveryItem`.
-                // For MissedProductLog it was adding it to DeliveryItem AND MissedProductLog.
-                // Let's keep adding it to DeliveryItem so that the packer sees it.
-                const existingNextItem = await DeliveryItem.findOne({
-                    where: { schedule_id: nextSchedule.id, product_id: item.product_id },
-                    transaction: t
-                });
-                if (existingNextItem) {
-                    await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + requestedQty }, { transaction: t });
-                } else {
-                    await DeliveryItem.create({
-                        schedule_id: nextSchedule.id,
-                        product_id: item.product_id,
-                        qty_gm: requestedQty,
-                        packed_qty: null
-                    }, { transaction: t });
-                }
-
-                await ReturnedProductLog.create({
-                    user_id: user.id,
-                    product_id: item.product_id,
-                    returned_date: schedule.scheduled_date,
-                    returned_qty: requestedQty,
-                    next_schedule_date: nextSchedule.scheduled_date
+            if (!nextSchedule) {
+                nextSchedule = await DeliverySchedule.create({
+                    subscription_id: schedule.subscription_id,
+                    scheduled_date: nextDateStr,
+                    status: 'pending',
+                    is_returned_serving: true
                 }, { transaction: t });
             }
+
+            const existingNextItem = await DeliveryItem.findOne({
+                where: { schedule_id: nextSchedule.id, product_id: item.product_id },
+                transaction: t
+            });
+
+            if (existingNextItem) {
+                await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + requestedQty }, { transaction: t });
+            } else {
+                await DeliveryItem.create({
+                    schedule_id: nextSchedule.id,
+                    product_id: item.product_id,
+                    qty_gm: requestedQty,
+                    packed_qty: null
+                }, { transaction: t });
+            }
+
+            await ReturnedProductLog.create({
+                user_id: user.id,
+                product_id: item.product_id,
+                returned_date: schedule.scheduled_date,
+                returned_qty: requestedQty,
+                next_schedule_date: nextSchedule.scheduled_date
+            }, { transaction: t });
         }
 
         await t.commit();
@@ -2244,7 +2303,7 @@ export const boyReturnItem = async (req, res) => {
         await Notification.create({
             user_id: user.id,
             title: 'Return Processed',
-            message: `Delivery Boy has processed a return for ${product.name}. The item will be adjusted in your next serving.`,
+            message: `Delivery Boy has processed a return for ${product.name}. The item will be delivered to you tomorrow.`,
             type: 'alert',
             scheduled_at: new Date()
         }, { transaction: t });
@@ -2257,43 +2316,53 @@ export const boyReturnItem = async (req, res) => {
             returned_by: 'delivery_boy'
         }, { transaction: t });
 
-        // Carry-over logic
+        // Carry-over logic for next day
         if (item.DeliverySchedule?.Subscription) {
             const schedule = item.DeliverySchedule;
-            const nextSchedule = await DeliverySchedule.findOne({
+            const tomorrow = new Date(schedule.scheduled_date);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const nextDateStr = tomorrow.toISOString().split('T')[0];
+
+            let nextSchedule = await DeliverySchedule.findOne({
                 where: {
                     subscription_id: schedule.subscription_id,
-                    scheduled_date: { [Op.gt]: schedule.scheduled_date },
-                    status: ['pending', 'ready_for_delivery']
+                    scheduled_date: nextDateStr
                 },
-                order: [['scheduled_date', 'ASC']],
                 transaction: t
             });
 
-            if (nextSchedule) {
-                const existingNextItem = await DeliveryItem.findOne({
-                    where: { schedule_id: nextSchedule.id, product_id: item.product_id },
-                    transaction: t
-                });
-                if (existingNextItem) {
-                    await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + requestedQty }, { transaction: t });
-                } else {
-                    await DeliveryItem.create({
-                        schedule_id: nextSchedule.id,
-                        product_id: item.product_id,
-                        qty_gm: requestedQty,
-                        packed_qty: null
-                    }, { transaction: t });
-                }
-
-                await ReturnedProductLog.create({
-                    user_id: user.id,
-                    product_id: item.product_id,
-                    returned_date: schedule.scheduled_date,
-                    returned_qty: requestedQty,
-                    next_schedule_date: nextSchedule.scheduled_date
+            if (!nextSchedule) {
+                nextSchedule = await DeliverySchedule.create({
+                    subscription_id: schedule.subscription_id,
+                    scheduled_date: nextDateStr,
+                    status: 'pending',
+                    is_returned_serving: true
                 }, { transaction: t });
             }
+
+            const existingNextItem = await DeliveryItem.findOne({
+                where: { schedule_id: nextSchedule.id, product_id: item.product_id },
+                transaction: t
+            });
+
+            if (existingNextItem) {
+                await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + requestedQty }, { transaction: t });
+            } else {
+                await DeliveryItem.create({
+                    schedule_id: nextSchedule.id,
+                    product_id: item.product_id,
+                    qty_gm: requestedQty,
+                    packed_qty: null
+                }, { transaction: t });
+            }
+
+            await ReturnedProductLog.create({
+                user_id: user.id,
+                product_id: item.product_id,
+                returned_date: schedule.scheduled_date,
+                returned_qty: requestedQty,
+                next_schedule_date: nextSchedule.scheduled_date
+            }, { transaction: t });
         }
 
         await t.commit();
@@ -2366,6 +2435,13 @@ export const adminReturnOrder = async (req, res) => {
                     product_id: item.product_id,
                     qty_gm: item.qty_gm,
                     packed_qty: null
+                }, { transaction: t });
+                await ReturnedProductLog.create({
+                    user_id: user.id,
+                    product_id: item.product_id,
+                    returned_date: schedule.scheduled_date,
+                    returned_qty: item.qty_gm,
+                    next_schedule_date: newSchedule.scheduled_date
                 }, { transaction: t });
             }
         }
@@ -2448,6 +2524,13 @@ export const boyReturnOrder = async (req, res) => {
                     product_id: item.product_id,
                     qty_gm: item.qty_gm,
                     packed_qty: null
+                }, { transaction: t });
+                await ReturnedProductLog.create({
+                    user_id: user.id,
+                    product_id: item.product_id,
+                    returned_date: schedule.scheduled_date,
+                    returned_qty: item.qty_gm,
+                    next_schedule_date: newSchedule.scheduled_date
                 }, { transaction: t });
             }
         }

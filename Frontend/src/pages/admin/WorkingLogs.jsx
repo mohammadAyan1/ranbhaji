@@ -102,8 +102,10 @@ export default function WorkingLogs() {
                             <th className="px-4 py-3 rounded-l-lg">Session</th>
                             <th className="px-4 py-3">Batch</th>
                             <th className="px-4 py-3">Quantity</th>
+                            <th className="px-4 py-3">Expected Time</th>
                             <th className="px-4 py-3">Time Taken</th>
-                            <th className="px-4 py-3 rounded-r-lg">Recorded At</th>
+                            <th className="px-4 py-3">Completed By</th>
+                            <th className="px-4 py-3 rounded-r-lg">Ended At</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -116,18 +118,24 @@ export default function WorkingLogs() {
                                 {session.batch_name}
                               </td>
                               <td className="px-4 py-3 font-semibold text-gray-700">
-                                {session.qty_gm >= 1000 
-                                  ? `${(session.qty_gm / 1000).toFixed(2)} kg` 
-                                  : `${session.qty_gm} gm`}
+                                {session.processed_qty_gm >= 1000 
+                                  ? `${(session.processed_qty_gm / 1000).toFixed(2)} kg` 
+                                  : `${session.processed_qty_gm || 0} gm`}
+                              </td>
+                              <td className="px-4 py-3 text-gray-500 text-sm">
+                                {session.expected_time_taken_minutes || 0} mins
                               </td>
                               <td className="px-4 py-3">
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 font-medium text-xs">
                                   <Clock size={14} />
-                                  {session.time_taken_minutes} mins
+                                  {session.time_taken_minutes || 0} mins
                                 </span>
                               </td>
+                              <td className="px-4 py-3 text-gray-600 text-sm capitalize">
+                                {session.CompletedBy ? session.CompletedBy.fullname : (session.is_ended ? "Admin" : "Wait...")}
+                              </td>
                               <td className="px-4 py-3 text-gray-500 text-xs">
-                                {new Date(session.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                {session.end_time ? new Date(session.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "In Progress"}
                               </td>
                             </tr>
                           ))}

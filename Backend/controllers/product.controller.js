@@ -6,7 +6,7 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, D
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time, margin_percentage } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
@@ -20,6 +20,7 @@ export const createProduct = async (req, res) => {
             name, hindi_name, image_url, category, sub_category, 
             purchase_price_per_gm: purchase_price_per_gm || 0, 
             selling_price_per_gm: selling_price_per_gm || 0, 
+            default_margin_percentage: margin_percentage || 0,
             unit, unit_id, description,
             min_retail_qty: min_retail_qty || 0,
             soaking_time: soaking_time || 0,
@@ -85,6 +86,11 @@ export const updateProduct = async (req, res) => {
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
 
         const updateData = { ...req.body };
+        if (updateData.margin_percentage !== undefined) {
+            updateData.default_margin_percentage = updateData.margin_percentage;
+            delete updateData.margin_percentage;
+        }
+
         if (req.file) {
             // New image uploaded, set new image url
             updateData.image_url = `/uploads/${req.file.filename}`;
@@ -323,12 +329,33 @@ export const updateRetailPrice = async (req, res) => {
         const percentage = parseFloat(markup_percentage);
         const purchasePrice = parseFloat(product.purchase_price_per_gm || 0);
 
-        // calculate new selling price
         const newSellingPrice = purchasePrice * (1 + (percentage / 100));
 
         await product.update({
             selling_price_per_gm: newSellingPrice
         });
+
+        // Update today's purchase log so frontend knows the margin is set
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        const recentLog = await PurchaseLog.findOne({
+            where: {
+                product_id: id,
+                purchase_date: {
+                    [Op.between]: [todayStart, todayEnd]
+                }
+            },
+            order: [['purchase_date', 'DESC']]
+        });
+
+        if (recentLog) {
+            await recentLog.update({
+                selling_price_per_kg: newSellingPrice * (product.unit === 'piece' ? 1 : 1000)
+            });
+        }
 
         res.status(200).json({ success: true, message: "Retail price updated successfully", product });
     } catch (error) {

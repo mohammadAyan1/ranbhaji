@@ -164,6 +164,7 @@ export default function AdminDemands() {
                   <th className="p-3">Product</th>
                   <th className="p-3">Package Qty</th>
                   <th className="p-3">Retail Qty</th>
+                  <th className="p-3">Return Qty</th>
                   <th className="p-3 rounded-tr-xl text-right">Total Qty</th>
                 </tr>
               </thead>
@@ -186,15 +187,18 @@ export default function AdminDemands() {
                       <td className="p-3 text-purple-400 font-medium">
                         {formatQuantity(d.total_retail_qty, d.unit)}
                       </td>
+                      <td className="p-3 text-yellow-400 font-medium">
+                        {formatQuantity(d.total_return_qty || 0, d.unit)}
+                      </td>
                       <td className="p-3 text-right text-lg font-bold text-fresh-600">
-                        {formatQuantity(d.total_package_qty + d.total_retail_qty, d.unit)}
+                        {formatQuantity(d.total_package_qty + d.total_retail_qty + (d.total_return_qty || 0), d.unit)}
                       </td>
                     </tr>
                     
                     {expandedId === d.id && (
                       <tr className="bg-white/50">
-                        <td colSpan="5" className="p-4 border-l-2 border-fresh-500">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <td colSpan="6" className="p-4 border-l-2 border-fresh-500">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* Package Details */}
                             <div className="bg-white rounded-lg p-4 border border-gray-300">
                               <h4 className="text-blue-400 font-bold mb-3 flex justify-between">
@@ -270,6 +274,45 @@ export default function AdminDemands() {
                                 </ul>
                               ) : (
                                 <p className="text-gray-500 text-sm italic">No retail orders.</p>
+                              )}
+                            </div>
+
+                            {/* Return Details */}
+                            <div className="bg-white rounded-lg p-4 border border-gray-300">
+                              <h4 className="text-yellow-400 font-bold mb-3 flex justify-between">
+                                <span>↩️ Return Orders</span>
+                                <span>{formatQuantity(d.total_return_qty || 0, d.unit)}</span>
+                              </h4>
+                              {d.return_details && d.return_details.length > 0 ? (
+                                <ul className="space-y-3">
+                                  {d.return_details.map((detail, idx) => (
+                                    <li key={idx} className="bg-gray-100 p-3 rounded-lg border border-gray-300">
+                                      <div className="flex justify-between items-center text-gray-700 mb-2">
+                                        <span>
+                                          <span className="font-semibold text-gray-900">{formatQuantity(detail.qty, d.unit)}</span>
+                                          <span className="text-gray-500 mx-2">x</span>
+                                          <span className="bg-gray-700 px-2 py-0.5 rounded text-xs">{detail.count} orders</span>
+                                        </span>
+                                        <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded border border-yellow-500/30">
+                                          Batch: {detail.batch}
+                                        </span>
+                                      </div>
+                                      {/* User List Detail */}
+                                      {detail.orders && detail.orders.length > 0 && (
+                                        <div className="mt-2 pl-2 border-l-2 border-gray-600 space-y-1">
+                                          {detail.orders.map((u, ui) => (
+                                            <div key={ui} className="flex justify-between items-center text-xs text-gray-600">
+                                              <span>👤 {u.userName || 'Unknown User'}</span>
+                                              <span>{u.phone || 'N/A'}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-gray-500 text-sm italic">No purchased returns.</p>
                               )}
                             </div>
                           </div>
