@@ -8,7 +8,7 @@ export const createPackage = async (req, res) => {
         const { name, num_persons, num_persons_max, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent, target_mobile_number } = req.body;
 
         // Validation: sum of fixed_item cost per service must be < per_service_amount
-        const per_service_amount = (parseFloat(price) / parseInt(services_per_month)) * (1 - parseFloat(margin_percent || 0) / 200);
+        const per_service_amount = (parseFloat(price) / parseInt(services_per_month)) / (1 + parseFloat(margin_percent || 0) / 200);
         let fixed_cost_per_service = 0;
 
         if (fixed_items && fixed_items.length > 0) {
@@ -210,7 +210,7 @@ export const updatePackage = async (req, res) => {
         const newPrice = price || pkg.price;
         const newServicesPerMonth = services_per_month || pkg.services_per_month;
         const newMarginPercent = margin_percent !== undefined ? margin_percent : pkg.margin_percent;
-        const per_service_amount = (parseFloat(newPrice) / parseInt(newServicesPerMonth)) * (1 - parseFloat(newMarginPercent || 0) / 200);
+        const per_service_amount = (parseFloat(newPrice) / parseInt(newServicesPerMonth)) / (1 + parseFloat(newMarginPercent || 0) / 200);
 
         if (fixed_items) {
             let fixed_cost_per_service = 0;
