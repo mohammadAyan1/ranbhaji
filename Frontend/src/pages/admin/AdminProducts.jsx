@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const UNITS = ["gm", "ml", "piece"];
 
@@ -53,8 +54,58 @@ export default function AdminProducts() {
   });
   const [purchaseLogs, setPurchaseLogs] = useState([]);
   const [stockSummary, setStockSummary] = useState([]);
+
+  const getStartOfWeek = () => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d.toISOString().split('T')[0];
+  };
+  const getEndOfWeek = () => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff + 6);
+    return d.toISOString().split('T')[0];
+  };
+
+  const [stockStartDate, setStockStartDate] = useState(getStartOfWeek());
+  const [stockEndDate, setStockEndDate] = useState(getEndOfWeek());
+
+  const getToday = () => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  };
+
+  const [logStartDate, setLogStartDate] = useState(getToday());
+  const [logEndDate, setLogEndDate] = useState(getToday());
+
   const [submittingPurchase, setSubmittingPurchase] = useState(false);
   const [selectedDemand, setSelectedDemand] = useState(null);
+
+  // Product Purchase Stats Modal State
+  const [selectedProductStats, setSelectedProductStats] = useState(null);
+  const [productStatsData, setProductStatsData] = useState([]);
+  const [productStatsLoading, setProductStatsLoading] = useState(false);
+
+  const handleOpenProductStats = async (product) => {
+    setSelectedProductStats(product);
+    setProductStatsLoading(true);
+    try {
+      const r = await api.get(`/products/${product.id}/purchase-history`);
+      const logs = r.data.logs || [];
+      const chartData = logs.map(log => ({
+        date: new Date(log.purchase_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' }),
+        price: parseFloat(log.purchase_price_per_kg)
+      }));
+      setProductStatsData(chartData);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setProductStatsLoading(false);
+    }
+  };
 
   // Products awaiting retail price update
   const [pendingRetailPricing, setPendingRetailPricing] = useState([]);
@@ -114,11 +165,19 @@ export default function AdminProducts() {
   };
 
   const fetchPurchaseLogs = () => {
-    api.get("/products/purchases").then(r => setPurchaseLogs(r.data.purchases || []));
+    let url = "/products/purchases";
+    if (logStartDate && logEndDate) {
+      url += `?startDate=${logStartDate}&endDate=${logEndDate}`;
+    }
+    api.get(url).then(r => setPurchaseLogs(r.data.purchases || []));
   };
 
   const fetchStockSummary = () => {
-    api.get("/products/stock-summary").then(r => setStockSummary(r.data.products || []));
+    let url = "/products/stock-summary";
+    if (stockStartDate && stockEndDate) {
+      url += `?startDate=${stockStartDate}&endDate=${stockEndDate}`;
+    }
+    api.get(url).then(r => setStockSummary(r.data.products || []));
   };
 
   const fetchDemands = () => {
@@ -131,7 +190,7 @@ export default function AdminProducts() {
       const cats = (r.data.categories || []).filter(c => c.status === "active");
       setDbCategories(cats);
       if (cats.length > 0 && !emptyForm.category) {
-         emptyForm.category = cats[0].name;
+        emptyForm.category = cats[0].name;
       }
     });
   };
@@ -278,7 +337,7 @@ export default function AdminProducts() {
 
     const buyPrice = parseFloat(p.purchase_price_per_gm) || 0;
     const sellPrice = parseFloat(p.selling_price_per_gm) || 0;
-    
+
     let uId = p.unit_id;
     if (!uId && unt) {
       const matchedUnit = unitsList.find(u => u.abbreviation === unt || u.name === unt);
@@ -290,11 +349,11 @@ export default function AdminProducts() {
       hindi_name: p.hindi_name || "",
       category: cat,
       sub_category: p.sub_category || "",
-      purchase_price_input: buyPrice > 0 
+      purchase_price_input: buyPrice > 0
         ? (canUseKg ? (buyPrice * 1000).toFixed(2) : buyPrice)
         : "",
-      margin_percentage: p.default_margin_percentage !== undefined 
-        ? p.default_margin_percentage 
+      margin_percentage: (p.default_margin_percentage && parseFloat(p.default_margin_percentage) !== 0)
+        ? parseFloat(p.default_margin_percentage).toString()
         : (buyPrice > 0 ? (((sellPrice - buyPrice) / buyPrice) * 100).toFixed(1) : ""),
       unit: unt || "",
       unit_id: uId || "",
@@ -373,8 +432,8 @@ export default function AdminProducts() {
   const filteredProducts = products.filter(p => {
     const matchCategory = filterCategory === "all" || p.category === filterCategory;
     const matchStatus = statusFilter === "all" || p.status === statusFilter;
-    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                        (p.hindi_name && p.hindi_name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.hindi_name && p.hindi_name.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchCategory && matchStatus && matchSearch;
   });
 
@@ -431,7 +490,7 @@ export default function AdminProducts() {
           {[
             { id: "catalog", label: "Product Catalog", icon: "🥦" },
             { id: "purchase", label: "Log Purchase", icon: "➕" },
-            { id: "retail_pricing", label: "Retail Pricing", icon: "🏷️" },
+            // { id: "retail_pricing", label: "Retail Pricing", icon: "🏷️" },
             { id: "stock", label: "Stock Inventory", icon: "📦" },
             { id: "logs", label: "Purchase Logs", icon: "📋" }
           ].map(tab => (
@@ -510,9 +569,9 @@ export default function AdminProducts() {
 
               <div>
                 <label className="label">Sub-Category</label>
-                <select 
-                  className="input" 
-                  value={form.sub_category} 
+                <select
+                  className="input"
+                  value={form.sub_category}
                   onChange={e => handleFormChange("sub_category", e.target.value)}
                 >
                   <option value="">Select Sub-Category</option>
@@ -596,7 +655,7 @@ export default function AdminProducts() {
                 <select className="input" value={form.unit_id || ""} onChange={e => {
                   const selId = parseInt(e.target.value);
                   const selUnit = unitsList.find(u => u.id === selId);
-                  if(selUnit) {
+                  if (selUnit) {
                     handleFormChange("unit_id", selUnit.id);
                     handleFormChange("unit", selUnit.abbreviation);
                   }
@@ -656,7 +715,7 @@ export default function AdminProducts() {
                   <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
                     value={form.weighting_time} onChange={e => handleFormChange("weighting_time", e.target.value)} />
                 </div>
-                </div>
+              </div>
 
 
 
@@ -687,14 +746,14 @@ export default function AdminProducts() {
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b border-gray-200">
               <h3 className="font-semibold text-gray-900">Catalog Products ({filteredProducts.length})</h3>
               <div className="flex flex-wrap items-center gap-3">
-                <input 
+                <input
                   type="text"
                   placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-fresh-500 focus:border-fresh-500 outline-none w-full sm:w-48"
                 />
-                
+
                 <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-200">
                   <button
                     onClick={() => setStatusFilter("all")}
@@ -736,8 +795,7 @@ export default function AdminProducts() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="table-header">
-                    <th className="text-left p-3 rounded-tl-xl w-12">Image</th>
-                    <th className="text-left p-3">Name</th>
+                    <th className="text-left p-3 rounded-tl-xl">Name</th>
                     <th className="text-left p-3">Category</th>
                     <th className="text-right p-3">Avg Cost Price</th>
                     <th className="text-right p-3">Default Sell Price</th>
@@ -755,28 +813,39 @@ export default function AdminProducts() {
 
                     return (
                       <tr key={p.id} className="table-row">
-                        <td className="p-3">
-                          {p.image_url ? (
-                            <img
-                              src={`${import.meta.env.VITE_API_URL}${p.image_url}`}
-                              alt={p.name}
-                              className="w-10 h-10 object-cover rounded-lg border border-gray-300 bg-gray-100"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-300 flex items-center justify-center text-gray-500 text-xs">
-                              No Img
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-3 text-gray-900 font-medium">
+                        <td 
+                          className="p-3 text-gray-900 font-medium cursor-pointer hover:bg-gray-50 transition-colors"
+                          onClick={() => handleOpenProductStats(p)}
+                          title="Click to view purchase history graph"
+                        >
                           {p.name} {p.hindi_name ? <span className="text-gray-600 font-normal">({p.hindi_name})</span> : ""}
                         </td>
                         <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
                         <td className="p-3 text-right">
                           <p className="text-gray-700 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</p>
-                          <p className="text-gray-600 text-[10px]">₹{p.purchase_price_per_gm} / {p.unit}</p>
+                          
+                          {p.PurchaseLogs && p.PurchaseLogs.length >= 2 && (() => {
+                            const latestPrice = parseFloat(p.PurchaseLogs[0].purchase_price_per_kg);
+                            const prevPrice = parseFloat(p.PurchaseLogs[1].purchase_price_per_kg);
+                            const diff = latestPrice - prevPrice;
+                            const isUp = diff > 0;
+                            const isDown = diff < 0;
+
+                            if (!isUp && !isDown) return null;
+
+                            return (
+                              <div className="flex items-center justify-end gap-1 font-bold text-[11px] mt-1">
+                                {isUp && <span className="text-green-500 flex items-center">↑ ₹{Math.abs(diff).toFixed(2)}</span>}
+                                {isDown && <span className="text-red-500 flex items-center">↓ ₹{Math.abs(diff).toFixed(2)}</span>}
+                              </div>
+                            );
+                          })()}
+
                           <button
-                            onClick={() => calculateActualAvg(p.id, p.name, p.unit)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              calculateActualAvg(p.id, p.name, p.unit);
+                            }}
                             className="mt-1 px-2 py-0.5 text-[10px] bg-gray-100 text-blue-400 rounded hover:bg-gray-700 transition-colors"
                           >
                             📊 Check Actual Avg
@@ -792,11 +861,10 @@ export default function AdminProducts() {
                           <button
                             onClick={() => handleToggleStatus(p)}
                             title={`Click to ${p.status === "active" ? "disable" : "enable"}`}
-                            className={`px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider transition-all shadow-sm ${
-                              p.status === "active"
-                                ? "bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
-                                : "bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
-                            }`}
+                            className={`px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider transition-all shadow-sm ${p.status === "active"
+                              ? "bg-green-100 text-green-700 hover:bg-green-200 border border-green-200"
+                              : "bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
+                              }`}
                           >
                             {p.status === "active" ? "Active" : "Disabled"}
                           </button>
@@ -1043,7 +1111,30 @@ export default function AdminProducts() {
       {/* ─── TAB 3: STOCK & INVENTORY SUMMARY ────────────────────────── */}
       {activeTab === "stock" && (
         <div className="card">
-          <h3 className="font-semibold text-gray-900 mb-4">Current Stock Levels</h3>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+            <h3 className="font-semibold text-gray-900">Current Stock Levels</h3>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                className="input py-1 text-sm"
+                value={stockStartDate}
+                onChange={e => setStockStartDate(e.target.value)}
+              />
+              <span className="text-gray-500">to</span>
+              <input
+                type="date"
+                className="input py-1 text-sm"
+                value={stockEndDate}
+                onChange={e => setStockEndDate(e.target.value)}
+              />
+              <button
+                onClick={fetchStockSummary}
+                className="btn-primary py-1 px-3 text-sm ml-2"
+              >
+                Filter
+              </button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1100,7 +1191,30 @@ export default function AdminProducts() {
       {/* ─── TAB 4: PURCHASE HISTORY LOGS ────────────────────────────────── */}
       {activeTab === "logs" && (
         <div className="card">
-          <h3 className="font-semibold text-gray-900 mb-4">Stock Purchase Transactions Logs</h3>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+            <h3 className="font-semibold text-gray-900">Stock Purchase Transactions Logs</h3>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                className="input py-1 text-sm"
+                value={logStartDate}
+                onChange={e => setLogStartDate(e.target.value)}
+              />
+              <span className="text-gray-500">to</span>
+              <input
+                type="date"
+                className="input py-1 text-sm"
+                value={logEndDate}
+                onChange={e => setLogEndDate(e.target.value)}
+              />
+              <button 
+                onClick={fetchPurchaseLogs}
+                className="btn-primary py-1 px-3 text-sm ml-2"
+              >
+                Filter
+              </button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1246,6 +1360,59 @@ export default function AdminProducts() {
           </div>
         </div>
       )}
+
+      {/* Product Stats Modal */}
+      {selectedProductStats && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">Purchase History (Last 30 Days)</h3>
+                <p className="text-sm text-gray-500">{selectedProductStats.name}</p>
+              </div>
+              <button
+                onClick={() => setSelectedProductStats(null)}
+                className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto">
+              {productStatsLoading ? (
+                <div className="flex justify-center items-center h-48 text-gray-500">Loading graph...</div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Chart */}
+                  {productStatsData.length > 0 && (
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={productStatsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                          <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value) => [`₹${value}`, 'Price']}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="price" 
+                            stroke="#0ea5e9" 
+                            strokeWidth={3} 
+                            dot={{ r: 4, strokeWidth: 2 }} 
+                            activeDot={{ r: 6 }} 
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -8,6 +8,11 @@ export default function AdminReturns() {
   const [selectedPhoto, setSelectedPhoto] = useState(null); // zoom modal
   const [expandedId, setExpandedId] = useState(null);
 
+  // Modal State for Review
+  const [reviewModalData, setReviewModalData] = useState(null);
+  const [isScheduled, setIsScheduled] = useState(true);
+  const [isWaste, setIsWaste] = useState(false);
+
   const toggleRow = (id) => {
     setExpandedId(expandedId === id ? null : id);
   };
@@ -73,14 +78,26 @@ export default function AdminReturns() {
   }, [selectedPhoto]);
 
   const handleReview = async (id, status) => {
-    setMsg("");
-    let willPurchase = false;
-    if (status === 'approved') {
-      willPurchase = window.confirm("Kya aap is product ko dobara market se purchase karenge?");
+    if (status === 'rejected') {
+      submitReview(id, 'rejected', false, false);
+      return;
     }
+    // If approved, open modal
+    setReviewModalData({ id, status });
+    setIsScheduled(true);
+    setIsWaste(false);
+  };
+
+  const submitReview = async (id, status, scheduled, waste) => {
+    setMsg("");
     try {
-      await api.patch(`/return-item/${id}/review`, { status, will_purchase: willPurchase });
+      await api.patch(`/return-item/${id}/review`, { 
+        status, 
+        is_scheduled_for_pickup: scheduled,
+        is_waste: waste 
+      });
       setMsg(`✅ Return request ${status} successfully.`);
+      setReviewModalData(null);
       fetchReturns();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || "Action failed"}`);
@@ -320,6 +337,61 @@ export default function AdminReturns() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {reviewModalData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-gray-200">
+            <h3 className="font-bold text-xl text-gray-900 mb-2">Accept Return</h3>
+            <p className="text-sm text-gray-500 mb-6">Please configure how this return should be handled.</p>
+
+            <div className="space-y-4">
+              <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={isScheduled}
+                  onChange={(e) => setIsScheduled(e.target.checked)}
+                  className="mt-1 w-4 h-4 text-fresh-600 rounded focus:ring-fresh-500 border-gray-300"
+                />
+                <div>
+                  <span className="block font-semibold text-gray-800 text-sm">Schedule for delivery boy pickup?</span>
+                  <span className="block text-xs text-gray-500 mt-1">If unchecked, it will be added to your inventory immediately (meaning you already have it physically).</span>
+                </div>
+              </label>
+
+              {isScheduled && (
+                <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isWaste}
+                    onChange={(e) => setIsWaste(e.target.checked)}
+                    className="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500 border-gray-300"
+                  />
+                  <div>
+                    <span className="block font-semibold text-gray-800 text-sm">Is this returned product considered WASTE?</span>
+                    <span className="block text-xs text-gray-500 mt-1">If checked, it will be logged as waste and not added to your inventory when returned.</span>
+                  </div>
+                </label>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setReviewModalData(null)}
+                className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => submitReview(reviewModalData.id, reviewModalData.status, isScheduled, isScheduled ? isWaste : false)}
+                className="px-4 py-2 text-sm font-semibold text-white bg-fresh-600 hover:bg-fresh-700 rounded-lg shadow-sm transition-all active:scale-95"
+              >
+                Confirm & Accept
+              </button>
+            </div>
           </div>
         </div>
       )}

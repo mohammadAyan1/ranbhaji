@@ -33,6 +33,7 @@ import categoryRoutes from "./routes/category.route.js";
 import subCategoryRoutes from "./routes/subCategory.route.js";
 import todayWorkRoutes from "./routes/todayWork.route.js";
 import reportRoutes from "./routes/report.route.js";
+import wasteRoutes from "./routes/waste.route.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
@@ -94,6 +95,7 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/sub-categories", subCategoryRoutes);
 app.use("/api/today-work", todayWorkRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/waste", wasteRoutes);
 
 // 404 fallback
 app.use((req, res) => {

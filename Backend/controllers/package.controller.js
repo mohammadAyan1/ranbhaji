@@ -82,10 +82,16 @@ export const getPackages = async (req, res) => {
 
         // Filter out custom packages not targeted at this user
         const filtered = packages.filter(p => {
-            if (p.type === 'custom' && !isAdmin) {
-                return p.target_user_id === userId;
+            if (isAdmin) return true;
+
+            if (p.type === 'custom') {
+                if (userId) {
+                    return p.target_user_id === userId;
+                }
+                return false; // Not logged in, skip custom packages
             }
-            return true;
+            
+            return true; // Return standard packages
         });
 
         // Strip price details for non-admins (only show package price, not per-item prices)

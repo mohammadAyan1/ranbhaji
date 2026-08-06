@@ -8,6 +8,13 @@ export default function ReturnItem() {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
+  // Modal State for Review
+  const [reviewModalData, setReviewModalData] = useState(null);
+  const [isRescheduled, setIsRescheduled] = useState(true);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [isWaste, setIsWaste] = useState(false);
+  const [addToStock, setAddToStock] = useState(true);
+
   const toggleRow = (id) => {
     setExpandedId(expandedId === id ? null : id);
   };
@@ -72,14 +79,32 @@ export default function ReturnItem() {
   }, [selectedPhoto]);
 
   const handleReview = async (id, status) => {
-    setMsg("");
-    let willPurchase = false;
-    if (status === 'approved') {
-      willPurchase = window.confirm("Kya aap is product ko dobara market se purchase karenge?");
+    if (status === 'rejected') {
+      submitReview(id, 'rejected', false, "", false, false);
+      return;
     }
+    // If approved, open modal
+    setReviewModalData({ id, status });
+    setIsRescheduled(true);
+    const tmrw = new Date();
+    tmrw.setDate(tmrw.getDate() + 1);
+    setRescheduleDate(tmrw.toISOString().split('T')[0]);
+    setIsWaste(false);
+    setAddToStock(true);
+  };
+
+  const submitReview = async (id, status, rescheduled, reschedDate, waste, stock) => {
+    setMsg("");
     try {
-      await api.patch(`/return-item/${id}/review`, { status, will_purchase: willPurchase });
+      await api.patch(`/return-item/${id}/review`, { 
+        status, 
+        is_rescheduled: rescheduled,
+        reschedule_date: reschedDate,
+        is_waste: waste,
+        add_to_stock: stock
+      });
       setMsg(`✅ Return request ${status} successfully.`);
+      setReviewModalData(null);
       fetchReturns();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || "Action failed"}`);
@@ -319,6 +344,89 @@ export default function ReturnItem() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {reviewModalData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-gray-200">
+            <h3 className="font-bold text-xl text-gray-900 mb-2">Accept Return</h3>
+            <p className="text-sm text-gray-500 mb-6">Please configure how this return should be handled.</p>
+
+            <div className="space-y-4">
+              <div className="flex gap-2 mb-4">
+                <button 
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-colors ${isRescheduled ? 'bg-fresh-50 border-fresh-500 text-fresh-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                  onClick={() => setIsRescheduled(true)}
+                >
+                  Reschedule Delivery
+                </button>
+                <button 
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-colors ${!isRescheduled ? 'bg-red-50 border-red-500 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                  onClick={() => setIsRescheduled(false)}
+                >
+                  Cancel Delivery
+                </button>
+              </div>
+
+              {isRescheduled ? (
+                <div className="space-y-4 animate-fade-in">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-800 mb-1">Select Reschedule Date</label>
+                    <input 
+                      type="date" 
+                      className="w-full border border-gray-300 rounded-xl p-2.5 text-sm focus:border-fresh-500 focus:ring-1 focus:ring-fresh-500"
+                      value={rescheduleDate}
+                      onChange={(e) => setRescheduleDate(e.target.value)}
+                    />
+                  </div>
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={isWaste}
+                      onChange={(e) => setIsWaste(e.target.checked)}
+                      className="mt-1 w-4 h-4 text-red-600 rounded focus:ring-red-500 border-gray-300"
+                    />
+                    <div>
+                      <span className="block font-semibold text-gray-800 text-sm">Is this returned product considered WASTE?</span>
+                      <span className="block text-xs text-gray-500 mt-1">If checked, it will NOT be added to stock and will appear in purchase demand.</span>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-fade-in">
+                  <label className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={addToStock}
+                      onChange={(e) => setAddToStock(e.target.checked)}
+                      className="mt-1 w-4 h-4 text-fresh-600 rounded focus:ring-fresh-500 border-gray-300"
+                    />
+                    <div>
+                      <span className="block font-semibold text-gray-800 text-sm">Add item back to stock?</span>
+                      <span className="block text-xs text-gray-500 mt-1">If unchecked, it will be marked as Waste.</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setReviewModalData(null)}
+                className="px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => submitReview(reviewModalData.id, reviewModalData.status, isRescheduled, rescheduleDate, isWaste, addToStock)}
+                className="px-4 py-2 text-sm font-semibold text-white bg-fresh-600 hover:bg-fresh-700 rounded-lg shadow-sm transition-all active:scale-95"
+              >
+                Confirm & Accept
+              </button>
+            </div>
           </div>
         </div>
       )}

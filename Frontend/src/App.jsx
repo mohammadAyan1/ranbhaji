@@ -59,6 +59,7 @@ import Landing from "./pages/Landing/Landing";
 import AdminCategories from "./pages/admin/Master/AdminCategories";
 import AdminSubCategories from "./pages/admin/Master/AdminSubCategories";
 import AdminZones from "./pages/admin/Master/AdminZones";
+import AdminWaste from "./pages/admin/AdminWaste";
 
 // Calculators
 import PackageCalculator from "./pages/admin/Calculators/PackageCalculator";
@@ -158,6 +159,7 @@ function App() {
           <Route path="/admin/working-logs" element={<WorkingLogs />} />
           <Route path="/admin/master/sub-categories" element={<AdminSubCategories />} />
           <Route path="/admin/master/zones" element={<AdminZones />} />
+          <Route path="/admin/waste" element={<AdminWaste />} />
 
           {/* Master */}
           <Route path="/admin/master/categories" element={<AdminCategories />} />

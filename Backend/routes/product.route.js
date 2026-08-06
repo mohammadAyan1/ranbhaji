@@ -1,5 +1,5 @@
 import express from "express";
-import { createProduct, getProducts, getPublicVegetables, updateProduct, deleteProduct, createPurchase, getPurchases, getStockSummary, getProductSales, updateRetailPrice } from "../controllers/product.controller.js";
+import { createProduct, getProducts, getPublicVegetables, updateProduct, deleteProduct, createPurchase, getPurchases, getStockSummary, getProductSales, updateRetailPrice, getProductPurchaseHistory } from "../controllers/product.controller.js";
 import { requireAuth, requireRole, optionalAuth } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
 
@@ -10,6 +10,7 @@ router.get("/", optionalAuth, getProducts);
 router.post("/", requireAuth, requireRole(["admin"]), upload.single("image"), createProduct);
 router.put("/:id", requireAuth, requireRole(["admin"]), upload.single("image"), updateProduct);
 router.put("/:id/retail-price", requireAuth, requireRole(["admin"]), updateRetailPrice);
+router.get("/:id/purchase-history", requireAuth, requireRole(["admin"]), getProductPurchaseHistory);
 router.delete("/:id", requireAuth, requireRole(["admin"]), deleteProduct);
 
 // Purchase & Stock routes

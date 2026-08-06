@@ -459,6 +459,18 @@ User.hasMany(ReturnedProductLog, { foreignKey: 'user_id' });
 ReturnedProductLog.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(ReturnedProductLog, { foreignKey: 'product_id' });
 
+// 26. WASTE_LOG
+const WasteLog = sequelize.define('WasteLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  quantity: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  remark: { type: DataTypes.STRING(255), allowNull: true },
+  waste_date: { type: DataTypes.DATEONLY, defaultValue: DataTypes.NOW }
+}, { tableName: 'waste_logs', timestamps: true, createdAt: 'created_at', updatedAt: false });
+
+WasteLog.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(WasteLog, { foreignKey: 'product_id' });
+
+
 // 26. BATCH_PROCESSING_LOG
 const BatchProcessingLog = sequelize.define('BatchProcessingLog', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -533,6 +545,7 @@ export {
   ReturnedProductLog,
   BatchProcessingLog,
   Zone,
-  LossLog
+  LossLog,
+  WasteLog
 };
 

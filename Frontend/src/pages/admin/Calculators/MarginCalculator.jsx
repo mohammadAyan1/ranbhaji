@@ -63,8 +63,8 @@ export default function MarginCalculator() {
   const clearCalculator = () => {
     setFixedCount(2);
     setSeasonalCount(3);
-    setFixedItems(Array.from({length: 2}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
-    setSeasonalItems(Array.from({length: 3}).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
+    setFixedItems(Array.from({ length: 2 }).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
+    setSeasonalItems(Array.from({ length: 3 }).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
     setDraftName("");
     setNumPersonsMax("");
     setPersonRangeModeCalc(false);
@@ -109,16 +109,16 @@ export default function MarginCalculator() {
   // 1. Ek delivery ki package price nikali
   const finalPackagePrice = parseFloat(totalAmount || 0);
   const pricePerService = finalPackagePrice / parseInt(servicesCount || 1);
-  
+
   // 2. Ek delivery ka margin amount nikala
   const calculatedMarginAmountPerService = pricePerService - totalBasePurchaseCost;
-  
+
   // 3. Cost ko 2 se divide kiya (jaisa Package Calculator me kiya tha)
   const dividedCost = totalBasePurchaseCost / 2;
-  
+
   // 4. Margin percentage calculate kiya
   const calculatedMarginPercent = dividedCost > 0 ? (calculatedMarginAmountPerService / dividedCost) * 100 : 0;
-  
+
   // Just keeping this in case it's used elsewhere for total margin sum
   const calculatedMarginAmount = finalPackagePrice - (totalBasePurchaseCost * parseInt(servicesCount || 1));
 
@@ -200,11 +200,10 @@ export default function MarginCalculator() {
       </div>
 
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm border ${
-          msgType === "success" 
-            ? "bg-fresh-100/30 text-fresh-600 border-fresh-700/50" 
+        <div className={`rounded-xl px-4 py-3 text-sm border ${msgType === "success"
+            ? "bg-fresh-100/30 text-fresh-600 border-fresh-700/50"
             : "bg-red-900/30 text-red-600 border-red-700/50"
-        }`}>
+          }`}>
           {msg}
         </div>
       )}
@@ -241,11 +240,10 @@ export default function MarginCalculator() {
                 setPersonRangeModeCalc(!personRangeModeCalc);
                 if (personRangeModeCalc) setNumPersonsMax("");
               }}
-              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border transition-all ${
-                personRangeModeCalc
+              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border transition-all ${personRangeModeCalc
                   ? "bg-fresh-100/50 border-fresh-600/50 text-fresh-600"
                   : "bg-gray-100 border-gray-300 text-gray-600 hover:text-gray-900"
-              }`}
+                }`}
             >
               {personRangeModeCalc ? "📏 Range" : "→ Range?"}
             </button>
@@ -292,19 +290,19 @@ export default function MarginCalculator() {
             onChange={(e) => {
               const newCount = parseInt(e.target.value) || 0;
               if (newCount < fixedCount) {
-                 const removedItems = fixedItems.slice(newCount);
-                 const hasProductSelected = removedItems.some(item => item.product_id);
-                 if (hasProductSelected) {
-                    const confirmRemove = window.confirm("You have selected products in the rows being removed. Are you sure you want to remove them?");
-                    if (!confirmRemove) return;
-                 }
+                const removedItems = fixedItems.slice(newCount);
+                const hasProductSelected = removedItems.some(item => item.product_id);
+                if (hasProductSelected) {
+                  const confirmRemove = window.confirm("You have selected products in the rows being removed. Are you sure you want to remove them?");
+                  if (!confirmRemove) return;
+                }
               }
               setFixedCount(newCount);
               const newItems = [...fixedItems];
               if (newCount > newItems.length) {
                 for (let i = newItems.length; i < newCount; i++) {
-                   const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
-                   newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
+                  const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
+                  newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
                 }
               } else if (newCount < newItems.length) {
                 newItems.splice(newCount);
@@ -323,19 +321,19 @@ export default function MarginCalculator() {
             onChange={(e) => {
               const newCount = parseInt(e.target.value) || 0;
               if (newCount < seasonalCount) {
-                 const removedItems = seasonalItems.slice(newCount);
-                 const hasProductSelected = removedItems.some(item => item.product_id);
-                 if (hasProductSelected) {
-                    const confirmRemove = window.confirm("You have selected products in the rows being removed. Are you sure you want to remove them?");
-                    if (!confirmRemove) return;
-                 }
+                const removedItems = seasonalItems.slice(newCount);
+                const hasProductSelected = removedItems.some(item => item.product_id);
+                if (hasProductSelected) {
+                  const confirmRemove = window.confirm("You have selected products in the rows being removed. Are you sure you want to remove them?");
+                  if (!confirmRemove) return;
+                }
               }
               setSeasonalCount(newCount);
               const newItems = [...seasonalItems];
               if (newCount > newItems.length) {
                 for (let i = newItems.length; i < newCount; i++) {
-                   const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
-                   newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
+                  const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
+                  newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
                 }
               } else if (newCount < newItems.length) {
                 newItems.splice(newCount);
@@ -478,10 +476,10 @@ export default function MarginCalculator() {
                     </div>
                   </div>
                 )}
-                
+
                 {/* Remove Row Button */}
                 <div className="ml-auto md:ml-0 flex items-center justify-end">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       if (item.product_id) {
@@ -603,7 +601,7 @@ export default function MarginCalculator() {
 
                 {/* Remove Row Button */}
                 <div className="ml-auto md:ml-0 flex items-center justify-end">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       if (item.product_id) {
