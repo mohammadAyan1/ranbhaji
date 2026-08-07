@@ -24,8 +24,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
 
-          protocol: ftps
-          security: strict
+          
 
           local-dir: ./Backend/
           server-dir: /rambhaji.backend.shreenari.com/
