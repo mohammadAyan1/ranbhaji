@@ -113,6 +113,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
+// Start server
 const startServer = async () => {
     await connectDB();
     await sequelize.sync();
