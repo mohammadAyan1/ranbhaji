@@ -156,7 +156,7 @@ function App() {
           <Route path="/admin/product-sales" element={<AdminProductSales />} />
           <Route path="/admin/units" element={<AdminUnits />} />
           <Route path="/admin/user-preferences" element={<AdminUserPreferences />} />
-          
+
           {/* Working Logs */}
           <Route path="/admin/working-logs" element={<WorkingLogs />} />
           <Route path="/admin/master/sub-categories" element={<AdminSubCategories />} />
@@ -197,7 +197,7 @@ function App() {
           <Route path="/admin/reports/loss/:productId" element={<LossDetail />} />
         </Route>
 
-        {/* 🚚 DELIVERY Routes 🚚 */}
+        {/* 🚚 DELIVERY Routes 🚚🚚🚚🚚 */}
         <Route element={<ProtectedRoute roles={["delivery"]}><Layout /></ProtectedRoute>}>
           <Route path="/delivery" element={<DeliveryHome />} />
           <Route path="/delivery/history" element={<DeliveryBoyHistory />} />
