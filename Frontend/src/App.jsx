@@ -44,6 +44,7 @@ import AdminProductSales from "./pages/admin/AdminProductSales";
 import AdminUserHistory from "./pages/admin/AdminUserHistory";
 import AdminUnits from "./pages/admin/AdminUnits";
 import AdminUserPreferences from "./pages/admin/AdminUserPreferences";
+import Attendance from "./pages/admin/Attendance";
 
 // Reports
 import ItemPurchaseReport from "./pages/admin/Reports/ItemPurchaseReport";
@@ -162,6 +163,7 @@ function App() {
           <Route path="/admin/master/sub-categories" element={<AdminSubCategories />} />
           <Route path="/admin/master/zones" element={<AdminZones />} />
           <Route path="/admin/waste" element={<AdminWaste />} />
+          <Route path="/admin/attendance" element={<Attendance />} />
 
           {/* Master */}
           <Route path="/admin/master/categories" element={<AdminCategories />} />

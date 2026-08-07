@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User, Package } from "../models/index.js";
+import { User, Package, AttendanceLog } from "../models/index.js";
 
 const generateToken = (id, role) =>
     jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -72,6 +72,7 @@ export const login = async (req, res) => {
         if (!match) return res.status(400).json({ success: false, message: "Invalid password" });
 
         const token = generateToken(user.id, user.role);
+
         res.cookie("token", token, cookieOpts).status(200).json({
             success: true,
             token,

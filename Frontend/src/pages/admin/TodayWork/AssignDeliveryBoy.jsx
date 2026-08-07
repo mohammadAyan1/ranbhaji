@@ -20,6 +20,7 @@ export default function AssignDeliveryBoy() {
   });
 
   const [expandedId, setExpandedId] = useState(null);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
 
   const fetchBatches = async () => {
     try {
@@ -75,6 +76,62 @@ export default function AssignDeliveryBoy() {
     }
   };
 
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedUserIds(readyUsers.map(u => u.user.id));
+    } else {
+      setSelectedUserIds([]);
+    }
+  };
+
+  const handleSelectUser = (userId) => {
+    if (selectedUserIds.includes(userId)) {
+      setSelectedUserIds(selectedUserIds.filter(id => id !== userId));
+    } else {
+      setSelectedUserIds([...selectedUserIds, userId]);
+    }
+  };
+
+  const handleBulkAssign = async (delivery_boy_id) => {
+    if (!delivery_boy_id) return;
+    if (selectedUserIds.length === 0) {
+      alert("Please select at least one order to assign.");
+      return;
+    }
+
+    let allScheduleIds = [];
+    let allRetailOrderIds = [];
+
+    readyUsers.forEach(u => {
+      if (selectedUserIds.includes(u.user.id)) {
+        u.addresses.forEach(addr => {
+          if (addr.status === 'ready_for_delivery' && addr.delivery_boy_id == null) {
+            allScheduleIds = [...allScheduleIds, ...(addr.scheduleIds || [])];
+            allRetailOrderIds = [...allRetailOrderIds, ...(addr.retailOrderIds || [])];
+          }
+        });
+      }
+    });
+
+    if (allScheduleIds.length === 0 && allRetailOrderIds.length === 0) {
+      alert("No ready orders found for selected users.");
+      return;
+    }
+
+    try {
+      await api.put('/admin/orders/assign-delivery-boy', { 
+        scheduleIds: allScheduleIds, 
+        retailOrderIds: allRetailOrderIds, 
+        delivery_boy_id 
+      });
+      alert('Delivery boy assigned to selected orders successfully');
+      setSelectedUserIds([]);
+      fetchOrders();
+    } catch (err) {
+      alert('Failed to assign delivery boy');
+    }
+  };
+
   const toggleRow = (userId) => {
     setExpandedId(expandedId === userId ? null : userId);
   };
@@ -103,7 +160,22 @@ export default function AssignDeliveryBoy() {
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Assign Delivery Boy</h2>
           <p className="text-gray-500 text-sm">Assign delivery boys to ready orders</p>
         </div>
-        <div className="w-full sm:w-auto flex gap-3">
+        <div className="w-full sm:w-auto flex flex-wrap items-center gap-3">
+          {selectedUserIds.length > 0 && (
+            <select
+              className="input-field py-2 px-3 text-sm bg-blue-50 border-blue-200 text-blue-900 rounded-xl outline-none focus:border-blue-500 font-semibold cursor-pointer"
+              onChange={(e) => {
+                handleBulkAssign(e.target.value);
+                e.target.value = "";
+              }}
+              defaultValue=""
+            >
+              <option value="" disabled>Assign to Selected ({selectedUserIds.length})...</option>
+              {deliveryBoys.map(boy => (
+                <option key={boy.id} value={boy.id}>{boy.name}</option>
+              ))}
+            </select>
+          )}
           <input
             type="date"
             value={date}
@@ -125,7 +197,15 @@ export default function AssignDeliveryBoy() {
             <table className="w-full text-left min-w-[700px]">
               <thead className="bg-gray-50/50 text-gray-600 border-b border-gray-100">
                 <tr>
-                  <th className="p-4 w-12 font-medium"></th>
+                  <th className="p-4 w-12 text-center">
+                    <input 
+                      type="checkbox" 
+                      onChange={handleSelectAll} 
+                      checked={readyUsers.length > 0 && selectedUserIds.length === readyUsers.length}
+                      className="rounded border-gray-300 text-fresh-600 focus:ring-fresh-500 cursor-pointer w-4 h-4"
+                    />
+                  </th>
+                  <th className="p-4 w-10 font-medium"></th>
                   <th className="p-4 font-semibold text-sm">User</th>
                   <th className="p-4 font-semibold text-sm">Package Assigned</th>
                   <th className="p-4 font-semibold text-sm">Total Items</th>
@@ -136,7 +216,15 @@ export default function AssignDeliveryBoy() {
                 {readyUsers.map((u) => (
                   <React.Fragment key={u.user.id}>
                     <tr className="hover:bg-gray-50/50 transition-colors">
-                      <td className="p-4 text-gray-400 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                      <td className="p-4 text-center">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedUserIds.includes(u.user.id)}
+                          onChange={() => handleSelectUser(u.user.id)}
+                          className="rounded border-gray-300 text-fresh-600 focus:ring-fresh-500 cursor-pointer w-4 h-4"
+                        />
+                      </td>
+                      <td className="p-4 text-gray-400 cursor-pointer text-center" onClick={() => toggleRow(u.user.id)}>
                         {expandedId === u.user.id ? '▼' : '▶'}
                       </td>
                       <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
@@ -162,7 +250,7 @@ export default function AssignDeliveryBoy() {
 
                     {expandedId === u.user.id && (
                       <tr className="bg-gray-50/30">
-                        <td colSpan="5" className="p-0 border-l-2 border-fresh-500">
+                        <td colSpan="6" className="p-0 border-l-2 border-fresh-500">
                           <div className="p-6">
                             <div className="mb-6 space-y-6">
                               <h4 className="text-sm font-bold text-gray-700 flex items-center">

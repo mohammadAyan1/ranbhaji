@@ -527,6 +527,16 @@ const LossLog = sequelize.define('LossLog', {
 LossLog.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(LossLog, { foreignKey: 'product_id' });
 
+// 29. ATTENDANCE_LOG
+const AttendanceLog = sequelize.define('AttendanceLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  login_time: { type: DataTypes.DATE, allowNull: false }
+}, { tableName: 'attendance_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+AttendanceLog.belongsTo(User, { foreignKey: 'delivery_boy_id', as: 'DeliveryBoy' });
+User.hasMany(AttendanceLog, { foreignKey: 'delivery_boy_id' });
+
 export {
   sequelize,
   User,
@@ -562,6 +572,7 @@ export {
   Zone,
   LossLog,
   WasteLog,
-  Franchise
+  Franchise,
+  AttendanceLog
 };
 

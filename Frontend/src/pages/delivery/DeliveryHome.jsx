@@ -12,6 +12,7 @@ export default function DeliveryHome() {
   const [msg, setMsg] = useState("");
   const [taggingLocation, setTaggingLocation] = useState(false);
   const [acceptedDetails, setAcceptedDetails] = useState(null);
+  const [markingAttendance, setMarkingAttendance] = useState(false);
 
   const [activeTab, setActiveTab] = useState("mine"); // "mine" or "available"
   const [availableOrders, setAvailableOrders] = useState({ schedules: [], retailOrders: [] });
@@ -92,6 +93,19 @@ export default function DeliveryHome() {
     );
   };
 
+  const handleMarkAttendance = async () => {
+    setMarkingAttendance(true);
+    setMsg("");
+    try {
+      const res = await api.post("/attendance/mark");
+      setMsg(`✅ ${res.data?.message || "Attendance marked successfully!"}`);
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setMarkingAttendance(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading deliveries...</div>;
 
   return (
@@ -99,7 +113,16 @@ export default function DeliveryHome() {
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <h1 className="page-header">Delivery Dashboard 🚚</h1>
-          <p className="page-sub">{new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}</p>
+          <div className="flex items-center gap-4 mt-1">
+            <p className="page-sub mb-0">{new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}</p>
+            <button
+              onClick={handleMarkAttendance}
+              disabled={markingAttendance}
+              className="text-xs bg-fresh-100 text-fresh-700 font-bold px-3 py-1.5 rounded-lg border border-fresh-300 hover:bg-fresh-200 transition-colors shadow-sm"
+            >
+              {markingAttendance ? "Marking..." : "📍 Mark Attendance"}
+            </button>
+          </div>
         </div>
         <div className="flex bg-white rounded-lg p-1 border border-gray-200 self-start">
           <button

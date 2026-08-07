@@ -35,6 +35,7 @@ import todayWorkRoutes from "./routes/todayWork.route.js";
 import reportRoutes from "./routes/report.route.js";
 import wasteRoutes from "./routes/waste.route.js";
 import franchiseRoutes from "./routes/franchise.route.js";
+import attendanceRoutes from "./routes/attendance.route.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
@@ -98,6 +99,7 @@ app.use("/api/today-work", todayWorkRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/waste", wasteRoutes);
 app.use("/api/franchises", franchiseRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 // 404 fallback
 app.use((req, res) => {

@@ -95,25 +95,12 @@ const adminLinks = [
       { to: "/admin/franchises", label: "Franchise Partners" },
     ]
   },
-  // {
-  //   label: "Others (Old Links)",
-  //   icon: <Settings size={20} />,
-  //   isCollapsible: true,
-  //   children: [
-  //     { to: "/admin/users", label: "Users" },
-  //     { to: "/admin/user-history", label: "User History" },
-  //     { to: "/admin/user-addresses", label: "User Addresses" },
-  //     { to: "/admin/subscriptions", label: "Subscriptions" },
-  //     { to: "/admin/demands", label: "Stock Demands" },
-  //     { to: "/admin/product-sales", label: "Product Sales" },
-  //     { to: "/admin/seasonal-selections", label: "Seasonal Picks" },
-  //     { to: "/admin/summary", label: "Daily Summary" },
-  //     { to: "/admin/retail-orders", label: "Retail Orders" },
-  //     { to: "/admin/all-orders", label: "All Orders" },
-  //     { to: "/admin/units", label: "Units Management" },
-  //     { to: "/admin/user-preferences", label: "User Preferences" },
-  //   ]
-  // }
+  {
+    label: "Attendance",
+    icon: <ClipboardList size={20} />,
+    isCollapsible: false,
+    to: "/admin/attendance"
+  }
 ];
 
 const userLinks = [
