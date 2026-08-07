@@ -1,4 +1,4 @@
-import { RetailOrder, Subscription, User, Package, Batch, DeliverySchedule, MissedProductLog, Product } from "../models/index.js";
+import { RetailOrder, Subscription, WaterSubscription, User, Package, Batch, DeliverySchedule, MissedProductLog, Product } from "../models/index.js";
 import { Op } from "sequelize";
 
 // GET /api/admin/today-work/orders-for-batch
@@ -49,6 +49,12 @@ export const getOrdersForBatch = async (req, res) => {
                         { model: Package, attributes: ['id', 'name'] }
                     ]
                 },
+                {
+                    model: WaterSubscription,
+                    include: [
+                        { model: User, attributes: ['id', 'name', 'phone'] }
+                    ]
+                },
                 { model: Batch, attributes: ['id', 'name'] }
             ],
             order: [['scheduled_date', 'DESC']]
@@ -71,18 +77,33 @@ export const getOrdersForBatch = async (req, res) => {
         });
 
         schedules.forEach(s => {
-            if (!s.Subscription) return;
-            unifiedOrders.push({
-                id: `sub-${s.id}`,
-                type: 'subscription',
-                order_id: s.id, // ID of DeliverySchedule
-                user: s.Subscription.User,
-                batch: s.Batch,
-                batch_id: s.batch_id,
-                status: s.status,
-                description: s.is_returned_serving ? `Return Order (${s.Subscription.Package?.name || 'Unknown'})` : `Package: ${s.Subscription.Package?.name || 'Unknown'}`,
-                date: s.scheduled_date
-            });
+            if (s.Subscription) {
+                unifiedOrders.push({
+                    id: `sub-${s.id}`,
+                    type: 'subscription',
+                    order_id: s.id, // ID of DeliverySchedule
+                    user: s.Subscription.User,
+                    batch: s.Batch,
+                    batch_id: s.batch_id,
+                    status: s.status,
+                    description: s.is_returned_serving ? `Return Order (${s.Subscription.Package?.name || 'Unknown'})` : `Package: ${s.Subscription.Package?.name || 'Unknown'}`,
+                    date: s.scheduled_date
+                });
+            }
+            
+            if (s.WaterSubscription) {
+                unifiedOrders.push({
+                    id: `water-${s.id}`,
+                    type: 'water',
+                    order_id: s.id,
+                    user: s.WaterSubscription.User,
+                    batch: s.Batch,
+                    batch_id: s.batch_id,
+                    status: s.status,
+                    description: `Water: ${s.WaterSubscription.water_type} (${s.WaterSubscription.container}) - ${parseFloat(s.WaterSubscription.capacity_liters || 2)}L`,
+                    date: s.scheduled_date
+                });
+            }
         });
 
         // Fetch batches for filter dropdown
@@ -109,7 +130,7 @@ export const assignBatchToOrders = async (req, res) => {
         for (const order of orders) {
             if (order.type === 'retail') {
                 await RetailOrder.update({ batch_id: newBatchId }, { where: { id: order.id } });
-            } else if (order.type === 'subscription') {
+            } else if (order.type === 'subscription' || order.type === 'water') {
                 await DeliverySchedule.update({ batch_id: newBatchId }, { where: { id: order.order_id } });
             }
         }

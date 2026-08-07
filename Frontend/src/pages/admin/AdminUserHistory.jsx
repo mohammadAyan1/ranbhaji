@@ -428,6 +428,16 @@ export default function AdminUserHistory() {
                         </div>
                       </div>
                       <div className="p-3 bg-white">
+                        {pkg.is_water && (
+                          <div className="flex gap-2 mb-2">
+                             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">
+                               Container: {pkg.container}
+                             </span>
+                             <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold border border-indigo-200">
+                               Frequency: {pkg.frequency}
+                             </span>
+                          </div>
+                        )}
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Package Services (Products)</p>
                         {pkg.items && pkg.items.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
@@ -439,6 +449,34 @@ export default function AdminUserHistory() {
                           </div>
                         ) : (
                           <p className="text-gray-400 text-xs italic">No specific products tracked for this package type.</p>
+                        )}
+
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Subscription Timeline</p>
+                          <ul className="text-[11px] text-gray-600 space-y-1 list-disc list-inside ml-1">
+                            {pkg.history && pkg.history.length > 0 ? (
+                               pkg.history.map((hDate, hi) => (
+                                 <li key={hi}>
+                                   {hi === 0 ? <span className="font-semibold text-gray-800">First Subscribed:</span> : <span className="font-semibold text-blue-700">Renewed ({hi}):</span>} {new Date(hDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                                 </li>
+                               ))
+                            ) : (
+                               <li>No history available</li>
+                            )}
+                          </ul>
+                        </div>
+
+                        {pkg.deliveries && pkg.deliveries.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-gray-100">
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Delivery History</p>
+                            <div className="flex flex-wrap gap-2">
+                              {pkg.deliveries.map((del, di) => (
+                                <span key={di} className="bg-green-50 border border-green-200 text-green-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">
+                                  ✅ {new Date(del.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

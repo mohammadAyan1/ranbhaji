@@ -8,21 +8,31 @@ export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", phone: "", email: "", password: "", role: "user" });
   const [creating, setCreating] = useState(false);
 
   const fetchUsers = () => {
-    api.get("/admin/users").then(r => setUsers(r.data.users || [])).finally(() => setLoading(false));
+    api.get("/admin/user-analytics/users").then(r => setUsers(r.data.users || [])).finally(() => setLoading(false));
   };
   useEffect(fetchUsers, []);
 
   const toggleStatus = async (user) => {
     const newStatus = user.status === "active" ? "inactive" : "active";
     try {
-      await api.patch(`/admin/users/${user.id}/status`, { status: newStatus });
+      await api.patch(`/admin/user-analytics/users/${user.id}/status`, { status: newStatus });
       setMsg(`✅ User ${newStatus}`);
+      fetchUsers();
+    } catch (err) { setMsg(`❌ ${err.response?.data?.message}`); }
+  };
+
+  const handleRoleChange = async (user, newRole) => {
+    try {
+      await api.patch(`/admin/user-analytics/users/${user.id}/role`, { role: newRole });
+      setMsg(`✅ Role updated to ${newRole}`);
       fetchUsers();
     } catch (err) { setMsg(`❌ ${err.response?.data?.message}`); }
   };
@@ -32,7 +42,7 @@ export default function AdminUsers() {
     setCreating(true);
     setMsg("");
     try {
-      await api.post("/admin/users", formData);
+      await api.post("/admin/user-analytics/users", formData);
       setMsg(`✅ User ${formData.name} created successfully.`);
       setIsModalOpen(false);
       setFormData({ name: "", phone: "", email: "", password: "", role: "user" });
@@ -53,9 +63,30 @@ export default function AdminUsers() {
           <h1 className="page-header">User Management 👥</h1>
           <p className="page-sub">View and manage all platform users</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="btn-primary text-sm flex items-center gap-2">
-          <Plus size={16} /> Add User
-        </button>
+        <div className="flex items-center gap-4">
+          <select 
+            className="input text-sm py-2" 
+            value={filterRole} 
+            onChange={(e) => setFilterRole(e.target.value)}
+          >
+            <option value="all">All Roles</option>
+            <option value="user">Users</option>
+            <option value="delivery">Delivery</option>
+            <option value="admin">Admin</option>
+          </select>
+          <select 
+            className="input text-sm py-2" 
+            value={filterStatus} 
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary text-sm flex items-center gap-2">
+            <Plus size={16} /> Add User
+          </button>
+        </div>
       </div>
 
       {msg && (
@@ -81,7 +112,10 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody>
-              {users.map(u => (
+              {users.filter(u => 
+                (filterRole === "all" || u.role === filterRole) && 
+                (filterStatus === "all" || u.status === filterStatus)
+              ).map(u => (
                 <tr key={u.id} className="table-row">
                   <td className="p-3 font-medium">
                     <button 
@@ -95,7 +129,15 @@ export default function AdminUsers() {
                   <td className="p-3 text-gray-500 text-xs">{u.email || "—"}</td>
                   <td className="p-3 text-gray-700 font-mono text-xs">{u.actual_password || "—"}</td>
                   <td className="p-3">
-                    <span className={`badge ${u.role === "admin" ? "badge-red" : u.role === "delivery" ? "badge-blue" : "badge-green"}`}>{u.role}</span>
+                    <select 
+                      className={`text-xs font-semibold px-2 py-1 rounded-md border-0 bg-gray-50 focus:ring-0 cursor-pointer ${u.role === "admin" ? "text-red-700" : u.role === "delivery" ? "text-blue-700" : "text-green-700"}`}
+                      value={u.role}
+                      onChange={(e) => handleRoleChange(u, e.target.value)}
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="delivery">Delivery</option>
+                      <option value="user">User</option>
+                    </select>
                   </td>
                   <td className="p-3 text-right text-fresh-600">₹{parseFloat(u.wallet_balance || 0).toFixed(0)}</td>
                   <td className="p-3 text-right text-red-600">₹{parseFloat(u.due_amount || 0).toFixed(0)}</td>
@@ -104,7 +146,7 @@ export default function AdminUsers() {
                   </td>
                   <td className="p-3 text-right">
                     <button onClick={() => toggleStatus(u)}
-                      className={`text-xs font-medium ${u.status === "active" ? "text-red-600 hover:text-red-300" : "text-fresh-600 hover:text-fresh-700"}`}>
+                      className={`text-xs font-medium px-3 py-1 rounded-full border ${u.status === "active" ? "text-red-600 hover:bg-red-50 border-red-200" : "text-fresh-600 hover:bg-fresh-50 border-fresh-200"}`}>
                       {u.status === "active" ? "Deactivate" : "Activate"}
                     </button>
                   </td>

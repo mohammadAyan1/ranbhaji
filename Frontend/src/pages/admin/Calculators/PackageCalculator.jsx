@@ -166,8 +166,8 @@ export default function PackageCalculator() {
 
     try {
       await api.post("/calculator/drafts", payload);
-      showMsg("✅ Simulation draft saved successfully!", "success");
-      setDraftName("");
+      clearCalculator();
+      showMsg("✅ Package create ho chuka hai draft me!", "success");
     } catch (err) {
       showMsg(`❌ Failed to save draft: ${err.response?.data?.message || err.message}`, "error");
     } finally {

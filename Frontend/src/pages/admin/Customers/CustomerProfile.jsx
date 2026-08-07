@@ -25,7 +25,7 @@ export default function CustomerProfile() {
     if (loading) return <div className="p-8 text-center text-gray-500">Loading profile...</div>;
     if (!profile || !profile.user) return <div className="p-8 text-center text-red-500">Customer not found</div>;
 
-    const { user, addresses, wallet_transactions, stats, deliveries } = profile;
+    const { user, addresses, wallet_transactions, stats, deliveries, subscriptionsList, waterSubscriptionsList } = profile;
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -86,6 +86,77 @@ export default function CustomerProfile() {
                     </div>
                 </div>
             </div>
+
+            {/* Subscriptions Grid */}
+            {(subscriptionsList?.length > 0 || waterSubscriptionsList?.length > 0) && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">📦 Active & Past Subscriptions</h2>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {subscriptionsList?.map(sub => (
+                            <div key={sub.id} className="border border-gray-200 rounded-xl p-4 shadow-sm relative">
+                                <div className="absolute top-4 right-4">
+                                    <span className={`text-[10px] px-2 py-1 rounded-full uppercase font-bold tracking-wider ${sub.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                                        {sub.status}
+                                    </span>
+                                </div>
+                                <h3 className="font-bold text-gray-900 text-lg mb-1">{sub.Package?.name}</h3>
+                                <p className="text-sm text-gray-500 mb-2">Price: <span className="font-semibold text-gray-900">₹{sub.Package?.price}</span> ({sub.type})</p>
+                                <div className="text-xs text-gray-600 space-y-1">
+                                    <p>Purchased: {new Date(sub.created_at).toLocaleDateString()}</p>
+                                    <p>Start Date: {sub.start_date ? new Date(sub.start_date).toLocaleDateString() : 'N/A'} | End Date: {sub.end_date ? new Date(sub.end_date).toLocaleDateString() : 'N/A'}</p>
+                                </div>
+                                {sub.Schedules && sub.Schedules.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-gray-100">
+                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-2">Upcoming Deliveries (Next 3)</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {sub.Schedules.filter(s => s.status === 'pending' || s.status === 'ready_for_delivery').slice(0, 3).map((sch, i) => (
+                                                <span key={i} className="text-[11px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-1 rounded">
+                                                    {new Date(sch.scheduled_date).toLocaleDateString()}
+                                                </span>
+                                            ))}
+                                            {sub.Schedules.filter(s => s.status === 'pending' || s.status === 'ready_for_delivery').length === 0 && (
+                                                <span className="text-xs text-gray-500">No upcoming deliveries</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {waterSubscriptionsList?.map(sub => (
+                            <div key={sub.id} className="border border-blue-200 bg-blue-50/20 rounded-xl p-4 shadow-sm relative">
+                                <div className="absolute top-4 right-4">
+                                    <span className={`text-[10px] px-2 py-1 rounded-full uppercase font-bold tracking-wider ${sub.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                                        {sub.status}
+                                    </span>
+                                </div>
+                                <h3 className="font-bold text-gray-900 text-lg mb-1 flex items-center gap-2">💧 {sub.water_type} Water</h3>
+                                <p className="text-sm text-gray-500 mb-2">
+                                    {sub.container.charAt(0).toUpperCase() + sub.container.slice(1)} Bottle | {parseFloat(sub.capacity_liters || 2)}L | ₹{sub.price_per_bottle}/bottle ({sub.frequency})
+                                </p>
+                                <div className="text-xs text-gray-600 space-y-1">
+                                    <p>Purchased: {new Date(sub.created_at).toLocaleDateString()}</p>
+                                    <p>Start Date: {sub.start_date ? new Date(sub.start_date).toLocaleDateString() : 'N/A'} | End Date: {sub.end_date ? new Date(sub.end_date).toLocaleDateString() : 'N/A'}</p>
+                                </div>
+                                {sub.Schedules && sub.Schedules.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-blue-100">
+                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-2">Upcoming Deliveries (Next 3)</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {sub.Schedules.filter(s => s.status === 'pending' || s.status === 'ready_for_delivery').slice(0, 3).map((sch, i) => (
+                                                <span key={i} className="text-[11px] bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 rounded">
+                                                    {new Date(sch.scheduled_date).toLocaleDateString()}
+                                                </span>
+                                            ))}
+                                            {sub.Schedules.filter(s => s.status === 'pending' || s.status === 'ready_for_delivery').length === 0 && (
+                                                <span className="text-xs text-gray-500">No upcoming deliveries</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left Column: Wallet & Address */}

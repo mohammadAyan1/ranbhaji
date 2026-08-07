@@ -390,7 +390,7 @@ export const markDelivered = async (req, res) => {
         await user.update({ wallet_balance: newBalance, due_amount: newDue }, { transaction: t });
         await WalletTransaction.create({
             user_id: user.id, amount: per_service_amount, type: 'debit',
-            reason: `Delivery on ${schedule.scheduled_date} — ${name}`,
+            reason: `Delivery on ${schedule.scheduled_date} â€” ${name}`,
             reference_id: schedule.id
         }, { transaction: t });
 
@@ -1063,7 +1063,8 @@ export const getProductDemands = async (req, res) => {
                     required: false,
                     include: [
                         { model: User, attributes: ['id', 'name', 'phone'] }
-                    ]
+                    ],
+                    attributes: ['id', 'water_type', 'container', 'capacity_liters']
                 },
                 { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
                 { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] },
@@ -1084,6 +1085,25 @@ export const getProductDemands = async (req, res) => {
         const actualWaterProducts = waterProducts.length > 0 ? waterProducts : await Product.findAll({ where: { category: 'water' } });
 
         const demandMap = {};
+        const waterDemandsMap = {};
+
+        const addWaterDemand = (sub, batchName, user) => {
+            const cap = parseFloat(sub.capacity_liters || 2);
+            if (!waterDemandsMap[cap]) {
+                waterDemandsMap[cap] = { capacity: cap, total: 0, glass: 0, plastic: 0, orders: [] };
+            }
+            waterDemandsMap[cap].total += 1;
+            if (sub.container === 'glass') waterDemandsMap[cap].glass += 1;
+            else if (sub.container === 'plastic') waterDemandsMap[cap].plastic += 1;
+            
+            waterDemandsMap[cap].orders.push({ 
+                userName: user ? user.name : 'Unknown', 
+                phone: user ? user.phone : 'Unknown',
+                water_type: sub.water_type,
+                container: sub.container,
+                batch: batchName || 'Unassigned'
+            });
+        };
 
         const addDemand = (p, qty, source, batchName, user) => {
             if (!demandMap[p.id]) {
@@ -1187,14 +1207,7 @@ export const getProductDemands = async (req, res) => {
                     }
                 } else if (schedule.WaterSubscription) {
                     const sub = schedule.WaterSubscription;
-                    const matchedProduct = actualWaterProducts.find(p => {
-                        const nameLower = p.name.toLowerCase();
-                        return nameLower.includes(sub.water_type.toLowerCase()) && nameLower.includes(sub.container.toLowerCase());
-                    });
-                    if (matchedProduct) {
-                        const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
-                        addDemand(matchedProduct, qty, 'package', batchName, user);
-                    }
+                    addWaterDemand(sub, batchName, user);
                 }
             }
         }
@@ -1215,7 +1228,12 @@ export const getProductDemands = async (req, res) => {
             retail_details: Object.values(d.retail_details)
         }));
 
-        res.status(200).json({ success: true, date: dateStr, demands: demandsList });
+        res.status(200).json({ 
+            success: true, 
+            date: dateStr, 
+            demands: demandsList,
+            waterDemands: Object.values(waterDemandsMap)
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -2502,6 +2520,46 @@ export const boyReturnOrder = async (req, res) => {
         res.status(200).json({ success: true, message: 'Order returned successfully and pushed to new schedule' });
     } catch (error) {
         await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/today-incoming (user)
+export const getTodayIncoming = async (req, res) => {
+    try {
+        const todayStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }).split(',')[0];
+        const [m, d, y] = todayStr.split('/');
+        const formattedDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+
+        const schedules = await DeliverySchedule.findAll({
+            where: { 
+                scheduled_date: formattedDate,
+                status: ['out_for_delivery', 'ready_for_delivery'] // or just out_for_delivery if user wants dispatch
+            },
+            include: [
+                {
+                    model: Subscription,
+                    where: { user_id: req.user.id },
+                    required: false,
+                    include: [{ model: Package, attributes: ['name'] }]
+                },
+                {
+                    model: WaterSubscription,
+                    where: { user_id: req.user.id },
+                    required: false
+                },
+                {
+                    model: DeliveryItem,
+                    as: 'DeliveryItems',
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }]
+                }
+            ]
+        });
+
+        const mySchedules = schedules.filter(s => s.Subscription || s.WaterSubscription);
+
+        res.status(200).json({ success: true, incoming: mySchedules });
+    } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };

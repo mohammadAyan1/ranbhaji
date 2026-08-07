@@ -5,11 +5,73 @@ import { Op } from "sequelize";
 export const getAllUsers = async (req, res) => {
     try {
         const users = await User.findAll({
-            where: { role: 'user' },
-            attributes: ['id', 'name', 'phone'],
-            order: [['name', 'ASC']]
+            attributes: ['id', 'name', 'phone', 'email', 'role', 'status', 'wallet_balance', 'due_amount', 'actual_password'],
+            order: [['created_at', 'DESC']]
         });
         res.status(200).json({ success: true, users });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/admin/user-analytics/users
+export const createUser = async (req, res) => {
+    try {
+        const { name, phone, email, password, role } = req.body;
+        
+        // Basic check if user exists
+        const existing = await User.findOne({ where: { phone } });
+        if (existing) {
+            return res.status(400).json({ success: false, message: "User with this phone already exists." });
+        }
+
+        const newUser = await User.create({
+            name,
+            phone,
+            email,
+            actual_password: password,
+            password_hash: password, // You should hash it properly in a real app, keeping it consistent with the system's auth
+            role: role || 'user',
+            status: role === 'delivery' ? 'inactive' : 'active'
+        });
+
+        res.status(201).json({ success: true, message: "User created successfully", user: newUser });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PATCH /api/admin/user-analytics/users/:id/status
+export const updateUserStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        user.status = status;
+        await user.save();
+
+        res.status(200).json({ success: true, message: "Status updated", user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PATCH /api/admin/user-analytics/users/:id/role
+export const updateUserRole = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role } = req.body;
+        
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        user.role = role;
+        await user.save();
+
+        res.status(200).json({ success: true, message: "Role updated", user });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -93,6 +155,8 @@ export const getUserAnalytics = async (req, res) => {
                         batch: sub.Batch ? sub.Batch.name : null,
                         batch_id: sub.batch_id,
                         is_water: false,
+                        history: [],
+                        deliveries: [],
                         items: {}
                     };
                 }
@@ -103,6 +167,7 @@ export const getUserAnalytics = async (req, res) => {
                     packageStats[pkg.id].batch_id = sub.batch_id;
                 }
                 packageStats[pkg.id].renewals += 1;
+                packageStats[pkg.id].history.push(sub.created_at || sub.createdAt);
 
                 // Process Items inside this subscription
                 if (sub.Items && sub.Items.length > 0) {
@@ -141,6 +206,10 @@ export const getUserAnalytics = async (req, res) => {
                     batch: wSub.Batch ? wSub.Batch.name : null,
                     batch_id: wSub.batch_id,
                     is_water: true,
+                    container: wSub.container,
+                    frequency: wSub.frequency,
+                    history: [],
+                    deliveries: [],
                     items: {
                         [wSub.id]: {
                             name: `${wSub.water_type} Water`,
@@ -157,6 +226,7 @@ export const getUserAnalytics = async (req, res) => {
                 packageStats[key].batch_id = wSub.batch_id;
             }
             packageStats[key].renewals += 1;
+            packageStats[key].history.push(wSub.created_at || wSub.createdAt);
         });
 
         // Process Retail Orders for totals and timeline
@@ -201,8 +271,8 @@ export const getUserAnalytics = async (req, res) => {
                 ]
             },
             include: [
-                { model: Subscription, required: false, attributes: [] },
-                { model: WaterSubscription, required: false, attributes: [] },
+                { model: Subscription, required: false, attributes: ['id', 'package_id'] },
+                { model: WaterSubscription, required: false, attributes: ['id', 'water_type'] },
                 { model: DeliveryItem, as: 'DeliveryItems', include: [{ model: Product }] },
                 { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', include: [{ model: Product }] }
             ]
@@ -222,6 +292,21 @@ export const getUserAnalytics = async (req, res) => {
                         addProductStat(sel.Product, parseFloat(sel.qty_gm || 0), 'package');
                     }
                 });
+            }
+
+            // Track deliveries
+            if (schedule.status === 'delivered') {
+                if (schedule.Subscription && schedule.Subscription.package_id) {
+                    const pkgId = schedule.Subscription.package_id;
+                    if (packageStats[pkgId]) {
+                        packageStats[pkgId].deliveries.push({ date: schedule.delivery_date, status: schedule.status });
+                    }
+                } else if (schedule.WaterSubscription && schedule.WaterSubscription.water_type) {
+                    const key = 'water_' + schedule.WaterSubscription.water_type;
+                    if (packageStats[key]) {
+                        packageStats[key].deliveries.push({ date: schedule.delivery_date, status: schedule.status });
+                    }
+                }
             }
         });
 
@@ -345,8 +430,20 @@ export const getCustomerProfile = async (req, res) => {
         // 6. Deliveries (Servings)
         const subIds = subscriptions.map(s => s.id);
         const waterSubscriptions = await WaterSubscription.findAll({
-            where: { user_id: id }
+            where: { user_id: id },
+            include: [{ model: DeliverySchedule, as: 'Schedules', attributes: ['scheduled_date', 'status'] }],
+            order: [['created_at', 'DESC']]
         });
+
+        const subscriptionsWithDetails = await Subscription.findAll({
+            where: { user_id: id },
+            include: [
+                { model: Package, attributes: ['name', 'price'] },
+                { model: DeliverySchedule, as: 'Schedules', attributes: ['scheduled_date', 'status'] }
+            ],
+            order: [['created_at', 'DESC']]
+        });
+
         const waterSubIds = waterSubscriptions.map(s => s.id);
 
         const deliverySchedules = await DeliverySchedule.findAll({
@@ -418,7 +515,9 @@ export const getCustomerProfile = async (req, res) => {
                 first_serving_date,
                 last_serving_date
             },
-            deliveries: mergedDeliveries // ordered by date ASC
+            deliveries: mergedDeliveries, // ordered by date ASC
+            subscriptionsList: subscriptionsWithDetails,
+            waterSubscriptionsList: waterSubscriptions
         });
 
     } catch (error) {

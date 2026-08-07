@@ -90,7 +90,7 @@ export const getPackages = async (req, res) => {
                 }
                 return false; // Not logged in, skip custom packages
             }
-            
+
             return true; // Return standard packages
         });
 
@@ -120,7 +120,7 @@ export const getPackages = async (req, res) => {
                 where: { user_id: userId },
                 order: [['created_at', 'DESC']]
             });
-            
+
             for (let obj of data) {
                 const latestSub = userSubs.find(s => s.package_id === obj.id);
                 if (latestSub && latestSub.renewal_count >= 3 && latestSub.locked_price) {
@@ -238,7 +238,7 @@ export const updatePackage = async (req, res) => {
 
         let final_target_user_id = target_user_id !== undefined ? target_user_id : pkg.target_user_id;
         let final_target_mobile = target_mobile_number !== undefined ? (target_mobile_number || null) : pkg.target_mobile_number;
-        
+
         if (type === 'custom' && final_target_mobile && !final_target_user_id) {
             const user = await User.findOne({ where: { phone: final_target_mobile }, transaction: t });
             if (user) final_target_user_id = user.id;

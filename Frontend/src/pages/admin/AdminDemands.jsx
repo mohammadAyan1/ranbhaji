@@ -7,10 +7,12 @@ export default function AdminDemands() {
     return today.toISOString().split('T')[0];
   });
   const [demands, setDemands] = useState([]);
+  const [waterDemands, setWaterDemands] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState("All");
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [activeTab, setActiveTab] = useState("regular");
 
   const fetchDemands = async (targetDate) => {
     setLoading(true);
@@ -18,6 +20,7 @@ export default function AdminDemands() {
     try {
       const res = await api.get(`/admin/demands?date=${targetDate}`);
       setDemands(res.data.demands || []);
+      setWaterDemands(res.data.waterDemands || []);
     } catch (err) {
       setMsg(`❌ Failed to load demands: ${err.response?.data?.message || err.message}`);
     } finally {
@@ -143,6 +146,21 @@ export default function AdminDemands() {
         </div>
       </div>
 
+      <div className="flex border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab("regular")}
+          className={`py-2 px-6 font-semibold text-sm ${activeTab === "regular" ? "border-b-2 border-fresh-600 text-fresh-700" : "text-gray-500 hover:text-gray-700"}`}
+        >
+          Regular Packages
+        </button>
+        <button
+          onClick={() => setActiveTab("water")}
+          className={`py-2 px-6 font-semibold text-sm ${activeTab === "water" ? "border-b-2 border-fresh-600 text-fresh-700" : "text-gray-500 hover:text-gray-700"}`}
+        >
+          Water Subscriptions
+        </button>
+      </div>
+
       {/* Demands Table */}
       <div className="card">
         {loading ? (
@@ -155,7 +173,7 @@ export default function AdminDemands() {
             <p className="text-lg font-medium text-gray-900">No deliveries scheduled</p>
             <p className="text-sm">There are no pending delivery schedules on this date for the selected batch.</p>
           </div>
-        ) : (
+        ) : activeTab === "regular" ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead>
@@ -321,6 +339,66 @@ export default function AdminDemands() {
                     )}
                   </React.Fragment>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="table-header">
+                  <th className="p-3 w-12 rounded-tl-xl"></th>
+                  <th className="p-3">Capacity (Liters)</th>
+                  <th className="p-3">Total Bottles Needed</th>
+                  <th className="p-3 text-blue-500">Glass</th>
+                  <th className="p-3 rounded-tr-xl text-purple-500">Plastic</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {waterDemands.map((w) => (
+                  <React.Fragment key={`water_${w.capacity}`}>
+                    <tr onClick={() => toggleRow(`water_${w.capacity}`)} className="hover:bg-white cursor-pointer transition-colors">
+                      <td className="p-3 text-gray-600">
+                        {expandedId === `water_${w.capacity}` ? '▼' : '▶'}
+                      </td>
+                      <td className="p-3 font-bold text-gray-900">{w.capacity} Liter</td>
+                      <td className="p-3 font-medium">{w.total} Bottles</td>
+                      <td className="p-3 font-medium text-blue-500">{w.glass}</td>
+                      <td className="p-3 font-medium text-purple-500">{w.plastic}</td>
+                    </tr>
+                    {expandedId === `water_${w.capacity}` && (
+                      <tr className="bg-white/50">
+                        <td colSpan="5" className="p-4 border-l-2 border-blue-500">
+                          <div className="bg-white rounded-lg p-4 border border-gray-300">
+                            <h4 className="text-blue-500 font-bold mb-3">💧 Order Breakdown</h4>
+                            {w.orders && w.orders.length > 0 ? (
+                              <ul className="space-y-2">
+                                {w.orders.map((o, oi) => (
+                                  <li key={oi} className="bg-gray-50 p-2 rounded border border-gray-200 flex justify-between items-center text-sm">
+                                    <div>
+                                      <span className="font-semibold text-gray-900 mr-2">👤 {o.userName}</span>
+                                      <span className="text-gray-500 text-xs">({o.phone})</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-700 capitalize">Type: {o.water_type}</span>
+                                      <span className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-700 capitalize">Cont: {o.container}</span>
+                                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Batch: {o.batch}</span>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-gray-500 text-sm italic">No active water orders for this capacity.</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+                {waterDemands.length === 0 && (
+                  <tr><td colSpan="5" className="p-4 text-center text-gray-500 italic">No water demands for today.</td></tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -6,7 +6,7 @@ import { Op } from "sequelize";
 export const subscribeWater = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { water_type, container, frequency, type, payment_method, address_id, batch_id } = req.body;
+        const { water_type, container, frequency, type, payment_method, address_id, batch_id, capacity_liters } = req.body;
         
         if (!water_type || !container || !frequency || !batch_id) {
             await t.rollback();
@@ -106,7 +106,8 @@ export const subscribeWater = async (req, res) => {
             total_services,
             services_completed: 0,
             address_id: finalAddressId,
-            batch_id
+            batch_id,
+            capacity_liters: capacity_liters || 2
         }, { transaction: t });
 
         await t.commit();

@@ -6,7 +6,7 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, D
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time, margin_percentage } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time, margin_percentage, water_capacity_liters } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
@@ -22,6 +22,7 @@ export const createProduct = async (req, res) => {
             selling_price_per_gm: selling_price_per_gm || 0, 
             default_margin_percentage: margin_percentage || 0,
             unit, unit_id, description,
+            water_capacity_liters: water_capacity_liters || 0,
             min_retail_qty: min_retail_qty || 0,
             soaking_time: soaking_time || 0,
             cleaning_time: cleaning_time || 0,

@@ -1,0 +1,609 @@
+FRESH BOX
+Online Subscription Delivery Platform
+Vegetables  |  Fruits  |  Water  |  Exotic Vegetables  |  Salad
+Project Requirements & System Flow Document
+Field
+Details
+Tech Stack
+React Native  |  Node.js  |  Express.js  |  MySQL
+Document Version
+v1.0
+Date
+June 2025
+Prepared By
+Project Owner
+Target Readers
+Developers, Team Leads, QA Engineers
+1. Project Overview
+Fresh Box ek mobile application hai (React Native) jisme customers ghar baithe vegetables, fruits, exotic vegetables, salad aur alkaline water ka subscription le sakte hain. Pura model package-based subscription hai — matlab user ek package buy karta hai aur us package ke according periodic deliveries milti rehti hain.
+Application ka core idea yeh hai ki admin products aur packages define karta hai, aur users un packages ko subscribe karte hain apni needs ke hisab se. System automatically delivery dates calculate karta hai, wallet manage karta hai, aur notifications bhejta hai.
+2. Technology Stack
+Layer
+Technology
+Role / Purpose
+Mobile App (Frontend)
+React Native
+iOS + Android app — user aur admin dono ke liye
+Backend Server
+Node.js + Express.js
+REST API — business logic handle karna
+Database
+MySQL
+Saara data store karna (users, packages, orders, wallet)
+Authentication
+JWT Tokens
+Secure login aur role-based access
+File Storage
+Cloudinary / S3
+Delivery photos, return images upload karna
+Push Notifications
+Firebase FCM
+Order reminders, delivery alerts
+Payment
+Wallet + Gateway
+PhonePe / Razorpay — package payment
+3. User Roles & Access
+Role
+Description
+Key Permissions
+Admin
+Platform owner / operator
+Products create karna, packages manage karna, orders track karna, reports dekhna, refunds approve karna
+Delivery Boy
+Order deliver karne wala
+Apne assigned orders dekhna, delivery confirm karna, photos upload karna
+Customer/User
+End consumer
+Packages subscribe karna, vegetables customize karna, pause/recharge karna, wallet dekhna
+4. Product Management (Admin)
+Admin sabse pehle apne saare sellable products create karta hai. Ye products baad mein packages mein use honge. Har product ka pricing per gram ke basis pe set hota hai taaki quantity ke according automatic cost calculate ho sake.
+4.1  Product Create Karna — Required Fields
+Field
+Example Value
+Description
+Product Name
+Aloo / Bhindi / Amla Water
+Product ka display naam
+Category
+Vegetable / Fruit / Water / Exotic / Salad
+Top-level category
+Sub-Category
+Bhaji / Root / Leafy / Health Water
+Category ke andar sub-type
+Purchase Price/gm
+Rs. 1.00 per gram
+Admin ka cost (purchase price)
+Selling Price/gm
+Rs. 1.50 per gram
+Customer ko charge hone wala price
+Unit
+Grams / ML / Piece
+Measurement unit
+Status
+Active / Inactive
+Active products hi packages mein add honge
+4.2  Price Calculation Logic
+Jab admin kisi product ki quantity set karta hai (package create karte time), system automatically calculate karta hai:
+Calculation
+Formula
+Example (Aloo 500gm)
+Purchase Cost
+qty × purchase_price_per_gm
+500 × 1.00 = Rs. 500
+Selling Revenue
+qty × selling_price_per_gm
+500 × 1.50 = Rs. 750
+Profit Margin
+Selling - Purchase
+750 - 500 = Rs. 250
+Profit %
+(Profit / Selling) × 100
+33.3%
+NOTE  Ye calculation admin ke internal use ke liye hai — customer ko sirf items aur quantities dikhengi, prices nahi.
+5. Package Management (Admin)
+Package ek subscription plan hai jise customer buy karta hai. Admin multiple packages create kar sakta hai different needs ke liye. Har package ke andar fixed vegetables aur seasonal vegetables dono hote hain.
+5.1  Package Types
+Type
+Who Can See
+Description
+Standard Package
+All users (public)
+Nano, Gold, Silver, Senior jaisi plans — sabke liye available
+Custom Package
+Sirf 1 specific user
+Kisi particular customer ke liye special package — baaki users ko visible nahi
+Yearly Booking
+All users (public)
+Kisi bhi standard package ka 12-month version — 25% discount milta hai
+5.2  Package Create Karna — Required Fields
+Field
+Example
+Explanation
+Package Name
+Nano / Gold / Silver
+Koi bhi naam ho sakta hai — admin define karta hai
+Number of Persons
+1, 2, ya 3
+Ye package kitne logon ke liye hai
+Services (per 30 days)
+5, 6, 9, 10...
+30 dinon mein kitni baar delivery hogi — admin set karta hai
+Package Price (Rs.)
+Rs. 750
+Is package ka total amount jo customer pay karega
+Fixed Vegetables
+Aloo 500gm, Tomato 1kg
+Hamesha aane wali vegetables — admin select karta hai quantities ke saath
+Seasonal Pool Size
+10-15 vegetables
+Kitne options user ke paas honge choose karne ke liye
+Seasonal Select Limit
+3 ya 4 items
+User max kitne seasonal items choose kar sakta hai
+Target User (Custom only)
+User ID / Name
+Sirf custom package ke liye — specific user assign karo
+5.3  Per-Service Amount Calculation
+Jab package create hota hai, system per-service cost automatically calculate karta hai:
+Step
+Calculation
+Example
+Total Package Price
+-
+Rs. 750
+Total Services
+-
+5 services
+Per Service Amount
+Price ÷ Services
+Rs. 750 ÷ 5 = Rs. 150 per service
+Fixed Veg Cost per service
+Sum of (qty × sell price)
+Aloo(10) + Tomato(10) + Onion(10) = Rs. 30
+Remaining for Seasonal
+Per Service - Fixed Cost
+Rs. 150 - Rs. 30 = Rs. 120
+NOTE  VALIDATION: Package price hamesha total vegetable selling cost se zyada honi chahiye. Agar total vegetable cost package price se exceed kare toh system admin ko save karne se rokna chahiye.
+5.4  Fixed Vegetables — Rules
+Admin fixed vegetables select karta hai apni product list mein se
+Admin default quantity set karta hai (e.g., Aloo = 500gm)
+Customer quantity slightly increase ya decrease kar sakta hai (within budget)
+Customer fixed vegetables completely remove nahi kar sakta
+Fixed vegetables hamesha har delivery mein aayengi
+5.5  Seasonal Vegetables — Rules
+Admin 10-15 vegetables ki pool define karta hai package mein
+Admin decide karta hai ki user max kitne items choose kar sakta hai (e.g., 3 ya 4)
+User apni marzi ke items choose karta hai pool mein se
+User quantities set karta hai — lekin budget constraint apply hoti hai
+User ko vegetables ki prices nahi dikhengi (internal calculation hoti hai selling price se)
+Agar user budget exhaust kar le aur aur quantity badhana chahe — pehle kisi item se ghata le, phir badha sakta hai
+Agar user pura budget use nahi kar paya — bacha hua amount wallet mein credit hoga
+NOTE  IMPORTANT: Seasonal vegetables select karne se PEHLE user ko package ka full payment complete karna hoga. Payment ke baad hi customization screen open hogi.
+5.6  Extra Items / Overage
+Agar user package budget se zyada koi item add karna chahe — system instant additional payment request karega
+Extra amount real-time payment se collect hoga usi moment mein
+Ye extra amount normal wallet transaction se alag track hoga
+6. Delivery Date Calculation Logic
+Ye system ka ek critical aur complex part hai. Delivery dates automatically calculate hoti hain based on package services aur existing delivery schedule.
+6.1  Gap Calculation
+Formula: Gap (days) = 30 ÷ Number of Services
+Services in Package
+Gap Between Deliveries
+Delivery Days in 30 Days
+5 services
+30 ÷ 5 = 6 days
+Day 1, 7, 13, 19, 25
+6 services
+30 ÷ 6 = 5 days
+Day 1, 6, 11, 16, 21, 26
+10 services
+30 ÷ 10 = 3 days
+Day 1, 4, 7, 10, ... (every 3 days)
+NOTE  SUNDAY RULE: Agar kisi calculated delivery date pe Sunday padta hai, toh wo delivery Saturday ko shift ho jaayegi. Aage ki saari dates same gap maintain karengi.
+6.2  Date Suggestion Logic (New User ke liye)
+Jab koi naya user koi package select karta hai, system randomly dates suggest nahi karta. Logic yeh hai:
+System check karta hai ki us specific package type (e.g., Nano) ke existing customers ki NEXT delivery dates kya hain
+Sirf wahi dates user ko suggest ki jaati hain jis din pehle se usi package type ki delivery already ho rahi hai
+User in suggested dates mein se apni start date choose karta hai
+Baaki dates same gap formula se automatically calculate ho jaati hain
+NOTE  BENEFIT: Isse ek hi route pe multiple customers ki delivery ek din mein ho jaati hai — delivery efficiency badh jaati hai aur cost kam hota hai.
+6.3  Service Completion & Recharge
+Jab user ki saari services complete ho jaayein — app user ko recharge notification bhejega
+Recharge ke baad same logic se agli 30 days ki delivery dates calculate hongi
+Recharge ki date same suggested date logic follow karegi
+7. Pause / Subscription Hold Logic
+Users apni subscription temporarily pause kar sakte hain. Pause rules monthly aur yearly subscriptions ke liye alag hain.
+7.1  Monthly Package — Pause Rules
+Rule
+Detail
+Max Pause Days per Month
+15 days (total, per 30-day cycle)
+Can Split Pause
+Haan — 5 din pause karo, phir baad mein 10 din aur le sakte ho (balance mein se)
+Restart Date
+System suggest karega — same package type ki existing delivery dates
+After 15 Days Used
+Us 30-day cycle mein koi aur pause nahi milega
+Balance Carry Forward
+Nahi — next month fresh 15 din milenge
+Example: User ne 5 din ka pause liya. Abhi bhi 10 din bacha hai. User chahe toh 2nd baar pause le sakta hai — max 10 din tak. Agar usne 3 din liya toh 7 din aur bache. 15 din total hote hi pause option band ho jaayega.
+7.2  Yearly Package — Pause Rules
+Rule
+Detail
+Total Pauses Allowed
+Sirf 1 baar poore saal mein
+Max Pause Duration
+45 days (ek baar mein)
+Early Restart
+User 30 din mein restart kar le — baaki 15 din ka balance dubara NAHI milega
+Auto Restart Logic
+Pause period khatam hone pe system auto-restart karega jis din us package type ki delivery hogi
+2nd Pause
+Allowed NAHI — chahe kitna bhi balance bacha ho
+NOTE  Restart date selection mein bhi same logic apply hota hai: system sirf wahi dates suggest karega jis din us package type ki delivery already schedule hai.
+7.3  Pause — Common Rules (Both Types)
+Pause ke dauran koi delivery nahi hogi
+Wallet se amount bhi deduct nahi hoga pause period mein
+Remaining services pause ke baad resume ho jaayengi
+Sab product types pe pause apply hota hai: vegetables, fruits, exotic, salad, water — sab
+8. Wallet System
+Har user ka ek internal wallet hoga. Package payment wallet mein credit hoti hai aur har delivery ke baad debit hoti hai. Ye system transparency provide karta hai aur refunds easy banata hai.
+8.1  Wallet Flow — Step by Step
+User package buy karta hai → Full amount wallet mein credit
+Delivery boy delivery complete mark karta hai → Per-service amount wallet se deduct
+IMPORTANT: Amount tabhi deduct hoga jab delivery confirmed ho — pehle nahi
+Agar 5 services hain Rs. 750 ka package → har delivery pe Rs. 150 deduct
+8.2  Wallet — Special Scenarios
+Scenario
+Wallet Action
+User ne budget se kam seasonal use kiya
+Bacha hua amount wallet mein credit ho jaata hai
+Package ki saari services complete
+Remaining balance wallet mein rehta hai
+Next recharge kiya
+Wallet ka previous balance naye amount se minus ho jaayega
+User 2 months subscribe kar chuka hai
+3rd month bina recharge ke milega — wallet mein 'Due Amount' dikhega
+3 months complete, payment pending
+New services band — jab tak payment ya admin override nahi
+Return approved by admin
+Return amount wallet mein wapas credit
+Delivery hi nahi hui
+Amount deduct nahi hoga — pending rahega
+8.3  Credit / Postpaid Feature (Loyalty)
+Agar koi user 2 consecutive months successfully subscribe kar chuka hai...
+...toh 3rd month mein bina recharge ke service milti rahegi
+User ke wallet mein 'Due Amount' clearly dikhega
+3rd month complete hote hi agar payment nahi aayi → saari services STOP
+Dobara start tabhi hoga jab: (a) User pending amount pay kare, ya (b) Admin manually allow kare
+9. Yearly Subscription Booking
+Koi bhi standard package yearly book kiya ja sakta hai. Yearly booking mein ek baar bade payment pe 25% discount milta hai.
+9.1  Yearly Calculation Example
+Step
+Calculation
+Amount
+Monthly Package Price
+Nano @ Rs. 750
+Rs. 750
+Annual Total
+Rs. 750 × 12 months
+Rs. 9,000
+25% Discount
+Rs. 9,000 × 25%
+- Rs. 2,250
+Final Yearly Amount
+Amount to pay once
+Rs. 6,750
+Total Services
+5 services × 12 months
+60 deliveries
+Total Days
+30 days × 12 months
+360 days
+NOTE  Yearly booking mein poora amount ek baar mein pay karna hoga. Baaki sab same rahega — gap calculation, pause logic, wallet, date suggestion sab identical hai monthly se.
+10. Alkaline Water Subscription
+Admin ke paas do types ka alkaline water hai. Water ka subscription vegetables se alag handle hota hai kyunki iska pricing per gram nahi per bottle hota hai.
+10.1  Water Product Matrix
+Attribute
+Health Water
+Miracle Water
+pH Level
+pH 8.0
+pH 9.5
+Type
+Regular alkaline
+High-grade alkaline
+Container Options
+Glass / Plastic
+Glass / Plastic
+Bottle Size
+2 Liters only
+2 Liters only
+Pricing
+Admin sets price per bottle per container type
+Admin sets price — alag from Health Water
+10.2  Water Delivery Frequency
+Option
+Delivery Schedule
+Daily
+Har din delivery hogi
+Alternate Days
+Ek din chhod ke delivery hogi (Mon-Wed-Fri etc.)
+NOTE  Water ke liye per gram pricing nahi hai. Admin sirf ek price set karta hai per bottle basis pe — alag pH ke liye alag price, alag container ke liye alag price.
+Water subscription mein bhi same features apply hote hain: Pause, Wallet deduction, Delivery date suggestion, Yearly booking, Custom package — sab identical hai vegetable subscription se.
+11. Notification & Order Customization System
+11.1  Pre-Delivery Notification
+Delivery se 1 din pehle raat 8:00 PM ke baad notification jaayegi
+Message: 'Kal (date) ko ye items aane wale hain: [items list]'
+User review kar sakta hai aur changes kar sakta hai
+11.2  Customization Window (Deadline)
+Scenario
+Deadline
+Action
+Vegetable change karna hai
+Delivery se 1 din pehle raat 8 PM tak
+User naya item select kar sakta hai
+Quantity change karni hai
+Same — raat 8 PM tak
+Increase ya decrease allowed within budget
+Koi item nahi chahiye
+Same deadline
+Item remove kar sakte hain
+User ne kuch nahi kiya (default)
+Raat 8 PM baad lock
+System last highest-frequency order auto-repeat karega
+NOTE  Raat 8 PM ke baad koi change allowed nahi — us delivery ke liye order LOCKED ho jaata hai. Next delivery pe changes apply kar sakte hain.
+11.3  Default Order Logic (Agar user ne kuch select nahi kiya)
+System check karega ki user ne historically sabse zyada kaunsi vegetables purchase ki hain
+Wohi items automatically fill ho jaayengi
+Quantities automatically per-service amount ke equal set hongi
+User koi action nahi karta toh bhi delivery sahi items ke saath hogi
+12. Admin Daily Summary (Raat 8 PM Ke Baad)
+Raat 8 PM ke baad jab orders lock ho jaayein, admin ko ek consolidated summary dikhni chahiye. Ye procurement planning ke liye critical hai.
+12.1  Summary Content
+Kal kaunse users ko delivery honi hai — unki list
+Har user ke liye: kya-kya items aur quantities jaane wali hain
+Har product ka TOTAL consolidated quantity — e.g., 'Aloo — Total 8.5 kg chahiye kal'
+Agar kisi user ko vegetables aur water dono hain — dono ek saath dikhna chahiye
+Multiple subscriptions ek user ki — sab ek row mein grouped
+12.2  Multi-Subscription View (Admin)
+Agar koi user vegetable + water + fruits teeno subscribe kiye hain:
+Admin clearly dekh sakta hai ki aaj is user ko kya-kya pahunchana hai
+Delivery boy ko bhi combined list milegi — ek trip mein sab items le jaayega
+Agar aaj sirf water ka din hai, vegetables ka nahi — clearly separate dikhega
+13. Delivery Boy Flow
+13.1  Delivery Complete Karna
+Delivery boy apna assigned order list dekhega app mein
+Customer ke ghar pahunchne ke baad wo delivery confirm karega
+Confirmation: photo upload karna hoga ya remark add karna hoga — ya dono
+Tab TABHI user ke wallet se amount deduct hoga
+13.2  Product Return Flow
+Step
+Who Does It
+Action
+1. Return Initiate
+Customer
+Photo upload karo + reason/remark likho ki item kyu return ho raha hai
+2. Review
+Admin
+Photo aur reason check karega
+3a. Approve
+Admin
+Return amount user ke wallet mein credit ho jaayega
+3b. Reject
+Admin
+Amount credit nahi hoga, user ko notification milegi
+NOTE  Jo amount delivery ke baad deduct hua tha, wahi amount return pe wapas credit hoga. Delivery confirm na hone pe amount deduct hi nahi hota.
+14. Product Types — Feature Coverage Matrix
+Saare product types ke liye core features same hain. Neeche ek matrix hai jo clearly batata hai kya kya apply hota hai:
+Feature
+Veg
+Exotic Veg
+Fruits
+Salad
+Water
+Fixed Items
+Yes
+Yes
+Yes
+Yes
+N/A
+Seasonal Customize
+Yes
+Yes
+Yes
+Yes
+N/A
+Per Gram Pricing
+Yes
+Yes
+Yes
+Yes
+No (per bottle)
+Pause Feature
+Yes
+Yes
+Yes
+Yes
+Yes
+Wallet Deduction
+Yes
+Yes
+Yes
+Yes
+Yes
+Custom Package
+Yes
+Yes
+Yes
+Yes
+Yes
+Yearly Booking
+Yes
+Yes
+Yes
+Yes
+Yes
+Date Suggestion
+Yes
+Yes
+Yes
+Yes
+Yes
+Daily Delivery Option
+No
+No
+No
+No
+Yes
+Alternate Delivery
+No
+No
+No
+No
+Yes
+Delivery Notification
+Yes
+Yes
+Yes
+Yes
+Yes
+Pre-8PM Customization
+Yes
+Yes
+Yes
+Yes
+Yes
+Credit (3rd Month)
+Yes
+Yes
+Yes
+Yes
+Yes
+15. Database Schema Overview (MySQL)
+Neeche primary tables aur unke key fields hain. Ye schema overview hai — actual implementation mein foreign keys, indexes aur constraints bhi add honge.
+15.1  Core Tables
+Table Name
+Key Fields
+users
+id, name, phone, email, password_hash, role (admin/delivery/customer), wallet_balance, created_at
+products
+id, name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, status, created_at
+packages
+id, name, num_persons, services_per_month, price, type (standard/custom/yearly), target_user_id (custom only), status
+package_fixed_items
+id, package_id, product_id, default_qty_gm
+package_seasonal_pool
+id, package_id, product_id
+package_seasonal_config
+id, package_id, max_select_count
+Table Name
+Key Fields
+subscriptions
+id, user_id, package_id, start_date, end_date, status (active/paused/completed/cancelled), type (monthly/yearly), yearly_amount_paid
+subscription_items
+id, subscription_id, product_id, qty_gm, is_fixed (bool), is_seasonal (bool), is_active
+delivery_schedule
+id, subscription_id, scheduled_date, status (pending/delivered/skipped), actual_delivery_date
+delivery_items
+id, schedule_id, product_id, qty_gm, delivered_qty, return_qty, return_reason, return_photo_url
+wallet_transactions
+id, user_id, amount, type (credit/debit), reason, reference_id, created_at
+pause_log
+id, subscription_id, pause_start, pause_end, requested_days, actual_days_used, type (monthly/yearly), status
+water_subscriptions
+id, user_id, water_type (health/miracle), container (glass/plastic), frequency (daily/alternate), price_per_bottle, status
+notifications
+id, user_id, title, message, type (reminder/alert/recharge), scheduled_at, sent_at, is_read
+credit_log
+id, user_id, month, due_amount, status (pending/paid), admin_override (bool)
+16. API Modules (Node.js + Express)
+Module
+Key Endpoints
+Notes
+Auth
+POST /auth/register
+POST /auth/login
+GET /auth/me
+JWT token return hoga login pe
+Products
+POST /products
+GET /products
+PUT /products/:id
+DELETE /products/:id
+Admin only for create/update/delete
+Packages
+POST /packages
+GET /packages
+GET /packages/:id
+PUT /packages/:id
+Custom package target_user_id field ke saath
+Subscriptions
+POST /subscribe
+GET /my-subscriptions
+PATCH /pause
+PATCH /restart
+PATCH /cancel
+User ka core flow
+Delivery Dates
+GET /available-dates?package_id=X
+POST /confirm-start-date
+Suggest + confirm flow
+Seasonal Items
+GET /seasonal-options/:subscription_id
+POST /select-seasonal
+PATCH /update-seasonal
+Post-payment customization
+Orders
+GET /today-deliveries (Delivery Boy)
+POST /mark-delivered
+POST /return-item
+Delivery boy app flow
+Wallet
+GET /wallet
+POST /add-funds
+GET /wallet/transactions
+User wallet management
+Admin Summary
+GET /admin/tomorrow-summary
+GET /admin/user/:id/all-subscriptions
+Raat 8 PM ke baad
+Notifications
+GET /notifications
+PATCH /mark-read
+[CRON] send-delivery-reminders
+Cron job raat 8 PM pe chalega
+Water
+POST /water/subscribe
+GET /water/subscriptions
+PATCH /water/pause
+Separate module for water
+17. Business Rules — Quick Reference
+Ye saare critical rules hain jo development mein kabhi bhi miss nahi hone chahiye:
+Package & Pricing Rules
+Package price HAMESHA total vegetable selling cost se zyada honi chahiye — hard validation at save time
+Seasonal vegetables select karne se PEHLE payment mandatory — no exceptions
+User ko products ki purchase/selling price kabhi nahi dikhni chahiye
+Extra quantity/item ke liye instant additional payment leni hogi
+Delivery Date Rules
+User sirf system-suggested dates hi select kar sakta hai — random date selection allowed nahi
+Suggested dates sirf us package type ki existing delivery dates se aayengi
+Sunday padne pe delivery automatic Saturday pe shift ho jaayegi
+Gap formula: 30 ÷ services = days between deliveries
+Wallet Rules
+Amount deduct tabhi hoga jab delivery boy delivery confirm kare — pehle nahi
+Remaining balance next recharge mein adjust hoga
+Return approved hone pe amount wapas wallet mein aayega
+2 month loyal users ko 3rd month credit pe milegi — 4th month se band agar payment nahi
+Pause Rules
+Monthly: Max 15 din per cycle, balance carry karta hai usi cycle mein, next cycle fresh 15 din
+Yearly: Sirf 1 baar max 45 din, early restart pe bhi balance waapis nahi milta
+Restart date bhi system-suggested hogi — same package type ki existing delivery date
+Pause ke dauran koi delivery nahi, koi wallet deduction nahi
+Notification Rules
+Delivery se 1 din pehle raat 8 PM ke baad notification jaayegi
+User sirf delivery se 1 din pehle raat 8 PM tak changes kar sakta hai
+8 PM baad order lock — us delivery ke liye koi changes nahi
+User ne kuch nahi kiya — system last highest-frequency order auto-repeat karega
+Fresh Box Platform  —  Project Requirements Document v1.0
+Confidential  |  June 2025

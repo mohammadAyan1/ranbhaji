@@ -9,19 +9,22 @@ export default function UserDashboard() {
   const [wallet, setWallet] = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [incoming, setIncoming] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [walletRes, subRes, notifRes] = await Promise.all([
+        const [walletRes, subRes, notifRes, incRes] = await Promise.all([
           api.get("/wallet"),
           api.get("/my-subscriptions"),
           api.get("/notifications"),
+          api.get("/today-incoming")
         ]);
         setWallet(walletRes.data);
         setSubscriptions(subRes.data.subscriptions || []);
         setNotifications(notifRes.data.notifications?.slice(0, 5) || []);
+        setIncoming(incRes.data.incoming || []);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     };
@@ -48,6 +51,43 @@ export default function UserDashboard() {
         </h1>
         <p className="page-sub">Here's your RamBhaji overview for today</p>
       </div>
+
+      {/* Incoming Delivery Alert */}
+      {incoming.length > 0 && (
+        <div className="bg-gradient-to-r from-fresh-500/20 to-fresh-500/10 border border-fresh-500/30 p-6 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl animate-bounce">🚚</span>
+            <h2 className="text-lg font-bold text-gray-900 tracking-tight">Coming Today</h2>
+          </div>
+          <div className="space-y-4">
+            {incoming.map(schedule => {
+              const items = schedule.DeliveryItems || [];
+              const isWater = !!schedule.WaterSubscription;
+              const subName = isWater 
+                ? `Water: ${schedule.WaterSubscription.water_type} (${schedule.WaterSubscription.container})`
+                : (schedule.Subscription?.Package?.name || "Regular Package");
+                
+              return (
+                <div key={schedule.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{subName}</h3>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mt-1">Status: {schedule.status.replace(/_/g, ' ')}</p>
+                  </div>
+                  {items.length > 0 && (
+                    <div className="flex flex-wrap gap-2 md:max-w-md">
+                      {items.map(item => (
+                        <span key={item.id} className="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded border border-gray-200">
+                          {item.Product?.name} ({item.qty_gm} {item.Product?.unit})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">

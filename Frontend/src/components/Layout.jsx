@@ -8,7 +8,7 @@ export default function Layout() {
   const [isTvMode, setIsTvMode] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-900 font-sans">
+    <div className="flex h-screen overflow-hidden bg-gray-50 text-gray-900 font-sans">
       {/* Mobile Overlay */}
       {sidebarOpen && !isTvMode && (
         <div 

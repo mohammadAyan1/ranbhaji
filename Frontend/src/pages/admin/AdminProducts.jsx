@@ -8,7 +8,7 @@ const UNITS = ["gm", "ml", "piece"];
 const emptyForm = {
   name: "", hindi_name: "", category: "", sub_category: "",
   purchase_price_input: "", margin_percentage: "", unit: "gm", unit_id: "",
-  description: "", min_retail_qty: "",
+  description: "", min_retail_qty: "", water_capacity_liters: "",
   soaking_time: "", cleaning_time: "", cutting_time: "", drying_time: "", weighting_time: "", image: null
 };
 
@@ -80,6 +80,7 @@ export default function AdminProducts() {
 
   const [logStartDate, setLogStartDate] = useState(getToday());
   const [logEndDate, setLogEndDate] = useState(getToday());
+  const [logCategory, setLogCategory] = useState("regular");
 
   const [submittingPurchase, setSubmittingPurchase] = useState(false);
   const [selectedDemand, setSelectedDemand] = useState(null);
@@ -230,20 +231,22 @@ export default function AdminProducts() {
 
   // Catalog Form Change
   const handleFormChange = (field, value) => {
-    const updated = { ...form, [field]: value };
-    if (field === "category" || field === "unit") {
-      const cat = field === "category" ? value : form.category;
-      const unt = field === "unit" ? value : form.unit;
-      if (!showKgToggle(cat, unt)) {
-        setPriceUnit("gm");
+    setForm(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === "category" || field === "unit") {
+        const cat = field === "category" ? value : prev.category;
+        const unt = field === "unit" ? value : prev.unit;
+        if (!showKgToggle(cat, unt)) {
+          setPriceUnit("gm");
+        }
+        if (field === "category") {
+          updated.purchase_price_input = "";
+          updated.margin_percentage = "";
+          updated.sub_category = "";
+        }
       }
-      if (field === "category") {
-        updated.purchase_price_input = "";
-        updated.margin_percentage = "";
-        updated.sub_category = "";
-      }
-    }
-    setForm(updated);
+      return updated;
+    });
   };
 
   // Submit Catalog Product
@@ -271,6 +274,7 @@ export default function AdminProducts() {
     if (form.unit_id) payload.append("unit_id", form.unit_id);
     if (form.description) payload.append("description", form.description);
     payload.append("min_retail_qty", form.min_retail_qty || 0);
+    payload.append("water_capacity_liters", form.water_capacity_liters || 0);
     payload.append("soaking_time", form.soaking_time || 0);
     payload.append("cleaning_time", form.cleaning_time || 0);
     payload.append("cutting_time", form.cutting_time || 0);
@@ -359,6 +363,7 @@ export default function AdminProducts() {
       unit_id: uId || "",
       description: p.description || "",
       min_retail_qty: p.min_retail_qty || "",
+      water_capacity_liters: p.water_capacity_liters || "",
       soaking_time: p.soaking_time || "",
       cleaning_time: p.cleaning_time || "",
       cutting_time: p.cutting_time || "",
@@ -665,18 +670,36 @@ export default function AdminProducts() {
                 </select>
               </div>
 
-              <div>
-                <label className="label">Min Retail Qty ({form.unit})</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="input"
-                  placeholder="e.g. 0.5 (for 500gm)"
-                  value={form.min_retail_qty}
-                  onChange={e => handleFormChange("min_retail_qty", e.target.value)}
-                />
-              </div>
+              {!isWater && (
+                <div>
+                  <label className="label">Min Retail Qty ({form.unit})</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input"
+                    placeholder="e.g. 0.5 (for 500gm)"
+                    value={form.min_retail_qty}
+                    onChange={e => handleFormChange("min_retail_qty", e.target.value)}
+                  />
+                </div>
+              )}
+
+              {isWater && (
+                <div>
+                  <label className="label">Bottle Capacity (Liters)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    className="input"
+                    placeholder="e.g. 2"
+                    value={form.water_capacity_liters}
+                    onChange={e => handleFormChange("water_capacity_liters", e.target.value)}
+                    required={isWater}
+                  />
+                </div>
+              )}
 
               <div className="md:col-span-2 lg:col-span-3">
                 <label className="label">Product Description</label>
@@ -689,33 +712,35 @@ export default function AdminProducts() {
               </div>
 
               {/* Time Fields */}
-              <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-5 gap-4 pt-2 pb-2 border-y border-gray-100 mt-2">
-                <div>
-                  <label className="label text-[11px] mb-1">Soaking (min/100g)</label>
-                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
-                    value={form.soaking_time} onChange={e => handleFormChange("soaking_time", e.target.value)} />
+              {!isWater && (
+                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-5 gap-4 pt-2 pb-2 border-y border-gray-100 mt-2">
+                  <div>
+                    <label className="label text-[11px] mb-1">Soaking (min/100g)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                      value={form.soaking_time} onChange={e => handleFormChange("soaking_time", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] mb-1">Cleaning (min/100g)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 5"
+                      value={form.cleaning_time} onChange={e => handleFormChange("cleaning_time", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] mb-1">Cutting (min/100g)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 15"
+                      value={form.cutting_time} onChange={e => handleFormChange("cutting_time", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] mb-1">Drying (min/100g)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                      value={form.drying_time} onChange={e => handleFormChange("drying_time", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] mb-1">Weighting (min/100g)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
+                      value={form.weighting_time} onChange={e => handleFormChange("weighting_time", e.target.value)} />
+                  </div>
                 </div>
-                <div>
-                  <label className="label text-[11px] mb-1">Cleaning (min/100g)</label>
-                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 5"
-                    value={form.cleaning_time} onChange={e => handleFormChange("cleaning_time", e.target.value)} />
-                </div>
-                <div>
-                  <label className="label text-[11px] mb-1">Cutting (min/100g)</label>
-                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 15"
-                    value={form.cutting_time} onChange={e => handleFormChange("cutting_time", e.target.value)} />
-                </div>
-                <div>
-                  <label className="label text-[11px] mb-1">Drying (min/100g)</label>
-                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
-                    value={form.drying_time} onChange={e => handleFormChange("drying_time", e.target.value)} />
-                </div>
-                <div>
-                  <label className="label text-[11px] mb-1">Weighting (min/100g)</label>
-                  <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
-                    value={form.weighting_time} onChange={e => handleFormChange("weighting_time", e.target.value)} />
-                </div>
-              </div>
+              )}
 
 
 
@@ -1150,7 +1175,7 @@ export default function AdminProducts() {
                 </tr>
               </thead>
               <tbody>
-                {stockSummary.map(p => {
+                {stockSummary.filter(p => p.category !== 'water').map(p => {
                   const currentStockVal = parseFloat(p.current_stock || 0);
                   const isLow = currentStockVal <= (p.unit === 'gm' ? 2000 : 2); // Less than 2kg or 2 pieces is low stock
 
@@ -1177,7 +1202,7 @@ export default function AdminProducts() {
                     </tr>
                   );
                 })}
-                {stockSummary.length === 0 && (
+                {stockSummary.filter(p => p.category !== 'water').length === 0 && (
                   <tr>
                     <td colSpan="8" className="text-center py-6 text-gray-500">No stock levels found in database.</td>
                   </tr>
@@ -1215,6 +1240,20 @@ export default function AdminProducts() {
               </button>
             </div>
           </div>
+          <div className="flex border-b border-gray-200 mb-4">
+            <button
+              onClick={() => setLogCategory("regular")}
+              className={`py-2 px-6 font-semibold text-sm ${logCategory === "regular" ? "border-b-2 border-fresh-600 text-fresh-700" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              Vegetables / Fruits
+            </button>
+            <button
+              onClick={() => setLogCategory("water")}
+              className={`py-2 px-6 font-semibold text-sm ${logCategory === "water" ? "border-b-2 border-fresh-600 text-fresh-700" : "text-gray-500 hover:text-gray-700"}`}
+            >
+              Water
+            </button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1229,7 +1268,7 @@ export default function AdminProducts() {
                 </tr>
               </thead>
               <tbody>
-                {purchaseLogs.map(log => {
+                {purchaseLogs.filter(log => (logCategory === 'water' ? log.Product?.category === 'water' : log.Product?.category !== 'water')).map(log => {
                   const dateStr = new Date(log.purchase_date).toLocaleString("en-IN", {
                     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
                   });
@@ -1252,7 +1291,7 @@ export default function AdminProducts() {
                     </tr>
                   );
                 })}
-                {purchaseLogs.length === 0 && (
+                {purchaseLogs.filter(log => (logCategory === 'water' ? log.Product?.category === 'water' : log.Product?.category !== 'water')).length === 0 && (
                   <tr>
                     <td colSpan="7" className="text-center py-6 text-gray-500">No purchase logs found. Go to "Log Purchase" to add one.</td>
                   </tr>

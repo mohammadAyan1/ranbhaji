@@ -25,6 +25,7 @@ import UserPreferences from "./pages/user/UserPreferences";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminUsers from "./pages/admin/AdminUsers";
+import AdminFranchises from "./pages/admin/AdminFranchises";
 import AdminUserAddresses from "./pages/admin/AdminUserAddresses";
 import AdminPackages from "./pages/admin/AdminPackages";
 import AdminSubscriptions from "./pages/admin/AdminSubscriptions";
@@ -138,6 +139,7 @@ function App() {
           <Route path="/admin/packages" element={<AdminPackages />} />
           <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
           <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/franchises" element={<AdminFranchises />} />
           <Route path="/admin/user-history" element={<AdminUserHistory />} />
           <Route path="/admin/user-addresses" element={<AdminUserAddresses />} />
           <Route path="/admin/returns" element={<AdminReturns />} />

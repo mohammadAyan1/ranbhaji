@@ -86,6 +86,15 @@ const adminLinks = [
       { to: "/admin/reports/loss", label: "Total Loss" },
     ]
   },
+  {
+    label: "Users & Partners",
+    icon: <UserCheck size={20} />,
+    isCollapsible: true,
+    children: [
+      { to: "/admin/users", label: "All Users" },
+      { to: "/admin/franchises", label: "Franchise Partners" },
+    ]
+  },
   // {
   //   label: "Others (Old Links)",
   //   icon: <Settings size={20} />,

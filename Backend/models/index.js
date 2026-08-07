@@ -20,8 +20,21 @@ const User = sequelize.define('User', {
   is_verified: { type: DataTypes.BOOLEAN, defaultValue: false },
   delivery_zones: { type: DataTypes.JSON, allowNull: true },
   last_assigned_at: { type: DataTypes.DATE, allowNull: true },
-  disliked_products: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }
+  disliked_products: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
+  delivery_profile: { type: DataTypes.JSON, allowNull: true }
 }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+// 1.1 FRANCHISE
+const Franchise = sequelize.define('Franchise', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  full_name: { type: DataTypes.STRING(100), allowNull: false },
+  mobile_number: { type: DataTypes.STRING(15), allowNull: false },
+  email: { type: DataTypes.STRING(100), allowNull: true },
+  city: { type: DataTypes.STRING(100), allowNull: false },
+  investment_capacity: { type: DataTypes.STRING(100), allowNull: true },
+  message: { type: DataTypes.TEXT, allowNull: true },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'inactive' }
+}, { tableName: 'franchises', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 1.5. UNITS
 const Unit = sequelize.define('Unit', {
@@ -61,6 +74,7 @@ const Product = sequelize.define('Product', {
   selling_price_per_gm: { type: DataTypes.DECIMAL(10, 4) },
   unit: { type: DataTypes.STRING(20), allowNull: true }, // keeping as string for backward compatibility during migration
   unit_id: { type: DataTypes.INTEGER, allowNull: true },
+  water_capacity_liters: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   min_retail_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   default_margin_percentage: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
@@ -194,6 +208,7 @@ const WaterSubscription = sequelize.define('WaterSubscription', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   water_type: { type: DataTypes.ENUM('health', 'miracle') },
   container: { type: DataTypes.ENUM('glass', 'plastic') },
+  capacity_liters: { type: DataTypes.DECIMAL(10, 2), defaultValue: 2 },
   frequency: { type: DataTypes.ENUM('daily', 'alternate') },
   price_per_bottle: { type: DataTypes.DECIMAL(10, 2) },
   status: { type: DataTypes.ENUM('active', 'paused', 'completed', 'cancelled'), defaultValue: 'active' },
@@ -546,6 +561,7 @@ export {
   BatchProcessingLog,
   Zone,
   LossLog,
-  WasteLog
+  WasteLog,
+  Franchise
 };
 
