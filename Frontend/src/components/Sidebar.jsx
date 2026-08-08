@@ -71,6 +71,7 @@ const adminLinks = [
       { to: "/admin/customers/retail", label: "Retails Customer" },
       { to: "/admin/customers/non-active", label: "Non Active Customer" },
       { to: "/admin/user-preferences", label: "User Preferences" },
+      { to: "/admin/user-addresses", label: "User Addresses" },
     ]
   },
   {

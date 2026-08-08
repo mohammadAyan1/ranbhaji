@@ -17,7 +17,7 @@ export const getAllUsers = async (req, res) => {
 // POST /api/admin/user-analytics/users
 export const createUser = async (req, res) => {
     try {
-        const { name, phone, email, password, role } = req.body;
+        const { name, phone, email, password, role, delivery_zones } = req.body;
         
         // Basic check if user exists
         const existing = await User.findOne({ where: { phone } });
@@ -32,7 +32,8 @@ export const createUser = async (req, res) => {
             actual_password: password,
             password_hash: password, // You should hash it properly in a real app, keeping it consistent with the system's auth
             role: role || 'user',
-            status: role === 'delivery' ? 'inactive' : 'active'
+            status: role === 'delivery' ? 'inactive' : 'active',
+            delivery_zones: role === 'delivery' ? delivery_zones : null
         });
 
         res.status(201).json({ success: true, message: "User created successfully", user: newUser });

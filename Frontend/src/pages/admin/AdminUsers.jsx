@@ -6,19 +6,56 @@ import api from "../../api/axios";
 export default function AdminUsers() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
+  const [allZones, setAllZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ name: "", phone: "", email: "", password: "", role: "user" });
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedViewUser, setSelectedViewUser] = useState(null);
+  const [isDeliveryZoneModalOpen, setIsDeliveryZoneModalOpen] = useState(false);
+  const [deliveryZoneUser, setDeliveryZoneUser] = useState(null);
+  const [selectedDeliveryZones, setSelectedDeliveryZones] = useState([]);
+  const [savingZones, setSavingZones] = useState(false);
+  const [formData, setFormData] = useState({ name: "", phone: "", email: "", password: "", role: "user", delivery_zones: [] });
   const [creating, setCreating] = useState(false);
 
   const fetchUsers = () => {
     api.get("/admin/user-analytics/users").then(r => setUsers(r.data.users || [])).finally(() => setLoading(false));
   };
-  useEffect(fetchUsers, []);
+  const fetchZones = () => {
+    api.get("/zones").then(r => setAllZones(r.data || [])).catch(e => console.error(e));
+  };
+  useEffect(() => {
+    fetchUsers();
+    fetchZones();
+  }, []);
+
+  const handleSaveDeliveryZones = async (e) => {
+    e.preventDefault();
+    if (!deliveryZoneUser) return;
+    setSavingZones(true);
+    try {
+      await api.patch(`/admin/users/${deliveryZoneUser.id}/delivery-zones`, { zones: selectedDeliveryZones });
+      setMsg(`✅ Delivery zones updated for ${deliveryZoneUser.name}`);
+      setIsDeliveryZoneModalOpen(false);
+      fetchUsers();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingZones(false);
+    }
+  };
+
+  const toggleZoneSelection = (zoneName) => {
+    if (selectedDeliveryZones.includes(zoneName)) {
+      setSelectedDeliveryZones(prev => prev.filter(z => z !== zoneName));
+    } else {
+      setSelectedDeliveryZones(prev => [...prev, zoneName]);
+    }
+  };
 
   const toggleStatus = async (user) => {
     const newStatus = user.status === "active" ? "inactive" : "active";
@@ -45,7 +82,7 @@ export default function AdminUsers() {
       await api.post("/admin/user-analytics/users", formData);
       setMsg(`✅ User ${formData.name} created successfully.`);
       setIsModalOpen(false);
-      setFormData({ name: "", phone: "", email: "", password: "", role: "user" });
+      setFormData({ name: "", phone: "", email: "", password: "", role: "user", delivery_zones: [] });
       fetchUsers();
     } catch (err) {
       setMsg(`❌ Failed to create user: ${err.response?.data?.message || err.message}`);
@@ -145,10 +182,33 @@ export default function AdminUsers() {
                     <span className={u.status === "active" ? "badge-green" : "badge-red"}>{u.status}</span>
                   </td>
                   <td className="p-3 text-right">
-                    <button onClick={() => toggleStatus(u)}
-                      className={`text-xs font-medium px-3 py-1 rounded-full border ${u.status === "active" ? "text-red-600 hover:bg-red-50 border-red-200" : "text-fresh-600 hover:bg-fresh-50 border-fresh-200"}`}>
-                      {u.status === "active" ? "Deactivate" : "Activate"}
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      {u.role === 'delivery' && (
+                        <button 
+                          onClick={() => {
+                            setDeliveryZoneUser(u);
+                            try {
+                                const parsedZones = typeof u.delivery_zones === 'string' ? JSON.parse(u.delivery_zones) : u.delivery_zones;
+                                setSelectedDeliveryZones(Array.isArray(parsedZones) ? parsedZones : []);
+                            } catch (e) { setSelectedDeliveryZones([]); }
+                            setIsDeliveryZoneModalOpen(true);
+                          }}
+                          className="text-xs font-medium px-3 py-1 rounded-full border border-blue-200 text-blue-700 hover:bg-blue-50"
+                        >
+                          Zones
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => { setSelectedViewUser(u); setIsViewModalOpen(true); }}
+                        className="text-xs font-medium px-3 py-1 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50"
+                      >
+                        View
+                      </button>
+                      <button onClick={() => toggleStatus(u)}
+                        className={`text-xs font-medium px-3 py-1 rounded-full border ${u.status === "active" ? "text-red-600 hover:bg-red-50 border-red-200" : "text-fresh-600 hover:bg-fresh-50 border-fresh-200"}`}>
+                        {u.status === "active" ? "Deactivate" : "Activate"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -160,7 +220,7 @@ export default function AdminUsers() {
       {/* Add User Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-900">Add New User</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -193,9 +253,139 @@ export default function AdminUsers() {
                   <option value="admin">Admin</option>
                 </select>
               </div>
+
+              {formData.role === 'delivery' && (
+                <div>
+                  <label className="label">Delivery Zones</label>
+                  <div className="max-h-40 overflow-y-auto space-y-2 border border-gray-100 p-3 rounded-xl bg-gray-50 mt-1">
+                    {allZones.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-2">No zones found.</p>
+                    ) : (
+                      allZones.map(z => (
+                        <label key={z.id} className="flex items-center gap-3 p-2 bg-white rounded-lg shadow-sm border border-gray-100 cursor-pointer hover:border-fresh-300">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 text-fresh-600 rounded border-gray-300 focus:ring-fresh-500"
+                            checked={formData.delivery_zones.includes(z.name)}
+                            onChange={() => {
+                              const selected = formData.delivery_zones.includes(z.name);
+                              setFormData({
+                                ...formData,
+                                delivery_zones: selected 
+                                  ? formData.delivery_zones.filter(zone => zone !== z.name)
+                                  : [...formData.delivery_zones, z.name]
+                              });
+                            }}
+                          />
+                          <span className="text-sm font-medium text-gray-800">{z.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
               
               <button type="submit" disabled={creating} className="btn-primary w-full mt-2">
                 {creating ? "Creating..." : "Create Verified User"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View User Details Modal */}
+      {isViewModalOpen && selectedViewUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-900">User Details</h2>
+              <button onClick={() => { setIsViewModalOpen(false); setSelectedViewUser(null); }} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Name</p>
+                  <p className="text-sm font-semibold text-gray-900">{selectedViewUser.name || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Phone</p>
+                  <p className="text-sm font-semibold text-gray-900">{selectedViewUser.phone || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Email</p>
+                  <p className="text-sm font-semibold text-gray-900">{selectedViewUser.email || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Role</p>
+                  <p className="text-sm font-semibold text-gray-900 capitalize">{selectedViewUser.role || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Status</p>
+                  <p className="text-sm font-semibold text-gray-900 capitalize">{selectedViewUser.status || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Wallet Balance</p>
+                  <p className="text-sm font-semibold text-fresh-600">₹{parseFloat(selectedViewUser.wallet_balance || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Due Amount</p>
+                  <p className="text-sm font-semibold text-red-600">₹{parseFloat(selectedViewUser.due_amount || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Created At</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {selectedViewUser.created_at ? new Date(selectedViewUser.created_at).toLocaleDateString() : "N/A"}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-6 pt-4 border-t border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900 mb-3">All Raw Details</h3>
+                <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-xs text-gray-700 font-mono">
+                  <pre>{JSON.stringify(selectedViewUser, null, 2)}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Zone Modal */}
+      {isDeliveryZoneModalOpen && deliveryZoneUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Assign Delivery Zones</h2>
+              <button onClick={() => setIsDeliveryZoneModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Select zones for delivery boy <b>{deliveryZoneUser.name}</b></p>
+            
+            <form onSubmit={handleSaveDeliveryZones} className="space-y-4">
+              <div className="max-h-60 overflow-y-auto space-y-2 border border-gray-100 p-3 rounded-xl bg-gray-50">
+                {allZones.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-2">No zones found.</p>
+                ) : (
+                  allZones.map(z => (
+                    <label key={z.id} className="flex items-center gap-3 p-2 bg-white rounded-lg shadow-sm border border-gray-100 cursor-pointer hover:border-fresh-300">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 text-fresh-600 rounded border-gray-300 focus:ring-fresh-500"
+                        checked={selectedDeliveryZones.includes(z.name)}
+                        onChange={() => toggleZoneSelection(z.name)}
+                      />
+                      <span className="text-sm font-medium text-gray-800">{z.name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              
+              <button type="submit" disabled={savingZones} className="btn-primary w-full mt-2">
+                {savingZones ? "Saving..." : "Save Zones"}
               </button>
             </form>
           </div>
