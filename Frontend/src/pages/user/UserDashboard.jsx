@@ -10,21 +10,24 @@ export default function UserDashboard() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [incoming, setIncoming] = useState([]);
+  const [referralData, setReferralData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [walletRes, subRes, notifRes, incRes] = await Promise.all([
+        const [walletRes, subRes, notifRes, incRes, refRes] = await Promise.all([
           api.get("/wallet"),
           api.get("/my-subscriptions"),
           api.get("/notifications"),
-          api.get("/today-incoming")
+          api.get("/today-incoming"),
+          api.get("/referral/my-code").catch(() => ({ data: null }))
         ]);
         setWallet(walletRes.data);
         setSubscriptions(subRes.data.subscriptions || []);
         setNotifications(notifRes.data.notifications?.slice(0, 5) || []);
         setIncoming(incRes.data.incoming || []);
+        if (refRes?.data?.success) setReferralData(refRes.data);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     };
@@ -121,6 +124,24 @@ export default function UserDashboard() {
           </div>
         </div>
       </div>
+
+      {referralData && referralData.hasActivePackage && (
+        <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-2">🎁 Share & Get Free Servings!</h2>
+            <p className="text-gray-700 max-w-2xl text-sm">
+              Share your referral code with friends. When they register and buy a package, you get a <strong>FREE extra serving</strong> added to your current active package! (Max 3 per package, lifetime max 10 servings).
+            </p>
+            <p className="text-sm font-semibold text-indigo-700 mt-2">
+              Free servings earned lifetime: {referralData.total_free_servings} / 10
+            </p>
+          </div>
+          <div className="bg-white px-6 py-4 rounded-xl border border-gray-200 shadow-inner text-center shrink-0 min-w-[200px]">
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Your Referral Code</p>
+            <p className="text-2xl font-black text-indigo-600 tracking-widest font-mono">{referralData.referral_code}</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         {/* Subscriptions - Takes up 2 columns on large screens */}

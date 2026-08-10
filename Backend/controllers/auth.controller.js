@@ -1,6 +1,21 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User, Package, AttendanceLog } from "../models/index.js";
+import { User, Package, AttendanceLog, ReferralLog, Subscription, DeliverySchedule, DeliveryItem } from "../models/index.js";
+
+const generateReferralCode = async () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code;
+    let exists = true;
+    while (exists) {
+        code = '';
+        for (let i = 0; i < 12; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const user = await User.findOne({ where: { referral_code: code } });
+        if (!user) exists = false;
+    }
+    return code;
+};
 
 const generateToken = (id, role) =>
     jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -15,11 +30,11 @@ const cookieOpts = {
 // POST /api/auth/register
 export const register = async (req, res) => {
     try {
-        const { name, phone, email, password, role, gender, disliked_products } = req.body;
+        const { name, phone, email, password, role, gender, disliked_products, referral_code } = req.body;
         if (!name || !phone || !password) {
             return res.status(400).json({ success: false, message: "name, phone, and password are required" });
         }
-        const allowedRoles = ["user", "delivery", "admin"];
+        const allowedRoles = ["user", "delivery", "admin", "salesman"];
         const userRole = role && allowedRoles.includes(role) ? role : "user";
         // `select * from where phone = ${phone}`
         const existing = await User.findOne({ where: { phone } });
@@ -35,11 +50,99 @@ export const register = async (req, res) => {
         const otp = "123456";
         const otp_expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
+        const myCode = await generateReferralCode();
+
         const user = await User.create({
             name, phone, email: email || null, password_hash, actual_password: password, role: userRole, gender: gender || null,
             otp, otp_expiry, is_verified: false,
-            disliked_products: Array.isArray(disliked_products) ? disliked_products : []
+            disliked_products: Array.isArray(disliked_products) ? disliked_products : [],
+            referral_code: myCode
         });
+
+        if (referral_code) {
+            const referrer = await User.findOne({ where: { referral_code } });
+            if (referrer) {
+                if (referrer.role === 'salesman') {
+                    await ReferralLog.create({
+                        referrer_id: referrer.id,
+                        referred_user_id: user.id,
+                        is_salesman: true,
+                        awarded_free_serving: false
+                    });
+                } else {
+                    let awarded = false;
+                    let awarded_sub_id = null;
+                    if (referrer.total_free_servings < 10) {
+                        const subscriptions = await Subscription.findAll({
+                            where: { user_id: referrer.id, status: 'active' },
+                            order: [['start_date', 'ASC']]
+                        });
+                        const eligibleSub = subscriptions.find(s => s.free_servings_awarded < 3);
+                        if (eligibleSub) {
+                            const lastSchedule = await DeliverySchedule.findOne({
+                                where: { subscription_id: eligibleSub.id },
+                                order: [['scheduled_date', 'DESC']]
+                            });
+                            
+                            let nextDate = new Date();
+                            if (lastSchedule) {
+                                nextDate = new Date(lastSchedule.scheduled_date);
+                                const allSchedules = await DeliverySchedule.findAll({
+                                    where: { subscription_id: eligibleSub.id },
+                                    order: [['scheduled_date', 'DESC']],
+                                    limit: 2
+                                });
+                                let gapDays = 1;
+                                if (allSchedules.length === 2) {
+                                    const d1 = new Date(allSchedules[0].scheduled_date);
+                                    const d2 = new Date(allSchedules[1].scheduled_date);
+                                    gapDays = Math.max(1, (d1 - d2) / (1000 * 60 * 60 * 24));
+                                }
+                                nextDate.setDate(nextDate.getDate() + gapDays);
+                            } else {
+                                nextDate.setDate(nextDate.getDate() + 1);
+                            }
+                            
+                            const isoDate = nextDate.toISOString().split('T')[0];
+                            const newSchedule = await DeliverySchedule.create({
+                                subscription_id: eligibleSub.id,
+                                scheduled_date: isoDate,
+                                status: 'pending',
+                                batch_id: eligibleSub.batch_id
+                            });
+
+                            if (lastSchedule) {
+                                const lastItems = await DeliveryItem.findAll({ where: { schedule_id: lastSchedule.id } });
+                                for (const item of lastItems) {
+                                    await DeliveryItem.create({
+                                        schedule_id: newSchedule.id,
+                                        product_id: item.product_id,
+                                        qty_gm: item.qty_gm
+                                    });
+                                }
+                            }
+
+                            eligibleSub.total_services += 1;
+                            eligibleSub.free_servings_awarded += 1;
+                            await eligibleSub.save();
+                            
+                            referrer.total_free_servings += 1;
+                            await referrer.save();
+                            
+                            awarded = true;
+                            awarded_sub_id = eligibleSub.id;
+                        }
+                    }
+                    await ReferralLog.create({
+                        referrer_id: referrer.id,
+                        referred_user_id: user.id,
+                        is_salesman: false,
+                        awarded_free_serving: awarded,
+                        subscription_id: awarded_sub_id
+                    });
+                }
+            }
+        }
 
         // Auto-assign any custom package targeting this mobile number
         await Package.update(

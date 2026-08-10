@@ -45,6 +45,8 @@ import AdminUserHistory from "./pages/admin/AdminUserHistory";
 import AdminUnits from "./pages/admin/AdminUnits";
 import AdminUserPreferences from "./pages/admin/AdminUserPreferences";
 import Attendance from "./pages/admin/Attendance";
+import AdminProduction from "./pages/admin/AdminProduction";
+import AdminReferrals from "./pages/admin/AdminReferrals";
 
 // Reports
 import ItemPurchaseReport from "./pages/admin/Reports/ItemPurchaseReport";
@@ -138,6 +140,7 @@ function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/products" element={<AdminProducts />} />
           <Route path="/admin/packages" element={<AdminPackages />} />
+          <Route path="/admin/production" element={<AdminProduction />} />
           <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/franchises" element={<AdminFranchises />} />
@@ -157,6 +160,7 @@ function App() {
           <Route path="/admin/product-sales" element={<AdminProductSales />} />
           <Route path="/admin/units" element={<AdminUnits />} />
           <Route path="/admin/user-preferences" element={<AdminUserPreferences />} />
+          <Route path="/admin/referrals" element={<AdminReferrals />} />
 
           {/* Working Logs */}
           <Route path="/admin/working-logs" element={<WorkingLogs />} />

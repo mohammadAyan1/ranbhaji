@@ -81,6 +81,10 @@ export default function RegisterPage() {
                 <option value="other">Other</option>
               </select>
             </div>
+            <div>
+              <label className="label">Referral Code (Optional)</label>
+              <input id="reg-referral" type="text" className="input uppercase" placeholder="e.g. A1B2C3D4E5F6" maxLength={12} value={form.referral_code || ""} onChange={e => setForm({...form, referral_code: e.target.value.toUpperCase()})} />
+            </div>
             
             {/* Disliked Vegetables Section */}
             {vegetables.length > 0 && (

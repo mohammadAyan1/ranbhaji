@@ -21,7 +21,9 @@ const User = sequelize.define('User', {
   delivery_zones: { type: DataTypes.JSON, allowNull: true },
   last_assigned_at: { type: DataTypes.DATE, allowNull: true },
   disliked_products: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
-  delivery_profile: { type: DataTypes.JSON, allowNull: true }
+  delivery_profile: { type: DataTypes.JSON, allowNull: true },
+  referral_code: { type: DataTypes.STRING(20), allowNull: true },
+  total_free_servings: { type: DataTypes.INTEGER, defaultValue: 0 }
 }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 1.1 FRANCHISE
@@ -81,11 +83,27 @@ const Product = sequelize.define('Product', {
   total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   current_stock: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-  soaking_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
-  cleaning_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
-  cutting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
-  drying_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, // time in minutes per 100gm
-  weighting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 } // time in minutes per 100gm
+  
+  // Legacy time fields
+  soaking_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
+  cleaning_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
+  cutting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
+  drying_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
+  weighting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+
+  // New Time & Production fields
+  plan_weight_g: { type: DataTypes.DECIMAL(10, 2), defaultValue: 500 },
+  soak_time_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  weigh_time_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  is_piece_based: { type: DataTypes.BOOLEAN, defaultValue: true },
+  pieces_per_25g: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  clean_cut_time_per_piece_min: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  clean_cut_time_per_25g_min: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  dry_cycle_time_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  dry_capacity_kg_per_load: { type: DataTypes.DECIMAL(10, 2), defaultValue: 5 },
+  dry_machine_count: { type: DataTypes.INTEGER, defaultValue: 1 },
+  wrap_time_per_plan_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  pack_time_per_plan_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 }
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 3. PACKAGES
@@ -135,7 +153,8 @@ const Subscription = sequelize.define('Subscription', {
   renewal_count: { type: DataTypes.INTEGER, defaultValue: 1 },
   locked_price: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   postpaid_serving_given: { type: DataTypes.BOOLEAN, defaultValue: false },
-  batch_id: { type: DataTypes.INTEGER, allowNull: true }
+  batch_id: { type: DataTypes.INTEGER, allowNull: true },
+  free_servings_awarded: { type: DataTypes.INTEGER, defaultValue: 0 }
 }, { tableName: 'subscriptions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 8. SUBSCRIPTION_ITEMS
@@ -232,6 +251,16 @@ const Notification = sequelize.define('Notification', {
   sent_at: { type: DataTypes.DATE, allowNull: true },
   is_read: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, { tableName: 'notifications', timestamps: false });
+
+// 14.5. REFERRAL_LOGS
+const ReferralLog = sequelize.define('ReferralLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  referrer_id: { type: DataTypes.INTEGER, allowNull: true },
+  referred_user_id: { type: DataTypes.INTEGER, allowNull: false },
+  is_salesman: { type: DataTypes.BOOLEAN, defaultValue: false },
+  awarded_free_serving: { type: DataTypes.BOOLEAN, defaultValue: false },
+  subscription_id: { type: DataTypes.INTEGER, allowNull: true }
+}, { tableName: 'referral_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 15. CREDIT_LOG
 const CreditLog = sequelize.define('CreditLog', {
@@ -351,6 +380,14 @@ Address.hasMany(WaterSubscription, { foreignKey: 'address_id' });
 // PaymentTransactions
 PaymentTransaction.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(PaymentTransaction, { foreignKey: 'user_id' });
+
+// ReferralLogs
+ReferralLog.belongsTo(User, { as: 'Referrer', foreignKey: 'referrer_id' });
+ReferralLog.belongsTo(User, { as: 'ReferredUser', foreignKey: 'referred_user_id' });
+ReferralLog.belongsTo(Subscription, { foreignKey: 'subscription_id' });
+User.hasMany(ReferralLog, { foreignKey: 'referrer_id', as: 'ReferralsMade' });
+User.hasMany(ReferralLog, { foreignKey: 'referred_user_id', as: 'ReferredLog' });
+Subscription.hasMany(ReferralLog, { foreignKey: 'subscription_id' });
 
 
 // 18. CALCULATOR_DRAFTS
@@ -537,6 +574,65 @@ const AttendanceLog = sequelize.define('AttendanceLog', {
 AttendanceLog.belongsTo(User, { foreignKey: 'delivery_boy_id', as: 'DeliveryBoy' });
 User.hasMany(AttendanceLog, { foreignKey: 'delivery_boy_id' });
 
+// ==========================================
+// NEW PRODUCTION WORKFLOW ENGINE MODELS
+// ==========================================
+
+const ProductionBatch = sequelize.define('ProductionBatch', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  total_qty_kg: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
+  pending_qty_kg: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
+  status: { type: DataTypes.ENUM('pending', 'in_progress', 'completed'), defaultValue: 'pending' }
+}, { tableName: 'production_batches', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+const BatchSplit = sequelize.define('BatchSplit', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  batch_id: { type: DataTypes.INTEGER, allowNull: false },
+  qty_kg: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
+  stage: { type: DataTypes.ENUM('pending', 'weighing_start', 'soaking', 'cleaning_cutting', 'drying', 'weighing_end', 'wrapping', 'packing', 'completed'), defaultValue: 'pending' },
+  status: { type: DataTypes.ENUM('waiting', 'in_progress', 'completed'), defaultValue: 'waiting' },
+  total_work_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+  remaining_work_minutes: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+  active_worker_count: { type: DataTypes.INTEGER, defaultValue: 0 },
+  last_recalculated_at: { type: DataTypes.DATE, allowNull: true },
+  stage_started_at: { type: DataTypes.DATE, allowNull: true },
+  stage_completed_at: { type: DataTypes.DATE, allowNull: true }
+}, { tableName: 'batch_splits', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+const SplitWorkerAssignment = sequelize.define('SplitWorkerAssignment', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  split_id: { type: DataTypes.INTEGER, allowNull: false },
+  worker_id: { type: DataTypes.INTEGER, allowNull: false },
+  joined_at: { type: DataTypes.DATE, allowNull: false },
+  left_at: { type: DataTypes.DATE, allowNull: true }
+}, { tableName: 'split_worker_assignments', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+const WorkerAttendance = sequelize.define('WorkerAttendance', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  worker_id: { type: DataTypes.INTEGER, allowNull: false },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  checked_in_at: { type: DataTypes.DATE, allowNull: false },
+  current_status: { type: DataTypes.ENUM('inactive', 'idle', 'working'), defaultValue: 'inactive' }
+}, { tableName: 'worker_attendances', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+// Associations for Production Workflow
+Product.hasMany(ProductionBatch, { foreignKey: 'product_id', as: 'production_batches' });
+ProductionBatch.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+
+ProductionBatch.hasMany(BatchSplit, { foreignKey: 'batch_id', as: 'splits' });
+BatchSplit.belongsTo(ProductionBatch, { foreignKey: 'batch_id', as: 'batch' });
+
+BatchSplit.hasMany(SplitWorkerAssignment, { foreignKey: 'split_id', as: 'assignments' });
+SplitWorkerAssignment.belongsTo(BatchSplit, { foreignKey: 'split_id', as: 'split' });
+
+User.hasMany(SplitWorkerAssignment, { foreignKey: 'worker_id', as: 'split_assignments' });
+SplitWorkerAssignment.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' });
+
+User.hasMany(WorkerAttendance, { foreignKey: 'worker_id', as: 'attendances' });
+WorkerAttendance.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' });
+
 export {
   sequelize,
   User,
@@ -573,6 +669,11 @@ export {
   LossLog,
   WasteLog,
   Franchise,
-  AttendanceLog
+  AttendanceLog,
+  ProductionBatch,
+  BatchSplit,
+  SplitWorkerAssignment,
+  WorkerAttendance,
+  ReferralLog
 };
 

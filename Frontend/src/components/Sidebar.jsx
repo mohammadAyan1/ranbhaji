@@ -9,6 +9,7 @@ import {
 
 const adminLinks = [
   { to: "/admin", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
+  { to: "/admin/production", label: "Production Dashboard", icon: <Activity size={20} /> },
   {
     label: "Master",
     icon: <Database size={20} />,
@@ -94,6 +95,7 @@ const adminLinks = [
     children: [
       { to: "/admin/users", label: "All Users" },
       { to: "/admin/franchises", label: "Franchise Partners" },
+      { to: "/admin/referrals", label: "Referrals" },
     ]
   },
   {

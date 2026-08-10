@@ -1,11 +1,12 @@
 import cron from "node-cron";
 import { Op } from "sequelize";
 import { sequelize } from "../confiq/db.js";
+import { io } from "../index.js";
 import {
     DeliverySchedule, Subscription, SubscriptionItem, Notification, User, Package,
     WalletTransaction, CreditLog, Product, DeliveryItem, WaterSubscription,
     ScheduleSeasonalSelection, PackageSeasonalConfig, PauseLog, PackageSeasonalPool,
-    RetailOrder, RetailOrderItem
+    RetailOrder, RetailOrderItem, BatchSplit, ProductionBatch
 } from "../models/index.js";
 
 /**
@@ -308,73 +309,90 @@ const runNightlyJob = async () => {
                 // Step 1: Auto-fill delivery items (if none exist for this schedule)
                 const existingItems = await DeliveryItem.count({ where: { schedule_id: schedule.id }, transaction: t });
                 if (existingItems === 0) {
-                    let deliveryItems = [];
+                    let rawItems = [];
 
-                    // Fixed items from subscription
+                    // 1. Gather Fixed items from subscription
                     const fixedItems = sub.Items.filter(i => i.is_fixed);
-                    deliveryItems.push(...fixedItems.map(item => ({
-                        schedule_id: schedule.id,
+                    rawItems.push(...fixedItems.map(item => ({
                         product_id: item.product_id,
-                        qty_gm: item.qty_gm
+                        qty_gm: item.qty_gm,
+                        is_seasonal: false
                     })));
 
-                    // Seasonal items
+                    // 2. Gather Seasonal items
                     if (sub.Package.SeasonalConfig) {
                         let selections = await ScheduleSeasonalSelection.findAll({
                             where: { schedule_id: schedule.id },
-                            include: [{ model: Product }],
                             transaction: t
                         });
-
-                        // Logic for disabled product redistribution
-                        const activeSelections = selections.filter(s => s.Product && s.Product.status === 'active');
-                        const disabledSelections = selections.filter(s => !s.Product || s.Product.status !== 'active');
                         
-                        if (disabledSelections.length > 0 && activeSelections.length > 0) {
-                            let redistributedBudget = 0;
-                            for (const ds of disabledSelections) {
-                                const prod = ds.Product;
-                                if (prod) redistributedBudget += parseFloat(ds.qty_gm) * parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 0);
-                            }
-                            
-                            const budgetPerActive = redistributedBudget / activeSelections.length;
-                            for (const as of activeSelections) {
-                                const prod = as.Product;
-                                const extraQty = budgetPerActive / parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
-                                as.qty_gm = parseFloat(as.qty_gm) + parseFloat(extraQty.toFixed(2));
-                                await as.save({ transaction: t });
-                            }
-                            
-                            for (const ds of disabledSelections) {
-                                await ds.destroy({ transaction: t });
-                            }
-                            selections = activeSelections;
-                        }
-
                         if (selections.length > 0) {
-                            deliveryItems.push(...selections.map(sel => ({
-                                schedule_id: schedule.id,
+                            rawItems.push(...selections.map(sel => ({
                                 product_id: sel.product_id,
-                                qty_gm: sel.qty_gm
+                                qty_gm: sel.qty_gm,
+                                is_seasonal: true,
+                                selection_model: sel
                             })));
                         } else {
-                            // Fallback to subscription default seasonal items
                             const defaultSeasonal = sub.Items.filter(i => i.is_seasonal);
-                            deliveryItems.push(...defaultSeasonal.map(item => ({
-                                schedule_id: schedule.id,
+                            rawItems.push(...defaultSeasonal.map(item => ({
                                 product_id: item.product_id,
-                                qty_gm: item.qty_gm
+                                qty_gm: item.qty_gm,
+                                is_seasonal: true
                             })));
                         }
                     } else {
-                        // For packages without seasonal configuration, use all active subscription items
                         const seasonalItems = sub.Items.filter(i => i.is_seasonal);
-                        deliveryItems.push(...seasonalItems.map(item => ({
-                            schedule_id: schedule.id,
+                        rawItems.push(...seasonalItems.map(item => ({
                             product_id: item.product_id,
-                            qty_gm: item.qty_gm
+                            qty_gm: item.qty_gm,
+                            is_seasonal: true
                         })));
                     }
+
+                    // 3. Unified disabled product redistribution
+                    const activeItems = [];
+                    const disabledItems = [];
+
+                    for (const item of rawItems) {
+                        const product = await Product.findByPk(item.product_id, { transaction: t });
+                        if (product && product.status === 'active') {
+                            activeItems.push({ ...item, product });
+                        } else {
+                            disabledItems.push({ ...item, product });
+                            if (item.selection_model) {
+                                await item.selection_model.destroy({ transaction: t });
+                            }
+                        }
+                    }
+
+                    if (disabledItems.length > 0 && activeItems.length > 0) {
+                        let redistributedBudget = 0;
+                        for (const ds of disabledItems) {
+                            const prod = ds.product;
+                            if (prod) {
+                                redistributedBudget += parseFloat(ds.qty_gm) * parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 0);
+                            }
+                        }
+
+                        const budgetPerActive = redistributedBudget / activeItems.length;
+                        for (const as of activeItems) {
+                            const prod = as.product;
+                            const extraQty = budgetPerActive / parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
+                            as.qty_gm = parseFloat(as.qty_gm) + parseFloat(extraQty.toFixed(2));
+                            
+                            if (as.selection_model) {
+                                as.selection_model.qty_gm = as.qty_gm;
+                                await as.selection_model.save({ transaction: t });
+                            }
+                        }
+                    }
+
+                    let deliveryItems = activeItems.map(item => ({
+                        schedule_id: schedule.id,
+                        product_id: item.product_id,
+                        qty_gm: item.qty_gm
+                    }));
 
                     if (deliveryItems.length > 0) {
                         await DeliveryItem.bulkCreate(deliveryItems, { transaction: t });
@@ -616,8 +634,68 @@ const notifyDisabledProductsJob = async () => {
     }
 };
 
+const checkUnattendedStages = async () => {
+    try {
+        const now = new Date();
+        const splits = await BatchSplit.findAll({
+            where: { status: 'in_progress' },
+            include: [{ model: ProductionBatch, as: 'batch', include: [{ model: Product, as: 'product' }] }]
+        });
+        
+        for (const split of splits) {
+            if (!split.batch || !split.batch.product) continue;
+            const product = split.batch.product;
+            const startedAt = new Date(split.stage_started_at || new Date());
+            
+            let expectedTimeMin = 0;
+            
+            if (split.stage === 'soaking') {
+                expectedTimeMin = parseFloat(product.soak_time_min || 0);
+            } else if (split.stage === 'drying') {
+                const dryCycleTime = parseFloat(product.dry_cycle_time_min || 0);
+                const dryCapacityKg = parseFloat(product.dry_capacity_kg_per_load || 1);
+                const dryMachineCount = parseInt(product.dry_machine_count || 1);
+                const loadsNeeded = Math.ceil(parseFloat(split.qty_kg) / dryCapacityKg);
+                expectedTimeMin = (dryMachineCount > 1) ? Math.ceil(loadsNeeded / dryMachineCount) * dryCycleTime : loadsNeeded * dryCycleTime;
+            } else if (split.stage === 'weighing_start' || split.stage === 'weighing_end') {
+                expectedTimeMin = parseFloat(product.weigh_time_min || 0);
+            } else if (split.stage === 'cleaning_cutting') {
+                // Approximate time
+                if (split.remaining_work_minutes !== null && split.active_worker_count > 0) {
+                    expectedTimeMin = parseFloat(split.remaining_work_minutes) / split.active_worker_count;
+                } else {
+                    expectedTimeMin = parseFloat(split.remaining_work_minutes || 0);
+                }
+            } else {
+                continue;
+            }
+            
+            const expectedEndTime = new Date(startedAt.getTime() + expectedTimeMin * 60000);
+            
+            if (expectedEndTime <= now) {
+                // If it's soaking or drying, we emit an alarm and set status to 'waiting' so they can acknowledge it
+                if (split.stage === 'soaking' || split.stage === 'drying') {
+                    if (split.status === 'in_progress') {
+                        split.status = 'waiting';
+                        await split.save();
+                        io.emit('production:alarm', { split_id: split.id, stage: split.stage, message: `${split.stage} complete for Batch ${split.batch_id}!` });
+                    }
+                } else {
+                    // For manual tasks, just emit the alarm (don't change status)
+                    io.emit('production:alarm', { split_id: split.id, stage: split.stage, message: `Target time for ${split.stage} (Batch ${split.batch_id}) has exceeded!` });
+                }
+            }
+        }
+    } catch (error) {
+        console.error('[CRON] checkUnattendedStages failed:', error);
+    }
+};
+
 // Schedule daily at 8 PM
 export const startCronJobs = () => {
+    setInterval(checkUnattendedStages, 30000); // run every 30s
+    console.log("[CRON] Scheduled Unattended Stages Check every 30s");
+
     cron.schedule("0 20 * * *", runNightlyJob, {
         scheduled: true,
         timezone: "Asia/Kolkata"

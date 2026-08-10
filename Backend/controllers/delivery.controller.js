@@ -150,7 +150,8 @@ export const getTodayDeliveries = async (req, res) => {
                         return nameLower.includes(sub.water_type.toLowerCase()) && nameLower.includes(sub.container.toLowerCase());
                     });
                     if (matchedProduct) {
-                        const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
+                        const capacity = parseFloat(sub.capacity_liters) || 1;
+                        const qty = matchedProduct.unit === 'ml' ? capacity * 1000 : capacity;
                         await DeliveryItem.create({
                             schedule_id: sched.id,
                             product_id: matchedProduct.id,

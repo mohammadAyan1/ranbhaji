@@ -9,7 +9,7 @@ const emptyForm = {
   name: "", hindi_name: "", category: "", sub_category: "",
   purchase_price_input: "", margin_percentage: "", unit: "gm", unit_id: "",
   description: "", min_retail_qty: "", water_capacity_liters: "",
-  soaking_time: "", cleaning_time: "", cutting_time: "", drying_time: "", weighting_time: "", image: null
+  soak_time_min: "", weigh_time_min: "", clean_cut_time_per_25g_min: "", dry_cycle_time_min: "", dry_machine_count: 1, image: null
 };
 
 const showKgToggle = (category, unit) =>
@@ -275,11 +275,11 @@ export default function AdminProducts() {
     if (form.description) payload.append("description", form.description);
     payload.append("min_retail_qty", form.min_retail_qty || 0);
     payload.append("water_capacity_liters", form.water_capacity_liters || 0);
-    payload.append("soaking_time", form.soaking_time || 0);
-    payload.append("cleaning_time", form.cleaning_time || 0);
-    payload.append("cutting_time", form.cutting_time || 0);
-    payload.append("drying_time", form.drying_time || 0);
-    payload.append("weighting_time", form.weighting_time || 0);
+    payload.append("soak_time_min", form.soak_time_min || 0);
+    payload.append("weigh_time_min", form.weigh_time_min || 0);
+    payload.append("clean_cut_time_per_25g_min", form.clean_cut_time_per_25g_min || 0);
+    payload.append("dry_cycle_time_min", form.dry_cycle_time_min || 0);
+    payload.append("dry_machine_count", form.dry_machine_count || 1);
     payload.append("margin_percentage", marginPercentage);
 
     if (form.image) {
@@ -364,11 +364,11 @@ export default function AdminProducts() {
       description: p.description || "",
       min_retail_qty: p.min_retail_qty || "",
       water_capacity_liters: p.water_capacity_liters || "",
-      soaking_time: p.soaking_time || "",
-      cleaning_time: p.cleaning_time || "",
-      cutting_time: p.cutting_time || "",
-      drying_time: p.drying_time || "",
-      weighting_time: p.weighting_time || "",
+      soak_time_min: p.soak_time_min || "",
+      weigh_time_min: p.weigh_time_min || "",
+      clean_cut_time_per_25g_min: p.clean_cut_time_per_25g_min || "",
+      dry_cycle_time_min: p.dry_cycle_time_min || "",
+      dry_machine_count: p.dry_machine_count || 1,
       image: null
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -713,32 +713,34 @@ export default function AdminProducts() {
 
               {/* Time Fields */}
               {!isWater && (
-                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-5 gap-4 pt-2 pb-2 border-y border-gray-100 mt-2">
+                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-6 gap-4 pt-2 pb-2 border-y border-gray-100 mt-2">
                   <div>
-                    <label className="label text-[11px] mb-1">Soaking (min/100g)</label>
+                    <label className="label text-[11px] mb-1">Soaking (min)</label>
                     <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
-                      value={form.soaking_time} onChange={e => handleFormChange("soaking_time", e.target.value)} />
+                      value={form.soak_time_min} onChange={e => handleFormChange("soak_time_min", e.target.value)} />
                   </div>
                   <div>
-                    <label className="label text-[11px] mb-1">Cleaning (min/100g)</label>
-                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 5"
-                      value={form.cleaning_time} onChange={e => handleFormChange("cleaning_time", e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label text-[11px] mb-1">Cutting (min/100g)</label>
-                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 15"
-                      value={form.cutting_time} onChange={e => handleFormChange("cutting_time", e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label text-[11px] mb-1">Drying (min/100g)</label>
-                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
-                      value={form.drying_time} onChange={e => handleFormChange("drying_time", e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label text-[11px] mb-1">Weighting (min/100g)</label>
+                    <label className="label text-[11px] mb-1">Weigh (min)</label>
                     <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
-                      value={form.weighting_time} onChange={e => handleFormChange("weighting_time", e.target.value)} />
+                      value={form.weigh_time_min} onChange={e => handleFormChange("weigh_time_min", e.target.value)} />
                   </div>
+                  <div>
+                    <label className="label text-[11px] mb-1" title="Clean & Cut time per 25g (worker-min)">Clean/Cut (min/25g)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 0.3"
+                      value={form.clean_cut_time_per_25g_min} onChange={e => handleFormChange("clean_cut_time_per_25g_min", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] mb-1">Drying Cycle (min)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                      value={form.dry_cycle_time_min} onChange={e => handleFormChange("dry_cycle_time_min", e.target.value)} />
+                  </div>
+                  {/* 
+                  <div>
+                    <label className="label text-[11px] mb-1">Dry Machines</label>
+                    <input type="number" step="1" min="1" className="input text-sm p-1.5" placeholder="e.g. 1"
+                      value={form.dry_machine_count} onChange={e => handleFormChange("dry_machine_count", e.target.value)} />
+                  </div>
+                  */}
                 </div>
               )}
 
@@ -997,8 +999,8 @@ export default function AdminProducts() {
                         </label>
                         <input
                           type="number"
-                          step="0.01"
-                          min="0.01"
+                          step="any"
+                          min="0.001"
                           placeholder="e.g. 10"
                           className="input"
                           value={purchaseForm.quantity}
@@ -1263,7 +1265,6 @@ export default function AdminProducts() {
                   <th className="text-left p-3">Category</th>
                   <th className="text-right p-3">Quantity Purchased</th>
                   <th className="text-right p-3">Purchase Price / Unit</th>
-                  <th className="text-right p-3">Selling Price / Unit</th>
                   <th className="text-right p-3 rounded-tr-xl">Total Paid Amount</th>
                 </tr>
               </thead>
@@ -1284,16 +1285,13 @@ export default function AdminProducts() {
                       <td className="p-3 text-right text-gray-700">
                         ₹{parseFloat(log.purchase_price_per_kg).toFixed(2)} / {log.Product?.unit === 'piece' ? 'pc' : 'kg/L'}
                       </td>
-                      <td className="p-3 text-right text-gray-900">
-                        ₹{parseFloat(log.selling_price_per_kg).toFixed(2)} / {log.Product?.unit === 'piece' ? 'pc' : 'kg/L'}
-                      </td>
                       <td className="p-3 text-right font-bold text-gradient">₹{parseFloat(log.total_amount).toFixed(2)}</td>
                     </tr>
                   );
                 })}
                 {purchaseLogs.filter(log => (logCategory === 'water' ? log.Product?.category === 'water' : log.Product?.category !== 'water')).length === 0 && (
                   <tr>
-                    <td colSpan="7" className="text-center py-6 text-gray-500">No purchase logs found. Go to "Log Purchase" to add one.</td>
+                    <td colSpan="6" className="text-center py-6 text-gray-500">No purchase logs found. Go to "Log Purchase" to add one.</td>
                   </tr>
                 )}
               </tbody>

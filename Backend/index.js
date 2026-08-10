@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
+import http from "http";
+import { Server } from "socket.io";
 
 dotenv.config();
 
@@ -36,6 +38,8 @@ import reportRoutes from "./routes/report.route.js";
 import wasteRoutes from "./routes/waste.route.js";
 import franchiseRoutes from "./routes/franchise.route.js";
 import attendanceRoutes from "./routes/attendance.route.js";
+import productionRoutes from "./routes/production.route.js";
+import referralRoutes from "./routes/referral.route.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
@@ -45,6 +49,19 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
+const httpServer = http.createServer(app);
+
+export const io = new Server(httpServer, {
+    cors: {
+        origin: process.env.NODE_ENV === "production"
+            ? [process.env.FRONTEND_URL, "http://localhost:8081", "http://localhost:5173", "http://localhost:3000", "https://ram-bhaji.vercel.app", "https://nextjs.driveranger.com", "https://vegalert-production-monitor.onrender.com"]
+            : ["http://localhost:5173", "http://localhost:3000", "http://localhost:8081"],
+        methods: ["GET", "POST", "PATCH", "PUT", "DELETE"]
+    }
+});
+
+// Make io accessible in routes
+app.set('io', io);
 
 // Middleware
 app.use(express.json());
@@ -100,6 +117,8 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/waste", wasteRoutes);
 app.use("/api/franchises", franchiseRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/production", productionRoutes);
+app.use("/api/referral", referralRoutes);
 
 // 404 fallback
 app.use((req, res) => {
@@ -113,7 +132,6 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-// Start server
 const startServer = async () => {
     await connectDB();
     await sequelize.sync();
@@ -123,7 +141,7 @@ const startServer = async () => {
 
     startCronJobs();
 
-    app.listen(port, () => {
+    httpServer.listen(port, () => {
         console.log(`\n🥦 RamBhaji Server running on http://localhost:${port}`);
         console.log(`   Health: http://localhost:${port}/health\n`);
     });

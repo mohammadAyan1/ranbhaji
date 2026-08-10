@@ -1,6 +1,74 @@
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect, no-unused-vars */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
+import { io } from "socket.io-client";
+
+const LiveTimer = ({ startedAt, expectedMinutes }) => {
+  const [elapsed, setElapsed] = useState(0);
+  const audioRef = useRef(null);
+  const hasPlayedAlarm = useRef(false);
+
+  useEffect(() => {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+      audioRef.current = new AudioContext();
+    }
+  }, []);
+
+  const playBeep = () => {
+    if (audioRef.current) {
+      if (audioRef.current.state === 'suspended') audioRef.current.resume();
+      const osc = audioRef.current.createOscillator();
+      const gain = audioRef.current.createGain();
+      osc.connect(gain);
+      gain.connect(audioRef.current.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, audioRef.current.currentTime);
+      gain.gain.setValueAtTime(1, audioRef.current.currentTime);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.00001, audioRef.current.currentTime + 1);
+      osc.stop(audioRef.current.currentTime + 1);
+    }
+  };
+
+  useEffect(() => {
+    if (!startedAt || expectedMinutes === null) return;
+    const start = new Date(startedAt).getTime();
+
+    const updateTimer = () => {
+      const now = new Date().getTime();
+      const elap = Math.max(0, Math.floor((now - start) / 1000));
+      setElapsed(elap);
+
+      if (expectedMinutes > 0 && elap >= Math.floor(expectedMinutes * 60) && !hasPlayedAlarm.current) {
+        hasPlayedAlarm.current = true;
+        playBeep();
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt, expectedMinutes]);
+
+  if (!startedAt || expectedMinutes === null) return null;
+
+  const expectedSeconds = expectedMinutes * 60;
+  const isOverdue = elapsed >= expectedSeconds;
+
+  const formatTime = (totalSeconds) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = Math.floor(totalSeconds % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className={`flex items-center text-lg mt-2 ${isOverdue ? 'text-red-500 font-bold animate-pulse' : 'text-blue-200'}`}>
+      ⏱️ {formatTime(elapsed)} / {formatTime(expectedSeconds)}
+      {isOverdue && <span className="ml-2 bg-red-600 text-white text-xs px-2 py-1 rounded">ALARM! Stage Complete!</span>}
+    </div>
+  );
+};
 
 export default function DeliveryHome() {
   const [deliveries, setDeliveries] = useState([]);
@@ -13,6 +81,16 @@ export default function DeliveryHome() {
   const [taggingLocation, setTaggingLocation] = useState(false);
   const [acceptedDetails, setAcceptedDetails] = useState(null);
   const [markingAttendance, setMarkingAttendance] = useState(false);
+  const [alarmData, setAlarmData] = useState(null);
+
+  // Production State
+  const [prodStatus, setProdStatus] = useState("idle");
+  const [prodData, setProdData] = useState(null);
+  const [activeSplits, setActiveSplits] = useState([]);
+  const [advancing, setAdvancing] = useState(false);
+  const [splitQty, setSplitQty] = useState("");
+  const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [nextQtyKg, setNextQtyKg] = useState("");
 
   const [activeTab, setActiveTab] = useState("mine"); // "mine" or "available"
   const [availableOrders, setAvailableOrders] = useState({ schedules: [], retailOrders: [] });
@@ -20,6 +98,14 @@ export default function DeliveryHome() {
 
   const fetchDeliveries = () => {
     api.get("/today-deliveries").then(r => setDeliveries(r.data.deliveries || [])).finally(() => setLoading(false));
+  };
+
+  const fetchProductionStatus = () => {
+    api.get("/production/my-status").then(r => {
+      setProdStatus(r.data.status);
+      setProdData(r.data.status === 'assigned' ? r.data.data : (r.data.pendingBatches || r.data.data || []));
+      setActiveSplits(r.data.activeSplits || []);
+    }).catch(err => console.error(err));
   };
 
   const fetchAvailable = () => {
@@ -32,12 +118,41 @@ export default function DeliveryHome() {
 
   useEffect(() => {
     let active = true;
+    fetchProductionStatus();
+
+    const socket = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:3000");
+    socket.on("production:update", () => {
+      if (active) fetchProductionStatus();
+    });
+    socket.on("production:alarm", (data) => {
+      if (active) {
+        setAlarmData(data);
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = "square";
+          osc.frequency.setValueAtTime(440, ctx.currentTime);
+          gain.gain.setValueAtTime(1, ctx.currentTime);
+          osc.start();
+          gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 1);
+          osc.stop(ctx.currentTime + 1);
+        }
+      }
+    });
+
     if (activeTab === "mine") {
       fetchDeliveries();
     } else {
       fetchAvailable();
     }
-    return () => { active = false; };
+    return () => {
+      active = false;
+      socket.disconnect();
+    };
   }, [activeTab]);
 
   const handleMarkDelivered = async (schedule_id, type) => {
@@ -99,6 +214,7 @@ export default function DeliveryHome() {
     try {
       const res = await api.post("/attendance/mark");
       setMsg(`✅ ${res.data?.message || "Attendance marked successfully!"}`);
+      fetchProductionStatus();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || err.message}`);
     } finally {
@@ -106,7 +222,81 @@ export default function DeliveryHome() {
     }
   };
 
+  const handleStartWork = async () => {
+    setAdvancing(true);
+    setMsg("");
+    try {
+      const res = await api.post("/production/start-work");
+      setMsg("✅ Started Work! Looking for tasks...");
+      fetchProductionStatus();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  const handleAcknowledgeAlarm = async () => {
+    if (!alarmData) return;
+    setAdvancing(true);
+    try {
+      await api.post(`/production/splits/${alarmData.split_id}/acknowledge-alarm`);
+      setMsg("✅ Alarm acknowledged, task started!");
+      setAlarmData(null);
+      fetchProductionStatus();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading deliveries...</div>;
+
+  const handleJoinSplit = async (splitId) => {
+    setAdvancing(true);
+    try {
+      await api.post(`/production/splits/${splitId}/join`);
+      setMsg("✅ Joined production task!");
+      fetchProductionStatus();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  const handleStartProcess = async () => {
+    if (!selectedBatchId || !splitQty) {
+      setMsg("❌ Select a batch and enter quantity.");
+      return;
+    }
+    setAdvancing(true);
+    try {
+      await api.post("/production/splits", { batch_id: selectedBatchId, qty_kg: splitQty });
+      setMsg("✅ Started new production process!");
+      fetchProductionStatus();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  const handleAdvanceStage = async (splitId) => {
+    setAdvancing(true);
+    try {
+      const payload = nextQtyKg ? { qty_kg: nextQtyKg } : {};
+      await api.post(`/production/splits/${splitId}/advance`, payload);
+      setMsg("✅ Stage advanced!");
+      setNextQtyKg("");
+      fetchProductionStatus();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setAdvancing(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -115,13 +305,24 @@ export default function DeliveryHome() {
           <h1 className="page-header">Delivery Dashboard 🚚</h1>
           <div className="flex items-center gap-4 mt-1">
             <p className="page-sub mb-0">{new Date().toLocaleDateString("en-IN", { dateStyle: "full" })}</p>
-            <button
-              onClick={handleMarkAttendance}
-              disabled={markingAttendance}
-              className="text-xs bg-fresh-100 text-fresh-700 font-bold px-3 py-1.5 rounded-lg border border-fresh-300 hover:bg-fresh-200 transition-colors shadow-sm"
-            >
-              {markingAttendance ? "Marking..." : "📍 Mark Attendance"}
-            </button>
+            {prodStatus === 'no_attendance' && (
+              <button
+                onClick={handleMarkAttendance}
+                disabled={markingAttendance}
+                className="text-xs bg-fresh-100 text-fresh-700 font-bold px-3 py-1.5 rounded-lg border border-fresh-300 hover:bg-fresh-200 transition-colors shadow-sm"
+              >
+                {markingAttendance ? "Marking..." : "📍 Mark Attendance"}
+              </button>
+            )}
+            {prodStatus === 'inactive' && (
+              <button
+                onClick={handleStartWork}
+                disabled={advancing}
+                className="text-xs bg-orange-100 text-orange-700 font-bold px-3 py-1.5 rounded-lg border border-orange-300 hover:bg-orange-200 transition-colors shadow-sm"
+              >
+                {advancing ? "Starting..." : "🚀 Start Work"}
+              </button>
+            )}
           </div>
         </div>
         <div className="flex bg-white rounded-lg p-1 border border-gray-200 self-start">
@@ -143,6 +344,106 @@ export default function DeliveryHome() {
       {msg && (
         <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
           {msg}
+        </div>
+      )}
+
+      {/* Production Section */}
+      {prodStatus === "assigned" && prodData && (
+        <div className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-2xl p-5 text-white shadow-lg">
+          <h2 className="font-bold text-lg mb-2 flex items-center gap-2">
+            <span className="animate-pulse">🟢</span> Active Production Task
+          </h2>
+          <div className="bg-white/10 p-3 rounded-lg border border-white/20 mb-3">
+            <p className="font-semibold text-blue-100">{prodData.batch?.product?.name} ({prodData.qty_kg} kg)</p>
+            <p className="text-sm capitalize mt-1">Current Stage: <span className="font-bold text-yellow-300">{prodData.stage.replace('_', ' ')}</span></p>
+            <LiveTimer startedAt={prodData.stage_started_at} expectedMinutes={prodData.eta_minutes} />
+          </div>
+          {(prodData.stage === 'weighing_start' || prodData.stage === 'cleaning_cutting') && (
+            <div className="mb-3">
+              <label className="text-sm font-bold text-blue-200 block mb-1">
+                {prodData.stage === 'weighing_start' ? 'Weight going into Soaking (kg)' : 'Weight going into Drying (kg)'}
+              </label>
+              <input
+                type="number"
+                step="any"
+                className="input w-full text-gray-900 font-bold"
+                placeholder="Enter Weight (kg)..."
+                value={nextQtyKg}
+                onChange={e => setNextQtyKg(e.target.value)}
+              />
+            </div>
+          )}
+          <button
+            onClick={() => handleAdvanceStage(prodData.id)}
+            disabled={advancing || ((prodData.stage === 'weighing_start' || prodData.stage === 'cleaning_cutting') && !nextQtyKg)}
+            className="w-full py-2 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+          >
+            {advancing ? "Updating..." : "Mark Stage Done & Advance ➡️"}
+          </button>
+        </div>
+      )}
+
+      {(prodStatus === "pick_or_join" || prodStatus === "pick_pending") && (
+        <div className="space-y-4">
+          {activeSplits && activeSplits.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 shadow-sm">
+              <h2 className="font-bold text-lg text-blue-900 mb-3">🤝 Help Others (Join Active Tasks)</h2>
+              <div className="space-y-3">
+                {activeSplits.map(s => (
+                  <div key={s.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-blue-100">
+                    <div>
+                      <p className="font-bold text-sm text-gray-800">{s.batch?.product?.name} ({s.qty_kg} kg)</p>
+                      <p className="text-xs text-gray-500 capitalize">Stage: {s.stage.replace('_', ' ')}</p>
+                    </div>
+                    <button
+                      onClick={() => handleJoinSplit(s.id)}
+                      disabled={advancing}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg"
+                    >
+                      Join Task
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {prodData && prodData.length > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 shadow-sm">
+              <h2 className="font-bold text-lg text-orange-900 mb-3">🔪 Start New Production Work</h2>
+              <div className="flex gap-3 mb-3">
+                <select className="input text-sm flex-1" onChange={e => setSelectedBatchId(e.target.value)} value={selectedBatchId}>
+                  <option value="">Select Pending Batch...</option>
+                  {prodData.map(b => (
+                    <option key={b.id} value={b.id}>{b.product?.name} ({b.pending_qty_kg} kg pending)</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  step="any"
+                  max={selectedBatchId ? prodData.find(b => b.id.toString() === selectedBatchId)?.pending_qty_kg : ""}
+                  placeholder="Qty (kg)"
+                  className="input text-sm w-24"
+                  value={splitQty}
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (selectedBatchId && val) {
+                      const maxQty = parseFloat(prodData.find(b => b.id.toString() === selectedBatchId)?.pending_qty_kg || 0);
+                      if (parseFloat(val) > maxQty) val = maxQty.toString();
+                    }
+                    setSplitQty(val);
+                  }}
+                />
+              </div>
+              <button
+                onClick={handleStartProcess}
+                disabled={advancing || !selectedBatchId || !splitQty}
+                className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition-colors"
+              >
+                {advancing ? "Starting..." : "Start Sequence (Weighing) 🚰"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -359,6 +660,23 @@ export default function DeliveryHome() {
                 Go to My Deliveries
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ALARM MODAL */}
+      {alarmData && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-red-900/50 backdrop-blur-sm animate-pulse p-4">
+          <div className="bg-white border-4 border-red-500 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col p-6 text-center">
+            <h2 className="text-3xl mb-2">🚨</h2>
+            <h3 className="text-2xl font-bold text-red-600 mb-2">ALARM!</h3>
+            <p className="text-gray-800 font-medium mb-6">{alarmData.message}</p>
+            <button
+              onClick={handleAcknowledgeAlarm}
+              disabled={advancing}
+              className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-lg shadow-lg"
+            >
+              {advancing ? "Processing..." : "Acknowledge & Start Next"}
+            </button>
           </div>
         </div>
       )}

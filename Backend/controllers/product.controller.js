@@ -1,12 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { Op } from "sequelize";
-import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, sequelize } from "../models/index.js";
+import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, Subscription, SubscriptionItem, WaterSubscription, DeliveryItem, ScheduleSeasonalSelection, sequelize, ProductionBatch } from '../models/index.js';
 
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soaking_time, cleaning_time, cutting_time, drying_time, weighting_time, margin_percentage, water_capacity_liters } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soak_time_min, weigh_time_min, clean_cut_time_per_25g_min, dry_cycle_time_min, dry_capacity_kg_per_load, dry_machine_count, margin_percentage, water_capacity_liters } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
@@ -24,11 +24,12 @@ export const createProduct = async (req, res) => {
             unit, unit_id, description,
             water_capacity_liters: water_capacity_liters || 0,
             min_retail_qty: min_retail_qty || 0,
-            soaking_time: soaking_time || 0,
-            cleaning_time: cleaning_time || 0,
-            cutting_time: cutting_time || 0,
-            drying_time: drying_time || 0,
-            weighting_time: weighting_time || 0
+            soak_time_min: soak_time_min || 0,
+            weigh_time_min: weigh_time_min || 0,
+            clean_cut_time_per_25g_min: clean_cut_time_per_25g_min || 0,
+            dry_cycle_time_min: dry_cycle_time_min || 0,
+            dry_capacity_kg_per_load: dry_capacity_kg_per_load || 0,
+            dry_machine_count: dry_machine_count || 1
         });
 
 
@@ -188,7 +189,21 @@ export const createPurchase = async (req, res) => {
             total_amount: totalAmount
         }, { transaction: t });
 
+        // Auto-create a Production Batch so workers have pending tasks
+        await ProductionBatch.create({
+            product_id,
+            date: new Date().toISOString().split('T')[0],
+            total_qty_kg: qtyVal,
+            pending_qty_kg: qtyVal,
+            status: 'pending'
+        }, { transaction: t });
+
         await t.commit();
+        
+        // Notify socket clients about new production batch
+        if (req.app.get('io')) {
+            req.app.get('io').emit('production:update', { timestamp: new Date() });
+        }
         res.status(201).json({ success: true, message: "Purchase recorded successfully", log, product });
     } catch (error) {
         await t.rollback();

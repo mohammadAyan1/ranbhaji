@@ -1,4 +1,5 @@
 import { AttendanceLog, User } from "../models/index.js";
+import { assignWorker } from "./production.controller.js";
 
 // GET /api/attendance
 export const getAttendanceLogs = async (req, res) => {
@@ -53,6 +54,16 @@ export const markAttendance = async (req, res) => {
             delivery_boy_id,
             date: today,
             login_time: new Date()
+        });
+
+        // Also create a WorkerAttendance record for production tracking (as inactive)
+        const { WorkerAttendance } = await import("../models/index.js");
+        await WorkerAttendance.findOrCreate({
+            where: { worker_id: delivery_boy_id, date: today },
+            defaults: {
+                checked_in_at: new Date(),
+                current_status: 'inactive'
+            }
         });
 
         res.status(201).json({ success: true, message: "Attendance marked successfully!", data: newLog });
