@@ -83,7 +83,7 @@ export const register = async (req, res) => {
                                 where: { subscription_id: eligibleSub.id },
                                 order: [['scheduled_date', 'DESC']]
                             });
-                            
+
                             let nextDate = new Date();
                             if (lastSchedule) {
                                 nextDate = new Date(lastSchedule.scheduled_date);
@@ -102,7 +102,7 @@ export const register = async (req, res) => {
                             } else {
                                 nextDate.setDate(nextDate.getDate() + 1);
                             }
-                            
+
                             const isoDate = nextDate.toISOString().split('T')[0];
                             const newSchedule = await DeliverySchedule.create({
                                 subscription_id: eligibleSub.id,
@@ -125,10 +125,10 @@ export const register = async (req, res) => {
                             eligibleSub.total_services += 1;
                             eligibleSub.free_servings_awarded += 1;
                             await eligibleSub.save();
-                            
+
                             referrer.total_free_servings += 1;
                             await referrer.save();
-                            
+
                             awarded = true;
                             awarded_sub_id = eligibleSub.id;
                         }
