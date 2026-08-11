@@ -1,5 +1,6 @@
 import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction } from "../models/index.js";
 import { Op } from "sequelize";
+import bcrypt from "bcrypt";
 
 // GET /api/admin/user-analytics/users
 export const getAllUsers = async (req, res) => {
@@ -25,14 +26,17 @@ export const createUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "User with this phone already exists." });
         }
 
+        const password_hash = await bcrypt.hash(password, 10);
+
         const newUser = await User.create({
             name,
             phone,
             email,
             actual_password: password,
-            password_hash: password, // You should hash it properly in a real app, keeping it consistent with the system's auth
+            password_hash,
             role: role || 'user',
-            status: role === 'delivery' ? 'inactive' : 'active',
+            status: 'active',
+            is_verified: true,
             delivery_zones: role === 'delivery' ? delivery_zones : null
         });
 

@@ -141,7 +141,7 @@ export const assignWorker = async (workerId) => {
 
     // 4. Look for pending ProductionBatches to start a new split (Auto-create a 10kg split)
     const pendingBatch = await ProductionBatch.findOne({
-        where: { pending_qty_kg: { [Op.gt]: 0 }, status: { [Op.ne]: 'completed' } },
+        where: { pending_qty_kg: { [Op.gt]: 0 }, status: { [Op.ne]: 'completed' }, date: today },
         include: [{ model: Product, as: 'product' }],
         order: [['created_at', 'ASC']]
     });
