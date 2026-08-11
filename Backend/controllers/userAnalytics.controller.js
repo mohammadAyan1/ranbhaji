@@ -1,6 +1,6 @@
 import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction } from "../models/index.js";
 import { Op } from "sequelize";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 // GET /api/admin/user-analytics/users
 export const getAllUsers = async (req, res) => {
