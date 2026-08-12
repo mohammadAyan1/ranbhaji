@@ -10,7 +10,8 @@ import {
     getMyStatus,
     advanceSplitStage,
     startWork,
-    acknowledgeAlarm
+    acknowledgeAlarm,
+    startProcess
 } from '../controllers/production.controller.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.post('/splits', requireAuth, createSplit);
 router.post('/splits/:id/leave', requireAuth, leaveSplit);
 router.post('/splits/:id/join', requireAuth, joinSplit);
 router.post('/splits/:id/advance', requireAuth, advanceSplitStage);
+router.post('/splits/:id/start-process', requireAuth, startProcess);
 router.post('/splits/:id/acknowledge-alarm', requireAuth, acknowledgeAlarm);
 router.get('/dashboard', requireAuth, requireRole(['admin']), getDashboard);
 router.get('/my-status', requireAuth, getMyStatus);

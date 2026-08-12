@@ -1,0 +1,370 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+    getTodayBatches, getBatchDemand, assignNextTask, startTaskStage, 
+    pauseTask, resumeTask, completeTask, acknowledgeAlarm, joinTask,
+    markAttendance, checkAlarms, syncTask 
+} from '../../api/workerTask.api';
+
+const WorkerDashboard = () => {
+    const [attendanceMarked, setAttendanceMarked] = useState(false);
+    const [batches, setBatches] = useState([]);
+    const [selectedBatch, setSelectedBatch] = useState('');
+    const [demand, setDemand] = useState([]);
+    const [currentTask, setCurrentTask] = useState(null);
+    const [timeLeft, setTimeLeft] = useState(0);
+    const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    const timerRef = useRef(null);
+    const syncTimerRef = useRef(null);
+
+    // Initial load and Alarm Polling
+    useEffect(() => {
+        // Load batches
+        getTodayBatches().then(res => {
+            if (res.success) setBatches(res.batches);
+        }).catch(console.error);
+
+        // Poll for alarms every 10 seconds
+        const alarmInterval = setInterval(() => {
+            if (selectedBatch) {
+                checkAlarms(selectedBatch).then(res => {
+                    if (res.success && res.task && res.task.status === 'ALARM') {
+                        setCurrentTask(res.task);
+                        setIsAlarmModalOpen(true);
+                    }
+                }).catch(e => console.error("Alarm poll error:", e));
+            }
+        }, 10000);
+
+        return () => clearInterval(alarmInterval);
+    }, [selectedBatch]);
+
+    // Background sync of current task to catch time jumps (when another worker joins/leaves)
+    useEffect(() => {
+        if (currentTask && ['RUNNING', 'PAUSED'].includes(currentTask.status)) {
+            syncTimerRef.current = setInterval(async () => {
+                try {
+                    const res = await syncTask(currentTask.id);
+                    if (res.success && res.task) {
+                        setCurrentTask(prev => {
+                            // Only update if it hasn't changed locally to prevent race conditions
+                            if (prev && prev.id === res.task.id) {
+                                return res.task;
+                            }
+                            return prev;
+                        });
+                    }
+                } catch(e) {
+                    // ignore sync errors
+                }
+            }, 5000); // Sync every 5 seconds
+        }
+
+        return () => {
+            if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+        };
+    }, [currentTask?.id, currentTask?.status]);
+
+    // Timer logic
+    useEffect(() => {
+        if (currentTask && currentTask.status === 'RUNNING') {
+            const updateTimer = () => {
+                const now = new Date();
+                const startedAt = new Date(currentTask.started_at);
+                const elapsedRealSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+                
+                // Assuming solo for simple local display. Server recalculates accurately on actions.
+                let remaining = currentTask.remaining_seconds - elapsedRealSeconds;
+                if (remaining <= 0) {
+                    remaining = 0;
+                    clearInterval(timerRef.current);
+                    // trigger local alarm UI
+                    setIsAlarmModalOpen(true);
+                }
+                setTimeLeft(remaining);
+            };
+
+            updateTimer();
+            timerRef.current = setInterval(updateTimer, 1000);
+        } else if (currentTask) {
+            setTimeLeft(currentTask.remaining_seconds);
+            if (currentTask.status === 'ALARM') {
+                setIsAlarmModalOpen(true);
+            }
+        }
+
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, [currentTask]);
+
+    const handleMarkAttendance = async () => {
+        try {
+            setLoading(true);
+            await markAttendance();
+            setAttendanceMarked(true);
+        } catch (e) {
+            alert(e.response?.data?.message || 'Error marking attendance');
+            // If already marked, allow proceed
+            if (e.response?.data?.message?.includes('already marked')) {
+                setAttendanceMarked(true);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSelectBatch = async (batchId) => {
+        setSelectedBatch(batchId);
+        try {
+            const res = await getBatchDemand(batchId);
+            if (res.success) setDemand(res.demand);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const fetchNextTask = async () => {
+        if (!selectedBatch) return alert("Select a batch first");
+        setLoading(true);
+        try {
+            const res = await assignNextTask(selectedBatch);
+            if (res.success) {
+                if (res.task) {
+                    setCurrentTask(res.task);
+                    if (res.task.status === 'ALARM') setIsAlarmModalOpen(true);
+                } else {
+                    alert("No more tasks available. You are idle.");
+                    setCurrentTask(null);
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleStartTask = async () => {
+        if (!currentTask) return;
+        try {
+            const res = await startTaskStage(currentTask.id);
+            if (res.success) setCurrentTask(res.task);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handlePauseTask = async () => {
+        if (!currentTask) return;
+        try {
+            const res = await pauseTask(currentTask.id);
+            if (res.success) setCurrentTask(res.task);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleResumeTask = async () => {
+        if (!currentTask) return;
+        try {
+            const res = await resumeTask(currentTask.id);
+            if (res.success) setCurrentTask(res.task);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleCompleteTask = async () => {
+        if (!currentTask) return;
+        try {
+            const res = await completeTask(currentTask.id);
+            if (res.success) {
+                setCurrentTask(null);
+                // Immediately check for next task
+                fetchNextTask();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleAcknowledgeAlarm = async () => {
+        if (!currentTask) return;
+        try {
+            const res = await acknowledgeAlarm(currentTask.id);
+            if (res.success) {
+                setIsAlarmModalOpen(false);
+                setCurrentTask(null);
+                fetchNextTask();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const formatTime = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    };
+
+    if (!attendanceMarked) {
+        return (
+            <div className="p-8 text-center max-w-md mx-auto mt-10 bg-white shadow rounded-lg">
+                <h1 className="text-2xl font-bold mb-4">Worker Login</h1>
+                <p className="mb-6 text-gray-600">Please mark your attendance to start the day.</p>
+                <button 
+                    onClick={handleMarkAttendance} 
+                    disabled={loading}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                    {loading ? 'Processing...' : 'Mark Attendance & Start'}
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-6 max-w-4xl mx-auto">
+            <h1 className="text-3xl font-bold mb-6">Worker Dashboard</h1>
+            
+            {!currentTask && (
+                <div className="bg-white p-6 rounded-lg shadow-sm border mb-6">
+                    <h2 className="text-xl font-semibold mb-4">Select Batch to Work On</h2>
+                    <div className="flex gap-4 mb-4">
+                        <select 
+                            className="flex-1 p-3 border rounded-lg"
+                            value={selectedBatch} 
+                            onChange={(e) => handleSelectBatch(e.target.value)}
+                        >
+                            <option value="">-- Select Batch --</option>
+                            {batches.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
+                        <button 
+                            onClick={fetchNextTask}
+                            disabled={!selectedBatch || loading}
+                            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                        >
+                            Start Work
+                        </button>
+                    </div>
+
+                    {selectedBatch && demand.length > 0 ? (
+                        <div className="mt-4">
+                            <h3 className="font-semibold mb-2">Batch Demand:</h3>
+                            <ul className="list-disc pl-5">
+                                {demand.map((d, i) => (
+                                    <li key={i}>{d.productName}: {d.quantity}g</li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : selectedBatch && demand.length === 0 ? (
+                        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
+                            <h3 className="font-semibold flex items-center gap-2">
+                                <span>⚠️</span> No Products Found
+                            </h3>
+                            <p className="mt-1 text-sm">
+                                There are currently no products assigned or pending for this batch. 
+                                Please ensure that product demands have been created from purchase logs by the admin.
+                            </p>
+                        </div>
+                    ) : null}
+                </div>
+            )}
+
+            {currentTask && (
+                <div className="bg-white p-8 rounded-xl shadow-lg border-2 border-blue-100">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-blue-900">Current Task: {currentTask.stage}</h2>
+                        <span className={`px-4 py-1 rounded-full text-sm font-bold ${
+                            currentTask.status === 'RUNNING' ? 'bg-green-100 text-green-800' : 
+                            currentTask.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800' : 
+                            currentTask.status === 'ALARM' ? 'bg-red-100 text-red-800' : 
+                            'bg-gray-100 text-gray-800'
+                        }`}>
+                            {currentTask.status}
+                        </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-8 text-lg">
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                            <p className="text-gray-500 text-sm font-semibold">Product</p>
+                            <p className="font-bold">{currentTask.Product ? currentTask.Product.name : `Product ID: ${currentTask.product_id}`}</p>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                            <p className="text-gray-500 text-sm font-semibold">Quantity</p>
+                            <p className="font-bold">{currentTask.quantity_grams}g</p>
+                        </div>
+                    </div>
+
+                    <div className="text-center mb-8">
+                        <p className="text-gray-500 font-semibold mb-2">Time Remaining</p>
+                        <div className="text-6xl font-mono font-bold text-blue-600">
+                            {formatTime(timeLeft)}
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4 justify-center">
+                        {currentTask.status === 'NOT_STARTED' && (
+                            <button onClick={handleStartTask} className="bg-green-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-green-700">
+                                Start Stage
+                            </button>
+                        )}
+                        {currentTask.status === 'RUNNING' && (
+                            <>
+                                <button onClick={handlePauseTask} className="bg-yellow-500 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-yellow-600">
+                                    Pause
+                                </button>
+                                {['SOAKING', 'DRYING'].includes(currentTask.stage) ? (
+                                    <button 
+                                        onClick={() => {
+                                            setCurrentTask(null);
+                                            fetchNextTask();
+                                        }} 
+                                        className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-indigo-700"
+                                    >
+                                        Run in Background & Next Task
+                                    </button>
+                                ) : (
+                                    <button onClick={handleCompleteTask} className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-blue-700">
+                                        Mark Complete
+                                    </button>
+                                )}
+                            </>
+                        )}
+                        {currentTask.status === 'PAUSED' && (
+                            <button onClick={handleResumeTask} className="bg-green-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-green-700">
+                                Resume Task
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Alarm Modal */}
+            {isAlarmModalOpen && currentTask && currentTask.status === 'ALARM' && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white p-8 rounded-xl max-w-sm w-full text-center shadow-2xl border-4 border-red-500">
+                        <div className="text-red-500 text-6xl mb-4">🚨</div>
+                        <h3 className="text-2xl font-bold mb-2">Timer Finished!</h3>
+                        <p className="text-gray-600 mb-6 text-lg">
+                            The <strong className="text-black">{currentTask.stage}</strong> stage for <strong className="text-blue-700">{currentTask.Product ? currentTask.Product.name : `Product ID: ${currentTask.product_id}`}</strong> has completed.
+                        </p>
+                        <button 
+                            onClick={handleAcknowledgeAlarm}
+                            className="w-full bg-red-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-red-700"
+                        >
+                            Acknowledge & Stop Alarm
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default WorkerDashboard;

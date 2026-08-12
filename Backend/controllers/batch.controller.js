@@ -2,7 +2,8 @@ import {
     Batch, DeliverySchedule, Subscription, SubscriptionItem,
     Product, Package, PackageSeasonalConfig, WaterSubscription,
     DeliveryItem, ScheduleSeasonalSelection, RetailOrder, RetailOrderItem,
-    BatchProcessingLog, User, PackageSeasonalPool
+    BatchProcessingLog, User, PackageSeasonalPool,
+    BatchProductTask, TaskWorkerAssignment
 } from "../models/index.js";
 
 // POST /api/admin/batches
@@ -502,6 +503,61 @@ export const getProcessingLogs = async (req, res) => {
         const formattedLogs = Object.values(productMap);
 
         res.status(200).json({ success: true, date, data: formattedLogs });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/admin/live-workers
+export const getLiveWorkers = async (req, res) => {
+    try {
+        // Find all users with role 'worker'
+        const workers = await User.findAll({
+            where: { role: 'worker' },
+            attributes: ['id', 'name', 'phone']
+        });
+
+        // For each worker, find their current active task
+        const liveWorkers = await Promise.all(workers.map(async (worker) => {
+            const assignment = await TaskWorkerAssignment.findOne({
+                where: { worker_id: worker.id, left_at: null },
+                include: [{
+                    model: BatchProductTask,
+                    as: 'task',
+                    include: [{ model: Product }]
+                }]
+            });
+
+            if (assignment && assignment.task) {
+                const task = assignment.task;
+                // Only return active states
+                if (['RUNNING', 'PAUSED', 'ALARM', 'NOT_STARTED'].includes(task.status)) {
+                    return {
+                        workerId: worker.id,
+                        workerName: worker.name,
+                        workerPhone: worker.phone,
+                        taskStatus: task.status,
+                        stage: task.stage,
+                        productName: task.Product ? task.Product.name : 'Unknown',
+                        quantityGrams: task.quantity_grams,
+                        startedAt: task.started_at,
+                        pausedAt: task.paused_at,
+                        remainingSeconds: task.remaining_seconds
+                    };
+                }
+            }
+
+            return {
+                workerId: worker.id,
+                workerName: worker.name,
+                workerPhone: worker.phone,
+                taskStatus: 'IDLE',
+                stage: null,
+                productName: null
+            };
+        }));
+
+        res.status(200).json({ success: true, workers: liveWorkers });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

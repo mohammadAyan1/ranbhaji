@@ -1,13 +1,15 @@
 import cron from "node-cron";
 import { Op } from "sequelize";
 import { sequelize } from "../confiq/db.js";
-import { io } from "../index.js";
 import {
     DeliverySchedule, Subscription, SubscriptionItem, Notification, User, Package,
     WalletTransaction, CreditLog, Product, DeliveryItem, WaterSubscription,
     ScheduleSeasonalSelection, PackageSeasonalConfig, PauseLog, PackageSeasonalPool,
     RetailOrder, RetailOrderItem, BatchSplit, ProductionBatch
 } from "../models/index.js";
+
+let ioInstance = null;
+
 
 /**
  * Daily 8 PM cron job:
@@ -673,16 +675,27 @@ const checkUnattendedStages = async () => {
             const expectedEndTime = new Date(startedAt.getTime() + expectedTimeMin * 60000);
             
             if (expectedEndTime <= now) {
+                // Find all workers who are/were assigned to this split
+                const assignments = await sequelize.models.SplitWorkerAssignment.findAll({
+                    where: { split_id: split.id },
+                    attributes: ['worker_id']
+                });
+                const workerIds = assignments.map(a => a.worker_id);
+
                 // If it's soaking or drying, we emit an alarm and set status to 'waiting' so they can acknowledge it
                 if (split.stage === 'soaking' || split.stage === 'drying') {
                     if (split.status === 'in_progress') {
                         split.status = 'waiting';
                         await split.save();
-                        io.emit('production:alarm', { split_id: split.id, stage: split.stage, message: `${split.stage} complete for Batch ${split.batch_id}!` });
+                        if (ioInstance) {
+                            ioInstance.emit('production:alarm', { split_id: split.id, stage: split.stage, worker_ids: workerIds, message: `${split.stage} complete for Batch ${split.batch_id}!` });
+                        }
                     }
                 } else {
                     // For manual tasks, just emit the alarm (don't change status)
-                    io.emit('production:alarm', { split_id: split.id, stage: split.stage, message: `Target time for ${split.stage} (Batch ${split.batch_id}) has exceeded!` });
+                    if (ioInstance) {
+                        ioInstance.emit('production:alarm', { split_id: split.id, stage: split.stage, worker_ids: workerIds, message: `Target time for ${split.stage} (Batch ${split.batch_id}) has exceeded!` });
+                    }
                 }
             }
         }
@@ -691,10 +704,42 @@ const checkUnattendedStages = async () => {
     }
 };
 
+const checkBatchProductTaskAlarms = async () => {
+    try {
+        const now = new Date();
+        const activeTasks = await sequelize.models.BatchProductTask.findAll({
+            where: { status: 'RUNNING' }
+        });
+        
+        for (const task of activeTasks) {
+            const startedAt = new Date(task.started_at);
+            const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+            const remaining = task.remaining_seconds - elapsed;
+            
+            if (remaining <= 0) {
+                task.status = 'ALARM';
+                task.remaining_seconds = 0;
+                task.alarm_fired_at = new Date();
+                await task.save();
+                
+                if (ioInstance) {
+                    ioInstance.emit('worker:alarm', { task_id: task.id, stage: task.stage, batch_id: task.batch_id });
+                }
+            }
+        }
+    } catch (error) {
+        console.error('[CRON] checkBatchProductTaskAlarms failed:', error);
+    }
+};
+
 // Schedule daily at 8 PM
-export const startCronJobs = () => {
+export const startCronJobs = (io) => {
+    ioInstance = io;
     setInterval(checkUnattendedStages, 30000); // run every 30s
     console.log("[CRON] Scheduled Unattended Stages Check every 30s");
+
+    setInterval(checkBatchProductTaskAlarms, 5000); // run every 5s
+    console.log("[CRON] Scheduled BatchProductTask Alarms Check every 5s");
 
     cron.schedule("0 20 * * *", runNightlyJob, {
         scheduled: true,
@@ -710,4 +755,4 @@ export const startCronJobs = () => {
 };
 
 // Export for manual trigger (testing)
-export { runNightlyJob, notifyDisabledProductsJob };
+export { runNightlyJob, notifyDisabledProductsJob, checkUnattendedStages };

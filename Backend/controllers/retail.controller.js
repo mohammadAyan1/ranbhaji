@@ -1,4 +1,4 @@
-import { 
+import {
     sequelize, RetailOrder, RetailOrderItem, Product, User, Address, WalletTransaction
 } from "../models/index.js";
 
@@ -76,7 +76,7 @@ export const createRetailOrder = async (req, res) => {
             }
             const newBalance = parseFloat(user.wallet_balance || 0) - totalAmount;
             await user.update({ wallet_balance: newBalance }, { transaction: t });
-            
+
             await WalletTransaction.create({
                 user_id,
                 amount: totalAmount,

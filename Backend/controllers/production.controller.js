@@ -19,18 +19,14 @@ const getNextStage = (currentStage) => {
 const advanceStage = async (split) => {
     const nextStage = getNextStage(split.stage);
     split.stage = nextStage;
-    split.stage_started_at = new Date();
+    split.stage_started_at = null; // Wait for them to click "Start"
     split.stage_completed_at = null;
     
-    // If next stage is soaking or drying, they are wait stages, so status is in_progress for the machine, but wait for workers
-    // Wait, the alarm goes off when they are DONE soaking/drying. While soaking/drying, they are 'in_progress'. 
-    // When they finish, they become 'waiting'.
-    if (nextStage === 'soaking' || nextStage === 'drying') {
-        split.status = 'in_progress';
-    } else if (nextStage === 'completed') {
+    if (nextStage === 'completed') {
         split.status = 'completed';
     } else {
-        split.status = 'waiting'; // Waiting for worker acknowledgement/assignment
+        // Every new stage starts as waiting until the worker clicks "Start"
+        split.status = 'waiting'; 
     }
     
     await split.save();
@@ -140,11 +136,31 @@ export const assignWorker = async (workerId) => {
     }
 
     // 4. Look for pending ProductionBatches to start a new split (Auto-create a 10kg split)
-    const pendingBatch = await ProductionBatch.findOne({
-        where: { pending_qty_kg: { [Op.gt]: 0 }, status: { [Op.ne]: 'completed' }, date: today },
+    const activeWeighingSplits = await BatchSplit.findAll({
+        where: { stage: 'weighing_start', status: { [Op.in]: ['in_progress', 'waiting'] } },
+        attributes: ['batch_id']
+    });
+    const activeBatchIds = activeWeighingSplits.map(s => s.batch_id);
+
+    let pendingBatch = await ProductionBatch.findOne({
+        where: { 
+            pending_qty_kg: { [Op.gt]: 0 }, 
+            status: { [Op.ne]: 'completed' }, 
+            date: today,
+            id: { [Op.notIn]: activeBatchIds.length > 0 ? activeBatchIds : [] }
+        },
         include: [{ model: Product, as: 'product' }],
         order: [['created_at', 'ASC']]
     });
+
+    if (!pendingBatch) {
+        // Fallback: If all pending batches are being weighed, just join the oldest one anyway
+        pendingBatch = await ProductionBatch.findOne({
+            where: { pending_qty_kg: { [Op.gt]: 0 }, status: { [Op.ne]: 'completed' }, date: today },
+            include: [{ model: Product, as: 'product' }],
+            order: [['created_at', 'ASC']]
+        });
+    }
 
     if (pendingBatch) {
         const qty_to_split = Math.min(10, parseFloat(pendingBatch.pending_qty_kg)); // Default 10kg
@@ -156,24 +172,21 @@ export const assignWorker = async (workerId) => {
             batch_id: pendingBatch.id,
             qty_kg: qty_to_split,
             stage: 'weighing_start',
-            status: 'in_progress',
+            status: 'waiting',
             total_work_minutes: totalWorkMinutes,
             remaining_work_minutes: totalWorkMinutes,
-            stage_started_at: new Date()
         });
 
-        pendingBatch.pending_qty_kg = parseFloat(pendingBatch.pending_qty_kg) - qty_to_split;
-        pendingBatch.status = 'in_progress';
+        // Deduct from pending batch
+        pendingBatch.pending_qty_kg = Math.max(0, pendingBatch.pending_qty_kg - qty_to_split);
         await pendingBatch.save();
 
-        await SplitWorkerAssignment.create({
-            split_id: newSplit.id,
-            worker_id: workerId,
-            joined_at: new Date()
-        });
-
+        await SplitWorkerAssignment.create({ split_id: newSplit.id, worker_id: workerId, joined_at: new Date() });
         await WorkerAttendance.update({ current_status: 'working' }, { where: { worker_id: workerId, date: today } });
-        return { action: 'working', split: newSplit };
+        
+        await recalculateSplit(newSplit.id);
+        
+        return { action: 'working', split: newSplit }; // No work available
     }
 
     return { action: 'idle' }; // No work available
@@ -510,7 +523,7 @@ export const getMyStatus = async (req, res) => {
             const dataToReturn = split.toJSON();
             dataToReturn.eta_minutes = eta_minutes !== null ? Number(Number(eta_minutes).toFixed(2)) : null;
 
-            return res.status(200).json({ success: true, status: 'assigned', data: dataToReturn });
+            return res.status(200).json({ success: true, worker_id: req.user.id, status: 'assigned', data: dataToReturn });
         }
 
         const today = new Date().toISOString().split('T')[0];
@@ -519,14 +532,52 @@ export const getMyStatus = async (req, res) => {
         });
 
         if (!attendance) {
-            return res.status(200).json({ success: true, status: 'no_attendance' });
+            return res.status(200).json({ success: true, worker_id: req.user.id, status: 'no_attendance' });
         }
         
         if (attendance.current_status === 'inactive') {
-            return res.status(200).json({ success: true, status: 'inactive' });
+            return res.status(200).json({ success: true, worker_id: req.user.id, status: 'inactive' });
         }
 
-        return res.status(200).json({ success: true, status: 'idle' });
+        if (attendance.current_status === 'idle') {
+            const assignRes = await assignWorker(workerId);
+            if (assignRes.action === 'working') {
+                // Re-fetch to get the proper relationships
+                const newAssignment = await SplitWorkerAssignment.findOne({
+                    where: { worker_id: workerId, left_at: null },
+                    include: [{
+                        model: BatchSplit,
+                        as: 'split',
+                        include: [{
+                            model: ProductionBatch,
+                            as: 'batch',
+                            include: [{ model: Product, as: 'product' }]
+                        }]
+                    }]
+                });
+                
+                if (newAssignment && newAssignment.split) {
+                    const split = newAssignment.split;
+                    let eta_minutes = null;
+                    const timeData = calculateProductProcessingTime(split.batch.product, split.qty_kg, split.active_worker_count || 1);
+                    if (split.stage === 'cleaning_cutting') {
+                        if (split.active_worker_count > 0) eta_minutes = split.remaining_work_minutes / split.active_worker_count;
+                    } else if (split.stage === 'soaking') eta_minutes = timeData.stages.soaking.time_min;
+                    else if (split.stage === 'drying') eta_minutes = timeData.stages.drying.time_min;
+                    else if (split.stage === 'wrapping') eta_minutes = timeData.stages.wrapping.time_min;
+                    else if (split.stage === 'packing') eta_minutes = timeData.stages.packing.time_min;
+                    else if (split.stage === 'weighing_start') eta_minutes = timeData.stages.weighing_start.time_min;
+                    else if (split.stage === 'weighing_end') eta_minutes = timeData.stages.weighing_end.time_min;
+                    
+                    const dataToReturn = split.toJSON();
+                    dataToReturn.eta_minutes = eta_minutes !== null ? Number(Number(eta_minutes).toFixed(2)) : null;
+
+                    return res.status(200).json({ success: true, worker_id: req.user.id, status: 'assigned', data: dataToReturn });
+                }
+            }
+        }
+
+        return res.status(200).json({ success: true, worker_id: req.user.id, status: 'idle' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -553,6 +604,37 @@ export const advanceSplitStage = async (req, res) => {
 
         emitUpdate(req);
         res.status(200).json({ success: true, message: "Stage advanced", split });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// API: POST /api/production/splits/:id/start-process
+export const startProcess = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const worker_id = req.user.id;
+
+        const split = await BatchSplit.findByPk(id);
+        if (!split) return res.status(404).json({ success: false, message: "Split not found" });
+
+        if (split.status !== 'waiting') {
+            return res.status(400).json({ success: false, message: "Task is already started or not waiting" });
+        }
+
+        split.status = 'in_progress';
+        split.stage_started_at = new Date();
+        await split.save();
+
+        // If it's a machine stage (soaking, drying), free the worker so they can take another task
+        if (split.stage === 'soaking' || split.stage === 'drying') {
+            await freeWorkers(split.id);
+        }
+
+        await recalculateSplit(split.id);
+
+        emitUpdate(req);
+        res.status(200).json({ success: true, message: "Process started", split });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

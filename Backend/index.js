@@ -40,6 +40,7 @@ import franchiseRoutes from "./routes/franchise.route.js";
 import attendanceRoutes from "./routes/attendance.route.js";
 import productionRoutes from "./routes/production.route.js";
 import referralRoutes from "./routes/referral.route.js";
+import workerTaskRoutes from "./routes/workerTask.routes.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
@@ -119,6 +120,7 @@ app.use("/api/franchises", franchiseRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/production", productionRoutes);
 app.use("/api/referral", referralRoutes);
+app.use("/api/worker-tasks", workerTaskRoutes);
 
 // 404 fallback
 app.use((req, res) => {
@@ -139,7 +141,7 @@ const startServer = async () => {
 
     await seedDatabase();
 
-    startCronJobs();
+    startCronJobs(io);
 
     httpServer.listen(port, () => {
         console.log(`\n🥦 RamBhaji Server running on http://localhost:${port}`);

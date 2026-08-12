@@ -6,7 +6,7 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, S
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, soak_time_min, weigh_time_min, clean_cut_time_per_25g_min, dry_cycle_time_min, dry_capacity_kg_per_load, dry_machine_count, margin_percentage, water_capacity_liters } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, margin_percentage, water_capacity_liters } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
@@ -24,12 +24,13 @@ export const createProduct = async (req, res) => {
             unit, unit_id, description,
             water_capacity_liters: water_capacity_liters || 0,
             min_retail_qty: min_retail_qty || 0,
-            soak_time_min: soak_time_min || 0,
-            weigh_time_min: weigh_time_min || 0,
-            clean_cut_time_per_25g_min: clean_cut_time_per_25g_min || 0,
-            dry_cycle_time_min: dry_cycle_time_min || 0,
-            dry_capacity_kg_per_load: dry_capacity_kg_per_load || 0,
-            dry_machine_count: dry_machine_count || 1
+            weighing_time_seconds: weighing_time_seconds || 0,
+            soaking_time_seconds: soaking_time_seconds || 0,
+            cutting_mode: cutting_mode || 'PER_25G',
+            pieces_per_25g: pieces_per_25g || null,
+            time_per_piece_seconds: time_per_piece_seconds || null,
+            time_per_25g_seconds: time_per_25g_seconds || null,
+            drying_time_seconds: drying_time_seconds || 0
         });
 
 
@@ -96,6 +97,14 @@ export const updateProduct = async (req, res) => {
         if (!product) return res.status(404).json({ success: false, message: "Product not found" });
 
         const updateData = { ...req.body };
+
+        const numericFields = ['pieces_per_25g', 'time_per_piece_seconds', 'time_per_25g_seconds', 'weighing_time_seconds', 'soaking_time_seconds', 'drying_time_seconds'];
+        for (const field of numericFields) {
+            if (updateData[field] === "") {
+                updateData[field] = null;
+            }
+        }
+
         if (updateData.margin_percentage !== undefined) {
             updateData.default_margin_percentage = updateData.margin_percentage;
             delete updateData.margin_percentage;

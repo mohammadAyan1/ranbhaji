@@ -94,6 +94,7 @@ import CustomerProfile from "./pages/admin/Customers/CustomerProfile";
 // Delivery pages
 import DeliveryHome from "./pages/delivery/DeliveryHome";
 import DeliveryBoyHistory from "./pages/delivery/DeliveryBoyHistory";
+import WorkerDashboard from "./pages/worker/WorkerDashboard";
 
 function App() {
   const { fetchMe, token } = useAuthStore();
@@ -207,6 +208,7 @@ function App() {
         <Route element={<ProtectedRoute roles={["delivery"]}><Layout /></ProtectedRoute>}>
           <Route path="/delivery" element={<DeliveryHome />} />
           <Route path="/delivery/history" element={<DeliveryBoyHistory />} />
+          <Route path="/delivery/worker-dashboard" element={<WorkerDashboard />} />
         </Route>
 
         {/* Fallback */}

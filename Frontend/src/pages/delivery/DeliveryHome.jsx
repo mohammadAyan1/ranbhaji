@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
 import { io } from "socket.io-client";
 
-const LiveTimer = ({ startedAt, expectedMinutes }) => {
+const LiveTimer = ({ startedAt, expectedMinutes, onAlarm }) => {
   const [elapsed, setElapsed] = useState(0);
   const audioRef = useRef(null);
   const hasPlayedAlarm = useRef(false);
@@ -42,7 +42,11 @@ const LiveTimer = ({ startedAt, expectedMinutes }) => {
 
       if (expectedMinutes > 0 && elap >= Math.floor(expectedMinutes * 60) && !hasPlayedAlarm.current) {
         hasPlayedAlarm.current = true;
-        playBeep();
+        if (onAlarm) {
+           onAlarm();
+        } else {
+           playBeep();
+        }
       }
     };
 
@@ -100,8 +104,13 @@ export default function DeliveryHome() {
     api.get("/today-deliveries").then(r => setDeliveries(r.data.deliveries || [])).finally(() => setLoading(false));
   };
 
+  const [workerId, setWorkerId] = useState(null);
+  const workerIdRef = useRef(null);
+
   const fetchProductionStatus = () => {
     api.get("/production/my-status").then(r => {
+      setWorkerId(r.data.worker_id);
+      workerIdRef.current = r.data.worker_id;
       setProdStatus(r.data.status);
       setProdData(r.data.status === 'assigned' ? r.data.data : (r.data.pendingBatches || r.data.data || []));
       setActiveSplits(r.data.activeSplits || []);
@@ -126,9 +135,17 @@ export default function DeliveryHome() {
     });
     socket.on("production:alarm", (data) => {
       if (active) {
+        // If worker_ids is provided, check if current worker is in it.
+        // For machine tasks, anyone who worked on the split gets the alarm.
+        if (data.worker_ids && workerIdRef.current) {
+          if (!data.worker_ids.includes(workerIdRef.current)) {
+            return; // Not assigned to this worker
+          }
+        }
+
         setAlarmData(data);
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext) {
+        if (AudioContext && !window.activeAlarmOscillator) {
           const ctx = new AudioContext();
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -136,10 +153,13 @@ export default function DeliveryHome() {
           gain.connect(ctx.destination);
           osc.type = "square";
           osc.frequency.setValueAtTime(440, ctx.currentTime);
+          
+          // Create a repeating on/off beep effect for continuous alarm
           gain.gain.setValueAtTime(1, ctx.currentTime);
+          // Instead of scheduling stops, we just let it run. In a real app, you might use an LFO for pulsing.
+          
           osc.start();
-          gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 1);
-          osc.stop(ctx.currentTime + 1);
+          window.activeAlarmOscillator = osc;
         }
       }
     });
@@ -241,8 +261,25 @@ export default function DeliveryHome() {
     setAdvancing(true);
     try {
       await api.post(`/production/splits/${alarmData.split_id}/acknowledge-alarm`);
-      setMsg("✅ Alarm acknowledged, task started!");
+      setMsg("✅ Alarm acknowledged, task completed!");
       setAlarmData(null);
+      if (window.activeAlarmOscillator) {
+        window.activeAlarmOscillator.stop();
+        window.activeAlarmOscillator = null;
+      }
+      fetchProductionStatus();
+    } catch (err) {
+      setMsg(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
+  const handleStartTask = async (splitId) => {
+    setAdvancing(true);
+    try {
+      await api.post(`/production/splits/${splitId}/start-process`);
+      setMsg("✅ Task started!");
       fetchProductionStatus();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || err.message}`);
@@ -295,6 +332,26 @@ export default function DeliveryHome() {
       setMsg(`❌ ${err.response?.data?.message || err.message}`);
     } finally {
       setAdvancing(false);
+    }
+  };
+
+  const triggerLocalAlarm = (data) => {
+    if (alarmData && alarmData.split_id === data.id) return;
+    
+    setAlarmData({ split_id: data.id, stage: data.stage, message: `Target time for ${data.stage} has exceeded!` });
+    
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext && !window.activeAlarmOscillator) {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "square";
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      gain.gain.setValueAtTime(1, ctx.currentTime);
+      osc.start();
+      window.activeAlarmOscillator = osc;
     }
   };
 
@@ -356,9 +413,9 @@ export default function DeliveryHome() {
           <div className="bg-white/10 p-3 rounded-lg border border-white/20 mb-3">
             <p className="font-semibold text-blue-100">{prodData.batch?.product?.name} ({prodData.qty_kg} kg)</p>
             <p className="text-sm capitalize mt-1">Current Stage: <span className="font-bold text-yellow-300">{prodData.stage.replace('_', ' ')}</span></p>
-            <LiveTimer startedAt={prodData.stage_started_at} expectedMinutes={prodData.eta_minutes} />
+            <LiveTimer startedAt={prodData.stage_started_at} expectedMinutes={prodData.eta_minutes} onAlarm={() => triggerLocalAlarm(prodData)} />
           </div>
-          {(prodData.stage === 'weighing_start' || prodData.stage === 'cleaning_cutting') && (
+          {(prodData.stage === 'weighing_start' || prodData.stage === 'cleaning_cutting') && prodData.status !== 'waiting' && (
             <div className="mb-3">
               <label className="text-sm font-bold text-blue-200 block mb-1">
                 {prodData.stage === 'weighing_start' ? 'Weight going into Soaking (kg)' : 'Weight going into Drying (kg)'}
@@ -373,13 +430,32 @@ export default function DeliveryHome() {
               />
             </div>
           )}
-          <button
-            onClick={() => handleAdvanceStage(prodData.id)}
-            disabled={advancing || ((prodData.stage === 'weighing_start' || prodData.stage === 'cleaning_cutting') && !nextQtyKg)}
-            className="w-full py-2 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
-          >
-            {advancing ? "Updating..." : "Mark Stage Done & Advance ➡️"}
-          </button>
+
+          {prodData.status === 'waiting' ? (
+            <button
+              onClick={() => handleStartTask(prodData.id)}
+              disabled={advancing}
+              className="w-full py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-lg transition-colors text-lg"
+            >
+              {advancing ? "Starting..." : "▶ Start Task"}
+            </button>
+          ) : alarmData && alarmData.split_id === prodData.id ? (
+            <button
+              onClick={handleAcknowledgeAlarm}
+              disabled={advancing}
+              className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-colors animate-bounce text-lg"
+            >
+              {advancing ? "Completing..." : "🛑 Stop Alarm & Complete Stage"}
+            </button>
+          ) : (
+            <button
+              onClick={() => handleAdvanceStage(prodData.id)}
+              disabled={advancing || ((prodData.stage === 'weighing_start' || prodData.stage === 'cleaning_cutting') && !nextQtyKg)}
+              className="w-full py-2 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+            >
+              {advancing ? "Updating..." : "Mark Stage Done & Advance ➡️"}
+            </button>
+          )}
         </div>
       )}
 

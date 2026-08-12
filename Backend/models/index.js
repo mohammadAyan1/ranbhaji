@@ -96,14 +96,22 @@ const Product = sequelize.define('Product', {
   soak_time_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   weigh_time_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   is_piece_based: { type: DataTypes.BOOLEAN, defaultValue: true },
-  pieces_per_25g: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   clean_cut_time_per_piece_min: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   clean_cut_time_per_25g_min: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   dry_cycle_time_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   dry_capacity_kg_per_load: { type: DataTypes.DECIMAL(10, 2), defaultValue: 5 },
   dry_machine_count: { type: DataTypes.INTEGER, defaultValue: 1 },
   wrap_time_per_plan_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
-  pack_time_per_plan_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 }
+  pack_time_per_plan_min: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+
+  // Exact processing configuration per instructions
+  weighing_time_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+  soaking_time_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+  cutting_mode: { type: DataTypes.ENUM('PER_PIECE', 'PER_25G'), allowNull: true, defaultValue: 'PER_25G' },
+  pieces_per_25g: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+  time_per_piece_seconds: { type: DataTypes.INTEGER, allowNull: true },
+  time_per_25g_seconds: { type: DataTypes.INTEGER, allowNull: true },
+  drying_time_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 }
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 3. PACKAGES
@@ -633,6 +641,55 @@ SplitWorkerAssignment.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' })
 User.hasMany(WorkerAttendance, { foreignKey: 'worker_id', as: 'attendances' });
 WorkerAttendance.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' });
 
+// ==========================================
+// NEW BATCH PRODUCT PROCESSING MODELS
+// ==========================================
+
+const BatchProductDemand = sequelize.define('BatchProductDemand', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  batch_id: { type: DataTypes.INTEGER, allowNull: false },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  quantity_grams: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 }
+}, { tableName: 'batch_product_demands', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+BatchProductDemand.belongsTo(Batch, { foreignKey: 'batch_id' });
+Batch.hasMany(BatchProductDemand, { foreignKey: 'batch_id', as: 'demands' });
+BatchProductDemand.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(BatchProductDemand, { foreignKey: 'product_id' });
+
+const BatchProductTask = sequelize.define('BatchProductTask', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  batch_id: { type: DataTypes.INTEGER, allowNull: false },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
+  stage: { type: DataTypes.ENUM('WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'), allowNull: false },
+  quantity_grams: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+  status: { type: DataTypes.ENUM('NOT_STARTED', 'RUNNING', 'ALARM', 'PAUSED', 'DONE'), defaultValue: 'NOT_STARTED' },
+  duration_seconds: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  remaining_seconds: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  started_at: { type: DataTypes.DATE, allowNull: true },
+  paused_at: { type: DataTypes.DATE, allowNull: true },
+  completed_at: { type: DataTypes.DATE, allowNull: true },
+  alarm_fired_at: { type: DataTypes.DATE, allowNull: true }
+}, { tableName: 'batch_product_tasks', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+BatchProductTask.belongsTo(Batch, { foreignKey: 'batch_id' });
+Batch.hasMany(BatchProductTask, { foreignKey: 'batch_id', as: 'tasks' });
+BatchProductTask.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(BatchProductTask, { foreignKey: 'product_id' });
+
+const TaskWorkerAssignment = sequelize.define('TaskWorkerAssignment', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  task_id: { type: DataTypes.INTEGER, allowNull: false },
+  worker_id: { type: DataTypes.INTEGER, allowNull: false },
+  joined_at: { type: DataTypes.DATE, allowNull: false },
+  left_at: { type: DataTypes.DATE, allowNull: true }
+}, { tableName: 'task_worker_assignments', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+TaskWorkerAssignment.belongsTo(BatchProductTask, { foreignKey: 'task_id', as: 'task' });
+BatchProductTask.hasMany(TaskWorkerAssignment, { foreignKey: 'task_id', as: 'worker_assignments' });
+TaskWorkerAssignment.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' });
+User.hasMany(TaskWorkerAssignment, { foreignKey: 'worker_id', as: 'task_assignments' });
+
 export {
   sequelize,
   User,
@@ -674,6 +731,9 @@ export {
   BatchSplit,
   SplitWorkerAssignment,
   WorkerAttendance,
-  ReferralLog
+  ReferralLog,
+  BatchProductDemand,
+  BatchProductTask,
+  TaskWorkerAssignment
 };
 

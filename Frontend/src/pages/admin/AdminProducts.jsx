@@ -6,10 +6,11 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 const UNITS = ["gm", "ml", "piece"];
 
 const emptyForm = {
-  name: "", hindi_name: "", category: "", sub_category: "",
+  name: "", hindi_name: "", category: "vegetable", sub_category: "",
   purchase_price_input: "", margin_percentage: "", unit: "gm", unit_id: "",
   description: "", min_retail_qty: "", water_capacity_liters: "",
-  soak_time_min: "", weigh_time_min: "", clean_cut_time_per_25g_min: "", dry_cycle_time_min: "", dry_machine_count: 1, image: null
+  weighing_time_seconds: 0, soaking_time_seconds: 0, cutting_mode: "PER_25G", 
+  pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0, image: null
 };
 
 const showKgToggle = (category, unit) =>
@@ -275,11 +276,13 @@ export default function AdminProducts() {
     if (form.description) payload.append("description", form.description);
     payload.append("min_retail_qty", form.min_retail_qty || 0);
     payload.append("water_capacity_liters", form.water_capacity_liters || 0);
-    payload.append("soak_time_min", form.soak_time_min || 0);
-    payload.append("weigh_time_min", form.weigh_time_min || 0);
-    payload.append("clean_cut_time_per_25g_min", form.clean_cut_time_per_25g_min || 0);
-    payload.append("dry_cycle_time_min", form.dry_cycle_time_min || 0);
-    payload.append("dry_machine_count", form.dry_machine_count || 1);
+    payload.append("weighing_time_seconds", form.weighing_time_seconds || 0);
+    payload.append("soaking_time_seconds", form.soaking_time_seconds || 0);
+    payload.append("cutting_mode", form.cutting_mode || "PER_25G");
+    payload.append("pieces_per_25g", form.pieces_per_25g || "");
+    payload.append("time_per_piece_seconds", form.time_per_piece_seconds || "");
+    payload.append("time_per_25g_seconds", form.time_per_25g_seconds || "");
+    payload.append("drying_time_seconds", form.drying_time_seconds || 0);
     payload.append("margin_percentage", marginPercentage);
 
     if (form.image) {
@@ -364,11 +367,13 @@ export default function AdminProducts() {
       description: p.description || "",
       min_retail_qty: p.min_retail_qty || "",
       water_capacity_liters: p.water_capacity_liters || "",
-      soak_time_min: p.soak_time_min || "",
-      weigh_time_min: p.weigh_time_min || "",
-      clean_cut_time_per_25g_min: p.clean_cut_time_per_25g_min || "",
-      dry_cycle_time_min: p.dry_cycle_time_min || "",
-      dry_machine_count: p.dry_machine_count || 1,
+      weighing_time_seconds: p.weighing_time_seconds || 0,
+      soaking_time_seconds: p.soaking_time_seconds || 0,
+      cutting_mode: p.cutting_mode || "PER_25G",
+      pieces_per_25g: p.pieces_per_25g || "",
+      time_per_piece_seconds: p.time_per_piece_seconds || "",
+      time_per_25g_seconds: p.time_per_25g_seconds || "",
+      drying_time_seconds: p.drying_time_seconds || 0,
       image: null
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -713,34 +718,57 @@ export default function AdminProducts() {
 
               {/* Time Fields */}
               {!isWater && (
-                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-6 gap-4 pt-2 pb-2 border-y border-gray-100 mt-2">
+                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 pt-4 pb-4 border-y border-gray-200 mt-4 bg-gray-50 px-4 rounded-xl shadow-inner">
+                  <div className="col-span-2 md:col-span-4 lg:col-span-7 mb-2">
+                    <h4 className="text-sm font-bold text-gray-800">Batch Processing Time Config</h4>
+                  </div>
+                  
                   <div>
-                    <label className="label text-[11px] mb-1">Soaking (min)</label>
-                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
-                      value={form.soak_time_min} onChange={e => handleFormChange("soak_time_min", e.target.value)} />
+                    <label className="label text-[11px] mb-1">Weighing (sec)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 60"
+                      value={form.weighing_time_seconds} onChange={e => handleFormChange("weighing_time_seconds", e.target.value)} />
                   </div>
                   <div>
-                    <label className="label text-[11px] mb-1">Weigh (min)</label>
-                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 2"
-                      value={form.weigh_time_min} onChange={e => handleFormChange("weigh_time_min", e.target.value)} />
+                    <label className="label text-[11px] mb-1">Soaking (sec)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 600"
+                      value={form.soaking_time_seconds} onChange={e => handleFormChange("soaking_time_seconds", e.target.value)} />
                   </div>
                   <div>
-                    <label className="label text-[11px] mb-1" title="Clean & Cut time per 25g (worker-min)">Clean/Cut (min/25g)</label>
-                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 0.3"
-                      value={form.clean_cut_time_per_25g_min} onChange={e => handleFormChange("clean_cut_time_per_25g_min", e.target.value)} />
+                    <label className="label text-[11px] mb-1">Cutting Mode</label>
+                    <select className="input text-sm p-1.5" value={form.cutting_mode} onChange={e => handleFormChange("cutting_mode", e.target.value)}>
+                      <option value="PER_25G">Per 25g (Weight)</option>
+                      <option value="PER_PIECE">Per Piece</option>
+                    </select>
                   </div>
+
+                  {form.cutting_mode === 'PER_25G' && (
+                    <div>
+                      <label className="label text-[11px] mb-1" title="Time to cut 25g in seconds">Cut Time/25g (sec)</label>
+                      <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                        value={form.time_per_25g_seconds} onChange={e => handleFormChange("time_per_25g_seconds", e.target.value)} />
+                    </div>
+                  )}
+
+                  {form.cutting_mode === 'PER_PIECE' && (
+                    <>
+                      <div>
+                        <label className="label text-[11px] mb-1">Pieces per 25g</label>
+                        <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 0.25 (1/4th)"
+                          value={form.pieces_per_25g} onChange={e => handleFormChange("pieces_per_25g", e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="label text-[11px] mb-1">Time per Piece (sec)</label>
+                        <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 5"
+                          value={form.time_per_piece_seconds} onChange={e => handleFormChange("time_per_piece_seconds", e.target.value)} />
+                      </div>
+                    </>
+                  )}
+
                   <div>
-                    <label className="label text-[11px] mb-1">Drying Cycle (min)</label>
-                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
-                      value={form.dry_cycle_time_min} onChange={e => handleFormChange("dry_cycle_time_min", e.target.value)} />
+                    <label className="label text-[11px] mb-1">Drying (sec)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 300"
+                      value={form.drying_time_seconds} onChange={e => handleFormChange("drying_time_seconds", e.target.value)} />
                   </div>
-                  {/* 
-                  <div>
-                    <label className="label text-[11px] mb-1">Dry Machines</label>
-                    <input type="number" step="1" min="1" className="input text-sm p-1.5" placeholder="e.g. 1"
-                      value={form.dry_machine_count} onChange={e => handleFormChange("dry_machine_count", e.target.value)} />
-                  </div>
-                  */}
                 </div>
               )}
 
