@@ -1,12 +1,14 @@
 import { Op } from 'sequelize';
 import {
     Batch, BatchProductDemand, BatchProductTask, TaskWorkerAssignment,
-    Product, User, DeliverySchedule, DeliveryItem, RetailOrder, RetailOrderItem
+    Product, User, DeliverySchedule, DeliveryItem, RetailOrder, RetailOrderItem,
+    PurchaseLog
 } from '../models/index.js';
 import {
     calculateTotalProductTime, calculateWeighingDuration, calculateSoakingDuration,
     calculateCuttingDuration, calculateDryingDuration, recalculateRemainingTime
 } from '../utils/taskMath.js';
+import { computeBatchDemandHelper } from './batch.controller.js';
 
 // Get available batches for today
 export const getTodayBatches = async (req, res) => {
@@ -39,16 +41,22 @@ const leaveTaskHelper = async (workerId) => {
             assignment.left_at = new Date();
             await assignment.save();
 
-            // Recalculate time if it was running and there's a change in worker count
-            if (task.status === 'RUNNING' && oldWorkerCount > 0) {
-                const now = new Date();
-                const elapsedRealSeconds = Math.floor((now.getTime() - new Date(task.started_at).getTime()) / 1000);
-                const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
-                let currentRemaining = task.remaining_seconds - Math.floor(effectiveElapsed / oldWorkerCount);
-                if (currentRemaining < 0) currentRemaining = 0;
-
+            // Recalculate time if it was running or not started and there's a change in worker count
+            if (['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(task.status)) {
+                let currentRemaining = task.remaining_seconds;
+                if (task.status === 'RUNNING' && oldWorkerCount > 0) {
+                    const now = new Date();
+                    const elapsedRealSeconds = Math.floor((now.getTime() - new Date(task.started_at).getTime()) / 1000);
+                    const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
+                    currentRemaining = task.remaining_seconds - Math.floor(effectiveElapsed / oldWorkerCount);
+                    if (currentRemaining < 0) currentRemaining = 0;
+                    task.started_at = now; // reset start time for the new speed
+                }
                 task.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
-                task.started_at = now; // reset start time for the new speed
+                if (newWorkerCount === 0 && task.status === 'RUNNING') {
+                    task.status = 'PAUSED';
+                    task.paused_at = new Date();
+                }
                 await task.save();
             }
         } else {
@@ -58,46 +66,66 @@ const leaveTaskHelper = async (workerId) => {
         }
     }
 };
+class Mutex {
+    constructor() { this.queue = []; this.locked = false; }
+    async lock() {
+        return new Promise(resolve => {
+            if (this.locked) { this.queue.push(resolve); } 
+            else { this.locked = true; resolve(); }
+        });
+    }
+    unlock() {
+        if (this.queue.length > 0) { const resolve = this.queue.shift(); resolve(); } 
+        else { this.locked = false; }
+    }
+}
+const syncMutex = new Mutex();
 
 const syncBatchDemand = async (batchId) => {
-    const today = new Date().toISOString().split('T')[0];
+    await syncMutex.lock();
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+    // Compute demandMap using the exact same logic as Admin Dashboard
+    const demandMapObj = await computeBatchDemandHelper(batchId, today);
     const demandMap = {};
-
-    const schedules = await DeliverySchedule.findAll({
-        where: { batch_id: batchId, scheduled_date: today },
-        include: [{ model: DeliveryItem, as: 'DeliveryItems' }]
+    Object.keys(demandMapObj).forEach(k => {
+        demandMap[k] = demandMapObj[k].total_quantity;
     });
 
-    for (const s of schedules) {
-        if (s.DeliveryItems) {
-            for (const i of s.DeliveryItems) {
-                if (i.product_id) demandMap[i.product_id] = (demandMap[i.product_id] || 0) + parseFloat(i.qty_gm || 0);
-            }
-        }
-    }
+    // Clear old demands for this batch to remove products that no longer have demand today
+    await BatchProductDemand.destroy({ where: { batch_id: batchId } });
 
-    const retails = await RetailOrder.findAll({
-        where: { batch_id: batchId, delivery_date: today, delivery_status: { [Op.notIn]: ['cancelled', 'delivered'] } },
-        include: [{ model: RetailOrderItem, as: 'Items' }]
+    // Fetch Purchase Logs for today to only show products actually purchased
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const purchases = await PurchaseLog.findAll({
+        where: { purchase_date: { [Op.between]: [startOfToday, endOfToday] } },
+        attributes: ['product_id']
     });
+    const purchasedProductIds = new Set(purchases.map(p => p.product_id));
 
-    for (const r of retails) {
-        if (r.Items) {
-            for (const i of r.Items) {
-                if (i.product_id) demandMap[i.product_id] = (demandMap[i.product_id] || 0) + parseFloat(i.quantity || 0);
-            }
-        }
-    }
+    // Fetch product categories to always allow water
+    const products = await Product.findAll({
+        where: { id: Object.keys(demandMap) },
+        attributes: ['id', 'category']
+    });
+    const productCategories = {};
+    products.forEach(p => productCategories[p.id] = p.category);
 
     for (const [productId, qty] of Object.entries(demandMap)) {
-        if (qty > 0) {
-            const existing = await BatchProductDemand.findOne({ where: { batch_id: batchId, product_id: productId } });
-            if (existing) {
-                await existing.update({ quantity_grams: qty });
-            } else {
-                await BatchProductDemand.create({ batch_id: batchId, product_id: productId, quantity_grams: qty });
-            }
+        const pId = parseInt(productId);
+        const isWater = productCategories[pId] === 'water';
+
+        if (qty > 0 && (isWater || purchasedProductIds.has(pId))) {
+            await BatchProductDemand.create({ batch_id: batchId, product_id: pId, quantity_grams: qty });
         }
+    }
+    } finally {
+        syncMutex.unlock();
     }
 };
 
@@ -140,8 +168,15 @@ export const checkAlarms = async (req, res) => {
         
         if (!batchId) return res.status(400).json({ success: false, message: "batchId required" });
 
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
         const alarmTasks = await BatchProductTask.findAll({
-            where: { batch_id: batchId, status: 'ALARM' },
+            where: { 
+                batch_id: batchId, 
+                status: 'ALARM',
+                created_at: { [Op.gte]: startOfToday }
+            },
             include: [
                 { model: Product },
                 { 
@@ -162,19 +197,6 @@ export const checkAlarms = async (req, res) => {
     }
 };
 
-class Mutex {
-    constructor() { this.queue = []; this.locked = false; }
-    async lock() {
-        return new Promise(resolve => {
-            if (this.locked) { this.queue.push(resolve); } 
-            else { this.locked = true; resolve(); }
-        });
-    }
-    unlock() {
-        if (this.queue.length > 0) { const resolve = this.queue.shift(); resolve(); } 
-        else { this.locked = false; }
-    }
-}
 const assignMutex = new Mutex();
 
 // Priority logic for assigning the next task to a worker
@@ -199,8 +221,14 @@ export const assignNextTask = async (req, res) => {
         }
 
         // Get all tasks for this batch today
+        const startOfTodayForTasks = new Date();
+        startOfTodayForTasks.setHours(0, 0, 0, 0);
+
         const tasks = await BatchProductTask.findAll({
-            where: { batch_id: batchId },
+            where: { 
+                batch_id: batchId,
+                created_at: { [Op.gte]: startOfTodayForTasks }
+            },
             include: [
                 { model: TaskWorkerAssignment, as: 'worker_assignments', where: { left_at: null }, required: false },
                 { model: Product }
@@ -217,7 +245,26 @@ export const assignNextTask = async (req, res) => {
             if (taskToReturn && ['WEIGHING', 'CUTTING'].includes(taskToReturn.stage)) {
                 const existing = await TaskWorkerAssignment.findOne({ where: { task_id: taskToReturn.id, worker_id: workerId, left_at: null } });
                 if (!existing) {
+                    const activeAssignments = await TaskWorkerAssignment.findAll({ where: { task_id: taskToReturn.id, left_at: null } });
+                    const oldWorkerCount = activeAssignments.length;
+                    const newWorkerCount = oldWorkerCount + 1;
+                    
                     await TaskWorkerAssignment.create({ task_id: taskToReturn.id, worker_id: workerId, joined_at: new Date() });
+                    
+                    // Recalculate time if it was running or not started and there's a change in worker count
+                    if (['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(taskToReturn.status)) {
+                        let currentRemaining = taskToReturn.remaining_seconds;
+                        if (taskToReturn.status === 'RUNNING' && oldWorkerCount > 0) {
+                            const now = new Date();
+                            const elapsedRealSeconds = Math.floor((now.getTime() - new Date(taskToReturn.started_at).getTime()) / 1000);
+                            const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
+                            currentRemaining = taskToReturn.remaining_seconds - Math.floor(effectiveElapsed / oldWorkerCount);
+                            if (currentRemaining < 0) currentRemaining = 0;
+                            taskToReturn.started_at = now; // reset start time for the new speed
+                        }
+                        taskToReturn.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
+                        await taskToReturn.save();
+                    }
                 }
             }
             return res.status(200).json({ success: true, task: taskToReturn, action });
@@ -466,10 +513,22 @@ export const resumeTask = async (req, res) => {
 export const completeTask = async (req, res) => {
     try {
         const { taskId } = req.params;
+        const workerId = req.user.id;
+        
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
         if (!task) return res.status(404).json({ success: false });
 
         const result = await handleStageCompletion(task);
+        
+        // If there's a next task for this product, assign it to the worker who completed this stage
+        if (result.nextTask && result.nextTask.status === 'NOT_STARTED') {
+            await TaskWorkerAssignment.create({ 
+                task_id: result.nextTask.id, 
+                worker_id: workerId, 
+                joined_at: new Date() 
+            });
+        }
+        
         res.status(200).json({ success: true, task: result.task, nextTask: result.nextTask });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -491,28 +550,25 @@ export const acknowledgeAlarm = async (req, res) => {
             return res.status(200).json({ success: true, task });
         }
         
-        if (task.status !== 'ALARM') {
-            return res.status(400).json({ success: false, message: "Task not in alarm" });
+        if (task.status !== 'ALARM' && task.status !== 'RUNNING') {
+            return res.status(400).json({ success: false, message: "Task not in alarm or running" });
         }
-
-        // Leave current task if any (e.g., Worker was cutting Product B, alarm for Product A pops)
-        await leaveTaskHelper(workerId);
 
         // Complete the alarm task and get next task
         const result = await handleStageCompletion(task);
         
-        // If there's a next task for this product, assign it to the worker who acknowledged the alarm
+        // Option B: Auto-Switch. Leave the current task (it will be PAUSED)
+        await leaveTaskHelper(workerId);
+        
+        // Automatically assign the worker to the newly created CUTTING task
         if (result.nextTask && result.nextTask.status === 'NOT_STARTED') {
-            await TaskWorkerAssignment.create({ 
-                task_id: result.nextTask.id, 
-                worker_id: workerId, 
-                joined_at: new Date() 
+            await TaskWorkerAssignment.create({
+                task_id: result.nextTask.id,
+                worker_id: workerId,
+                joined_at: new Date()
             });
-            result.nextTask.status = 'RUNNING';
-            result.nextTask.started_at = new Date();
-            await result.nextTask.save();
         }
-
+        
         res.status(200).json({ success: true, task: result.task, nextTask: result.nextTask });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -524,6 +580,7 @@ export const joinTask = async (req, res) => {
     try {
         const { taskId } = req.params;
         const workerId = req.user.id;
+
 
         const task = await BatchProductTask.findByPk(taskId);
         if (!task) return res.status(404).json({ success: false });
@@ -541,16 +598,17 @@ export const joinTask = async (req, res) => {
         const newWorkerCount = oldWorkerCount + 1;
 
         // Recalculate remaining time
-        if (task.status === 'RUNNING') {
-            // First update remaining_seconds based on elapsed time with oldWorkerCount
-            const now = new Date();
-            const elapsedRealSeconds = Math.floor((now.getTime() - new Date(task.started_at).getTime()) / 1000);
-            const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
-            let currentRemaining = task.remaining_seconds - (oldWorkerCount > 0 ? Math.floor(effectiveElapsed / oldWorkerCount) : 0);
-            if (currentRemaining < 0) currentRemaining = 0;
-
+        if (['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(task.status)) {
+            let currentRemaining = task.remaining_seconds;
+            if (task.status === 'RUNNING') {
+                const now = new Date();
+                const elapsedRealSeconds = Math.floor((now.getTime() - new Date(task.started_at).getTime()) / 1000);
+                const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
+                currentRemaining = task.remaining_seconds - (oldWorkerCount > 0 ? Math.floor(effectiveElapsed / oldWorkerCount) : 0);
+                if (currentRemaining < 0) currentRemaining = 0;
+                task.started_at = now; // reset start time for the new speed
+            }
             task.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
-            task.started_at = now; // reset start time for the new speed
             await task.save();
         }
 

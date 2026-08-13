@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import {
     Batch, DeliverySchedule, Subscription, SubscriptionItem,
     Product, Package, PackageSeasonalConfig, WaterSubscription,
@@ -79,101 +80,80 @@ export const deleteBatch = async (req, res) => {
 };
 
 // GET /api/admin/batches/:id/demands
-export const getBatchDemands = async (req, res) => {
-    try {
-        const { id: batch_id } = req.params;
-        const { date } = req.query;
+export const computeBatchDemandHelper = async (batch_id, date) => {
+    const demandMap = {};
+    const addDemand = (p, qty) => {
+        if (!p) return;
+        const quantity = parseFloat(qty) || 0;
+        if (quantity <= 0) return;
 
-        if (!date) {
-            return res.status(400).json({ success: false, message: "Date is required (YYYY-MM-DD)" });
+        if (!demandMap[p.id]) {
+            demandMap[p.id] = {
+                product_name: p.name,
+                total_quantity: 0,
+                unit: p.unit || 'gm',
+                product: p
+            };
         }
+        demandMap[p.id].total_quantity += quantity;
+    };
 
-        const demandMap = {};
+    // 1. Fetch Subscription & Water Deliveries
+    const schedules = await DeliverySchedule.findAll({
+        where: { batch_id, scheduled_date: date, status: ['pending', 'ready_for_delivery'] },
+        include: [
+            {
+                model: Subscription,
+                required: false,
+                include: [
+                    { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
+                    { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }, { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }] },
+                    { model: User, attributes: ['id', 'disliked_products'] }
+                ]
+            },
+            {
+                model: WaterSubscription,
+                required: false
+            },
+            { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
+            { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] }
+        ]
+    });
 
-        const addDemand = (p, qty) => {
-            if (!p) return;
-            const quantity = parseFloat(qty) || 0;
-            if (quantity <= 0) return;
+    let defaultHealthWater, defaultMiracleWater;
+    const waterProducts = await Product.findAll({ where: { category: 'water', status: 'active' } });
+    if (waterProducts.length > 0) {
+        defaultHealthWater = waterProducts.find(p => p.name.toLowerCase().includes('health'));
+        defaultMiracleWater = waterProducts.find(p => p.name.toLowerCase().includes('miracle'));
+        if (!defaultHealthWater) defaultHealthWater = waterProducts[0];
+        if (!defaultMiracleWater) defaultMiracleWater = waterProducts[0];
+    }
 
-            if (!demandMap[p.id]) {
-                demandMap[p.id] = {
-                    product_name: p.name,
-                    total_quantity: 0,
-                    unit: p.unit || 'gm',
-                    product: p
-                };
-            }
-            demandMap[p.id].total_quantity += quantity;
-        };
-
-        // 1. Fetch Subscription & Water Deliveries
-        const schedules = await DeliverySchedule.findAll({
-            where: { batch_id, scheduled_date: date, status: ['pending', 'ready_for_delivery'] },
-            include: [
-                {
-                    model: Subscription,
-                    required: false,
-                    include: [
-                        { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
-                        { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }, { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }] },
-                        { model: User, attributes: ['id', 'disliked_products'] }
-                    ]
-                },
-                {
-                    model: WaterSubscription,
-                    required: false
-                },
-                { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
-                { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] }
-            ]
-        });
-
-        // Water Products (For water subscriptions)
-        let defaultHealthWater, defaultMiracleWater;
-        const waterProducts = await Product.findAll({ where: { category: 'water', status: 'active' } });
-        if (waterProducts.length > 0) {
-            defaultHealthWater = waterProducts.find(p => p.name.toLowerCase().includes('health'));
-            defaultMiracleWater = waterProducts.find(p => p.name.toLowerCase().includes('miracle'));
-            if (!defaultHealthWater) defaultHealthWater = waterProducts[0];
-            if (!defaultMiracleWater) defaultMiracleWater = waterProducts[0];
+    const globalDemandMap = {};
+    schedules.forEach(schedule => {
+        if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
+            schedule.SeasonalSelections.forEach(sel => {
+                globalDemandMap[sel.product_id] = (globalDemandMap[sel.product_id] || 0) + parseFloat(sel.qty_gm || 0);
+            });
         }
+    });
 
-        // Pre-calculate global demand map from all existing seasonal selections
-        const globalDemandMap = {};
-        schedules.forEach(schedule => {
-            if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
-                schedule.SeasonalSelections.forEach(sel => {
-                    globalDemandMap[sel.product_id] = (globalDemandMap[sel.product_id] || 0) + parseFloat(sel.qty_gm || 0);
-                });
-            }
-        });
-
-        schedules.forEach(schedule => {
-            const dbItems = schedule.DeliveryItems || [];
-            if (dbItems.length > 0) {
-                for (const item of dbItems) {
-                    if (!item.Product) continue;
-                    if (schedule.is_returned_serving) {
-                        if (item.will_purchase) {
-                            addDemand(item.Product, parseFloat(item.qty_gm || 0));
-                        }
-                    } else {
+    schedules.forEach(schedule => {
+        const dbItems = schedule.DeliveryItems || [];
+        if (dbItems.length > 0) {
+            for (const item of dbItems) {
+                if (!item.Product) continue;
+                if (schedule.is_returned_serving) {
+                    if (item.will_purchase) {
                         addDemand(item.Product, parseFloat(item.qty_gm || 0));
                     }
+                } else {
+                    addDemand(item.Product, parseFloat(item.qty_gm || 0));
                 }
-            } else if (schedule.Subscription) {
-                const sub = schedule.Subscription;
-
-                // Fixed items
-                if (sub.Items) {
-                    sub.Items.forEach(item => {
-                        if (item.is_fixed && item.is_active && item.Product) {
-                            addDemand(item.Product, item.qty_gm);
-                        }
-                    });
-                }
-
-                // Seasonal items
+            }
+        } else {
+            const sub = schedule.Subscription;
+            if (sub && !schedule.is_returned_serving) {
                 if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
                     schedule.SeasonalSelections.forEach(sel => {
                         if (sel.Product) {
@@ -239,7 +219,6 @@ export const getBatchDemands = async (req, res) => {
                         });
                     }
                 } else if (sub.Items) {
-                    // Fallback to active seasonal items from sub if no selections for this schedule yet
                     sub.Items.forEach(item => {
                         if (item.is_seasonal && item.is_active && item.Product) {
                             addDemand(item.Product, item.qty_gm);
@@ -248,7 +227,6 @@ export const getBatchDemands = async (req, res) => {
                 }
             }
 
-            // Water Subscription
             if (schedule.WaterSubscription) {
                 const ws = schedule.WaterSubscription;
                 const qty = ws.container === 'glass' ? 20 : 20;
@@ -257,25 +235,40 @@ export const getBatchDemands = async (req, res) => {
                     addDemand(p, qty);
                 }
             }
-        });
+        }
+    });
 
-        // 2. Fetch Retail Orders
-        const retailOrders = await RetailOrder.findAll({
-            where: { batch_id, delivery_date: date, delivery_status: ['pending', 'ready_for_delivery'] },
-            include: [
-                { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
-            ]
-        });
+    // 2. Fetch Retail Orders
+    const retailOrders = await RetailOrder.findAll({
+        where: { batch_id, delivery_date: date, delivery_status: ['pending', 'ready_for_delivery'] },
+        include: [
+            { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
+        ]
+    });
 
-        retailOrders.forEach(order => {
-            if (order.Items) {
-                order.Items.forEach(item => {
-                    if (item.Product) {
-                        addDemand(item.Product, item.quantity);
-                    }
-                });
-            }
-        });
+    retailOrders.forEach(order => {
+        if (order.Items) {
+            order.Items.forEach(item => {
+                if (item.Product) {
+                    addDemand(item.Product, item.quantity);
+                }
+            });
+        }
+    });
+
+    return demandMap;
+};
+
+export const getBatchDemands = async (req, res) => {
+    try {
+        const { id: batch_id } = req.params;
+        const { date } = req.query;
+
+        if (!date) {
+            return res.status(400).json({ success: false, message: "Date is required (YYYY-MM-DD)" });
+        }
+
+        const demandMap = await computeBatchDemandHelper(batch_id, date);
 
         const processingLogs = await BatchProcessingLog.findAll({
             where: { batch_id, date }
@@ -294,9 +287,7 @@ export const getBatchDemands = async (req, res) => {
             const remaining_quantity = Math.max(0, pData.total_quantity - processed);
 
             if (remaining_quantity > 0) {
-                // Calculate time
                 const factor = remaining_quantity / 100;
-
                 const soakingTime = parseFloat(pData.product.soaking_time || 0) * factor;
                 const cleaningTime = parseFloat(pData.product.cleaning_time || 0) * factor;
                 const cuttingTime = parseFloat(pData.product.cutting_time || 0) * factor;
@@ -336,8 +327,6 @@ export const getBatchDemands = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
-// POST /api/admin/batches/:id/demands/process
 export const processBatchDemand = async (req, res) => {
     try {
         const { id: batch_id } = req.params;
@@ -511,9 +500,9 @@ export const getProcessingLogs = async (req, res) => {
 // GET /api/admin/live-workers
 export const getLiveWorkers = async (req, res) => {
     try {
-        // Find all users with role 'worker'
+        // Find all users with role 'delivery'
         const workers = await User.findAll({
-            where: { role: 'worker' },
+            where: { role: 'delivery' },
             attributes: ['id', 'name', 'phone']
         });
 
@@ -558,6 +547,91 @@ export const getLiveWorkers = async (req, res) => {
         }));
 
         res.status(200).json({ success: true, workers: liveWorkers });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/admin/worker-task-history
+export const getWorkerTaskHistory = async (req, res) => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ success: false, message: "Date is required" });
+        }
+
+        // Get all workers (delivery boys)
+        const workers = await User.findAll({
+            where: { role: 'delivery' },
+            attributes: ['id', 'name', 'phone']
+        });
+
+        // Parse date boundaries
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const history = await Promise.all(workers.map(async (worker) => {
+            // Find all assignments for this worker today
+            const assignments = await TaskWorkerAssignment.findAll({
+                where: {
+                    worker_id: worker.id,
+                    joined_at: {
+                        [Op.between]: [startOfDay, endOfDay]
+                    }
+                },
+                include: [{
+                    model: BatchProductTask,
+                    as: 'task',
+                    include: [{ model: Product }]
+                }],
+                order: [['joined_at', 'ASC']]
+            });
+            
+            const timeline = assignments.map(a => {
+                const task = a.task;
+                if (!task) return null;
+                
+                let timerStatus = 'N/A';
+                if (task.status === 'DONE') {
+                    if (task.alarm_fired_at) {
+                        timerStatus = 'After Timer (Delayed)';
+                    } else {
+                        timerStatus = 'Before Timer';
+                    }
+                }
+
+                let backgroundStatus = false;
+                if (a.left_at && ['SOAKING', 'DRYING'].includes(task.stage) && ['RUNNING', 'ALARM', 'DONE'].includes(task.status)) {
+                    backgroundStatus = true;
+                }
+
+                return {
+                    assignmentId: a.id,
+                    taskId: task.id,
+                    productName: task.Product ? task.Product.name : 'Unknown',
+                    stage: task.stage,
+                    quantityGrams: task.quantity_grams,
+                    assignedAt: a.joined_at, 
+                    startedAt: task.started_at,
+                    leftAt: a.left_at, 
+                    taskStatus: task.status, 
+                    taskCompletedAt: task.completed_at,
+                    timerStatus: timerStatus,
+                    isBackgrounded: backgroundStatus
+                };
+            }).filter(item => item !== null);
+
+            return {
+                workerId: worker.id,
+                workerName: worker.name,
+                workerPhone: worker.phone,
+                timeline: timeline
+            };
+        }));
+
+        res.status(200).json({ success: true, date, history });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

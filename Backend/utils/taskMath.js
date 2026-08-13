@@ -62,6 +62,7 @@ export const calculateTotalProductTime = (product, batchQuantityGrams) => {
  */
 export const recalculateRemainingTime = (currentRemainingSeconds, oldWorkerCount, newWorkerCount) => {
     if (newWorkerCount === 0) return currentRemainingSeconds;
-    const remainingWorkUnits = currentRemainingSeconds * oldWorkerCount;
+    const effectiveOldCount = oldWorkerCount > 0 ? oldWorkerCount : 1;
+    const remainingWorkUnits = currentRemainingSeconds * effectiveOldCount;
     return Math.floor(remainingWorkUnits / newWorkerCount);
 };

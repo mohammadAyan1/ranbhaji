@@ -684,7 +684,7 @@ export const getSeasonalOptions = async (req, res) => {
                     model: Package, include: [
                         { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status'] }] }
                     ]
                 }
             ]
@@ -699,14 +699,16 @@ export const getSeasonalOptions = async (req, res) => {
         const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // Extract fixed items from subscription (if present) or fallback to package fixed items
-        const subFixedItems = subscription.Items.filter(i => i.is_fixed);
+        const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active');
+        const activePkgFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active');
+        
         const fixed_items = subFixedItems.length > 0
             ? subFixedItems.map(i => ({
                 product_id: i.product_id,
                 qty_gm: i.qty_gm,
                 Product: i.Product
             }))
-            : pkg.FixedItems.map(fi => ({
+            : activePkgFixedItems.map(fi => ({
                 product_id: fi.product_id,
                 qty_gm: fi.default_qty_gm,
                 Product: fi.Product
@@ -763,7 +765,7 @@ export const selectSeasonalItems = async (req, res) => {
         const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // 1. Validate fixed items (cannot completely delete or leave empty)
-        const pkgFixedItemIds = pkg.FixedItems.map(fi => fi.product_id);
+        const pkgFixedItemIds = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => fi.product_id);
         const inputFixedItems = fixed_items || [];
 
         for (const fiId of pkgFixedItemIds) {
@@ -911,9 +913,9 @@ export const getUpcomingSelections = async (req, res) => {
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status'] }] }
                     ]
                 }
             ]
@@ -928,19 +930,19 @@ export const getUpcomingSelections = async (req, res) => {
             return res.status(400).json({ success: false, message: "This package does not support seasonal selections" });
         }
 
-        const pool = pkg.SeasonalPool;
+        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active');
         const maxCount = pkg.SeasonalConfig?.max_select_count;
         const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // Extract fixed items from subscription (if present) or fallback to package fixed items
-        const subFixedItems = subscription.Items.filter(i => i.is_fixed);
+        const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active');
         const fixed_items = subFixedItems.length > 0
             ? subFixedItems.map(i => ({
                 product_id: i.product_id,
                 qty_gm: i.qty_gm,
                 Product: i.Product
             }))
-            : pkg.FixedItems.map(fi => ({
+            : pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => ({
                 product_id: fi.product_id,
                 qty_gm: fi.default_qty_gm,
                 Product: fi.Product
@@ -1144,7 +1146,7 @@ export const saveScheduleSeasonal = async (req, res) => {
         const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) * (1 - parseFloat(pkg.margin_percent || 0) / 200);
 
         // 1. Validate fixed items (cannot completely delete or leave empty)
-        const pkgFixedItemIds = pkg.FixedItems.map(fi => fi.product_id);
+        const pkgFixedItemIds = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => fi.product_id);
         const inputFixedItems = fixed_items || [];
 
         for (const fiId of pkgFixedItemIds) {

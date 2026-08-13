@@ -11,6 +11,7 @@ const WorkerDashboard = () => {
     const [selectedBatch, setSelectedBatch] = useState('');
     const [demand, setDemand] = useState([]);
     const [currentTask, setCurrentTask] = useState(null);
+    const [alarmTask, setAlarmTask] = useState(null);
     const [timeLeft, setTimeLeft] = useState(0);
     const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -30,7 +31,7 @@ const WorkerDashboard = () => {
             if (selectedBatch) {
                 checkAlarms(selectedBatch).then(res => {
                     if (res.success && res.task && res.task.status === 'ALARM') {
-                        setCurrentTask(res.task);
+                        setAlarmTask(res.task);
                         setIsAlarmModalOpen(true);
                     }
                 }).catch(e => console.error("Alarm poll error:", e));
@@ -47,13 +48,19 @@ const WorkerDashboard = () => {
                 try {
                     const res = await syncTask(currentTask.id);
                     if (res.success && res.task) {
-                        setCurrentTask(prev => {
-                            // Only update if it hasn't changed locally to prevent race conditions
-                            if (prev && prev.id === res.task.id) {
-                                return res.task;
-                            }
-                            return prev;
-                        });
+                        if (res.task.status === 'DONE') {
+                            // Another worker completed this joint task. Move to next task.
+                            setCurrentTask(null);
+                            fetchNextTask();
+                        } else {
+                            setCurrentTask(prev => {
+                                // Only update if it hasn't changed locally to prevent race conditions
+                                if (prev && prev.id === res.task.id) {
+                                    return res.task;
+                                }
+                                return prev;
+                            });
+                        }
                     }
                 } catch(e) {
                     // ignore sync errors
@@ -80,6 +87,7 @@ const WorkerDashboard = () => {
                     remaining = 0;
                     clearInterval(timerRef.current);
                     // trigger local alarm UI
+                    setAlarmTask(currentTask);
                     setIsAlarmModalOpen(true);
                 }
                 setTimeLeft(remaining);
@@ -90,6 +98,7 @@ const WorkerDashboard = () => {
         } else if (currentTask) {
             setTimeLeft(currentTask.remaining_seconds);
             if (currentTask.status === 'ALARM') {
+                setAlarmTask(currentTask);
                 setIsAlarmModalOpen(true);
             }
         }
@@ -133,7 +142,10 @@ const WorkerDashboard = () => {
             if (res.success) {
                 if (res.task) {
                     setCurrentTask(res.task);
-                    if (res.task.status === 'ALARM') setIsAlarmModalOpen(true);
+                    if (res.task.status === 'ALARM') {
+                        setAlarmTask(res.task);
+                        setIsAlarmModalOpen(true);
+                    }
                 } else {
                     alert("No more tasks available. You are idle.");
                     setCurrentTask(null);
@@ -191,11 +203,14 @@ const WorkerDashboard = () => {
     };
 
     const handleAcknowledgeAlarm = async () => {
-        if (!currentTask) return;
+        if (!alarmTask) return;
         try {
-            const res = await acknowledgeAlarm(currentTask.id);
+            const res = await acknowledgeAlarm(alarmTask.id);
             if (res.success) {
                 setIsAlarmModalOpen(false);
+                setAlarmTask(null);
+                
+                // Option B: Auto-Switch. The backend already killed the previous task and assigned the new one.
                 setCurrentTask(null);
                 fetchNextTask();
             }
@@ -346,13 +361,13 @@ const WorkerDashboard = () => {
             )}
 
             {/* Alarm Modal */}
-            {isAlarmModalOpen && currentTask && currentTask.status === 'ALARM' && (
+            {isAlarmModalOpen && alarmTask && alarmTask.status === 'ALARM' && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white p-8 rounded-xl max-w-sm w-full text-center shadow-2xl border-4 border-red-500">
                         <div className="text-red-500 text-6xl mb-4">🚨</div>
                         <h3 className="text-2xl font-bold mb-2">Timer Finished!</h3>
                         <p className="text-gray-600 mb-6 text-lg">
-                            The <strong className="text-black">{currentTask.stage}</strong> stage for <strong className="text-blue-700">{currentTask.Product ? currentTask.Product.name : `Product ID: ${currentTask.product_id}`}</strong> has completed.
+                            The <strong className="text-black">{alarmTask.stage}</strong> stage for <strong className="text-blue-700">{alarmTask.Product ? alarmTask.Product.name : `Product ID: ${alarmTask.product_id}`}</strong> has completed.
                         </p>
                         <button 
                             onClick={handleAcknowledgeAlarm}

@@ -9,8 +9,11 @@ export default function WorkingLogs() {
   const [liveWorkers, setLiveWorkers] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const [workerHistory, setWorkerHistory] = useState([]);
+
   useEffect(() => {
     fetchLogs();
+    fetchWorkerHistory();
   }, [date]);
 
   useEffect(() => {
@@ -18,6 +21,17 @@ export default function WorkingLogs() {
     const interval = setInterval(fetchLiveWorkers, 10000); // Poll every 10s
     return () => clearInterval(interval);
   }, []);
+
+  const fetchWorkerHistory = async () => {
+    try {
+      const response = await api.get(`/admin/worker-task-history?date=${date}`);
+      if (response.data.success) {
+        setWorkerHistory(response.data.history);
+      }
+    } catch (error) {
+      console.error("Error fetching worker history:", error);
+    }
+  };
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -152,6 +166,90 @@ export default function WorkingLogs() {
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <hr className="border-gray-200 my-8" />
+
+      {/* WORKER TIMELINE SECTION */}
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+          <Clock className="text-blue-500" size={24} />
+          Worker Activity Timeline
+        </h2>
+        
+        <div className="grid gap-6">
+          {workerHistory.length === 0 ? (
+            <p className="text-gray-500 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 text-center">No worker history available for this date.</p>
+          ) : (
+            workerHistory.map(worker => (
+              <div key={worker.workerId} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                    <User size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">{worker.workerName}</h3>
+                    <p className="text-sm text-gray-500">{worker.workerPhone}</p>
+                  </div>
+                </div>
+
+                {worker.timeline.length === 0 ? (
+                  <p className="text-gray-400 text-sm italic text-center py-4">No tasks assigned today.</p>
+                ) : (
+                  <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-300 before:to-transparent">
+                    {worker.timeline.map((event, idx) => (
+                      <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-blue-100 text-blue-600 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                          {getProcessIcon(event.stage)}
+                        </div>
+                        <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-blue-200">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-2">
+                            <h4 className="font-bold text-gray-800 text-md flex items-center gap-2">
+                              {event.productName} <span className="text-xs font-normal bg-gray-200 px-2 py-0.5 rounded text-gray-700">{event.stage}</span>
+                            </h4>
+                            <div className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 text-blue-700 flex items-center gap-1 shrink-0">
+                              <Clock size={12}/>
+                              {new Date(event.assignedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </div>
+                          </div>
+                          
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p><strong>Qty:</strong> {event.quantityGrams}g</p>
+                            
+                            {event.taskStatus === 'DONE' ? (
+                              <p><strong>Completed At:</strong> {event.taskCompletedAt ? new Date(event.taskCompletedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A'}</p>
+                            ) : event.leftAt ? (
+                              <p><strong>Left At:</strong> {new Date(event.leftAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                            ) : (
+                              <p><strong>Status:</strong> <span className="text-green-600 font-semibold">{event.taskStatus}</span></p>
+                            )}
+
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {event.isBackgrounded && (
+                                <span className="text-[11px] font-semibold text-purple-700 bg-purple-100 px-2 py-1 rounded border border-purple-200">
+                                  Sent to Background
+                                </span>
+                              )}
+                              
+                              {event.taskStatus === 'DONE' && (
+                                <span className={`text-[11px] font-semibold px-2 py-1 rounded border ${
+                                  event.timerStatus === 'Before Timer' ? 'text-green-700 bg-green-100 border-green-200' : 
+                                  event.timerStatus === 'After Timer (Delayed)' ? 'text-red-700 bg-red-100 border-red-200' : 'text-gray-600 bg-gray-100 border-gray-200'
+                                }`}>
+                                  {event.timerStatus}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
