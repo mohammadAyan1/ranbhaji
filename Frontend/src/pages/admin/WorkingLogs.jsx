@@ -155,6 +155,11 @@ export default function WorkingLogs() {
                       <p className="text-sm text-gray-600 mt-1">
                         <span className="font-semibold text-gray-900">{worker.quantityGrams}g</span> - {worker.stage} Stage
                       </p>
+                      {worker.stage === 'DRYING' && worker.dryingMode && (
+                        <p className="text-xs text-blue-600 mt-1 font-medium bg-blue-50 px-2 py-1 rounded w-max border border-blue-100">
+                          Mode: {worker.dryingMode.charAt(0).toUpperCase() + worker.dryingMode.slice(1)}
+                        </p>
+                      )}
                     </div>
 
                     {worker.taskStatus === 'RUNNING' && worker.remainingSeconds !== undefined && (
@@ -222,6 +227,10 @@ export default function WorkingLogs() {
                           <div className="text-sm text-gray-600 space-y-1">
                             <p><strong>Qty:</strong> {event.quantityGrams}g</p>
                             
+                            {event.stage === 'DRYING' && event.dryingMode && (
+                               <p><strong>Mode:</strong> {event.dryingMode.charAt(0).toUpperCase() + event.dryingMode.slice(1)}</p>
+                            )}
+
                             {event.taskStatus === 'DONE' ? (
                               <p><strong>Completed At:</strong> {event.taskCompletedAt ? new Date(event.taskCompletedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A'}</p>
                             ) : event.leftAt ? (

@@ -111,7 +111,9 @@ const Product = sequelize.define('Product', {
   pieces_per_25g: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   time_per_piece_seconds: { type: DataTypes.INTEGER, allowNull: true },
   time_per_25g_seconds: { type: DataTypes.INTEGER, allowNull: true },
-  drying_time_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 }
+  drying_time_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+  drying_time_per_piece_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+  drying_time_per_25g_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 }
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 3. PACKAGES
@@ -126,6 +128,7 @@ const Package = sequelize.define('Package', {
   target_user_id: { type: DataTypes.INTEGER, allowNull: true },
   target_mobile_number: { type: DataTypes.STRING(15), allowNull: true },
   margin_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
+  creation_source: { type: DataTypes.STRING(255), defaultValue: 'manual' },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
 }, { tableName: 'packages', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
@@ -407,7 +410,8 @@ const CalculatorDraft = sequelize.define('CalculatorDraft', {
   num_persons: { type: DataTypes.INTEGER, defaultValue: 2 },
   calculated_price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   max_fixed_count: { type: DataTypes.INTEGER, defaultValue: 0 },
-  max_seasonal_count: { type: DataTypes.INTEGER, defaultValue: 0 }
+  max_seasonal_count: { type: DataTypes.INTEGER, defaultValue: 0 },
+  draft_type: { type: DataTypes.STRING(50), defaultValue: 'standard' }
 }, { tableName: 'calculator_drafts', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 19. CALCULATOR_DRAFT_ITEMS
@@ -661,7 +665,7 @@ const BatchProductTask = sequelize.define('BatchProductTask', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   batch_id: { type: DataTypes.INTEGER, allowNull: false },
   product_id: { type: DataTypes.INTEGER, allowNull: false },
-  stage: { type: DataTypes.ENUM('WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'), allowNull: false },
+  stage: { type: DataTypes.ENUM('WEIGHING', 'SOAKING', 'CUTTING', 'DRYING', 'BUCKET_ARRANGE'), allowNull: false },
   quantity_grams: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
   status: { type: DataTypes.ENUM('NOT_STARTED', 'RUNNING', 'ALARM', 'PAUSED', 'DONE'), defaultValue: 'NOT_STARTED' },
   duration_seconds: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
@@ -669,7 +673,8 @@ const BatchProductTask = sequelize.define('BatchProductTask', {
   started_at: { type: DataTypes.DATE, allowNull: true },
   paused_at: { type: DataTypes.DATE, allowNull: true },
   completed_at: { type: DataTypes.DATE, allowNull: true },
-  alarm_fired_at: { type: DataTypes.DATE, allowNull: true }
+  alarm_fired_at: { type: DataTypes.DATE, allowNull: true },
+  drying_mode: { type: DataTypes.STRING(50), allowNull: true }
 }, { tableName: 'batch_product_tasks', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 BatchProductTask.belongsTo(Batch, { foreignKey: 'batch_id' });

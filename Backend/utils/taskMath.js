@@ -38,11 +38,33 @@ export const calculateCuttingDuration = (product, quantityGrams) => {
 };
 
 /**
- * Calculate drying time.
- * Fixed, regardless of quantity.
+ * Calculate drying time (Default Machine time).
+ * Used when initially scheduling or machine mode.
  */
 export const calculateDryingDuration = (product) => {
     return product.drying_time_seconds || 0;
+};
+
+/**
+ * Recalculate drying time based on drying mode and quantity.
+ * @param {Object} product The product object
+ * @param {Number} quantityGrams The quantity to dry in grams
+ * @param {String} dryingMode 'machine', 'piece', or 'gram'
+ */
+export const recalculateDryingDuration = (product, quantityGrams, dryingMode) => {
+    if (!dryingMode || dryingMode === 'machine') {
+        return calculateDryingDuration(product);
+    }
+    
+    const q = Number(quantityGrams) || 0;
+    
+    if (dryingMode === 'piece' && product.pieces_per_25g != null) {
+        const totalPieces = (q / 25) * Number(product.pieces_per_25g);
+        return totalPieces * (Number(product.drying_time_per_piece_seconds) || 0);
+    } else {
+        // gram base or fallback
+        return (q / 25) * (Number(product.drying_time_per_25g_seconds) || 0);
+    }
 };
 
 /**

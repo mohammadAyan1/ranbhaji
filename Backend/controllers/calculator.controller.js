@@ -5,7 +5,7 @@ import { sequelize } from "../confiq/db.js";
 export const createDraft = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { name, margin_percent, services_per_month, num_persons, calculated_price, max_fixed_count, max_seasonal_count, items } = req.body;
+        const { name, margin_percent, services_per_month, num_persons, calculated_price, max_fixed_count, max_seasonal_count, items, seasonal_quantities, draft_type } = req.body;
 
         if (!name) {
             await t.rollback();
@@ -19,7 +19,9 @@ export const createDraft = async (req, res) => {
             num_persons: parseInt(num_persons || 2),
             calculated_price: parseFloat(calculated_price || 0),
             max_fixed_count: parseInt(max_fixed_count || 0),
-            max_seasonal_count: parseInt(max_seasonal_count || 0)
+            max_seasonal_count: parseInt(max_seasonal_count || 0),
+            seasonal_quantities: seasonal_quantities ? JSON.parse(JSON.stringify(seasonal_quantities)) : null,
+            draft_type: draft_type || 'price_calculator'
         }, { transaction: t });
 
         if (items && items.length > 0) {

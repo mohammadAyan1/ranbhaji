@@ -5,7 +5,14 @@ import { sequelize } from "../confiq/db.js";
 export const createPackage = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { name, num_persons, num_persons_max, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent, target_mobile_number } = req.body;
+        let { name, num_persons, num_persons_max, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent, target_mobile_number, default_seasonal_qty_gm, seasonal_quantities, creation_source } = req.body;
+        if (typeof fixed_items === 'string') fixed_items = JSON.parse(fixed_items);
+        if (typeof seasonal_pool === 'string') seasonal_pool = JSON.parse(seasonal_pool);
+        if (typeof seasonal_quantities === 'string') seasonal_quantities = JSON.parse(seasonal_quantities);
+        let image_url = null;
+        if (req.file) {
+            image_url = `/uploads/${req.file.filename}`;
+        }
 
         // Validation: sum of fixed_item cost per service must be < per_service_amount
         const per_service_amount = (parseFloat(price) / parseInt(services_per_month)) / (1 + parseFloat(margin_percent || 0) / 200);
@@ -38,7 +45,7 @@ export const createPackage = async (req, res) => {
             if (user) final_target_user_id = user.id;
         }
 
-        const pkg = await Package.create({ name, num_persons, num_persons_max: num_persons_max || null, services_per_month, price, type, target_user_id: final_target_user_id, target_mobile_number: final_target_mobile, margin_percent: margin_percent || 0 }, { transaction: t });
+        const pkg = await Package.create({ name, num_persons, num_persons_max: num_persons_max || null, services_per_month, price, type, target_user_id: final_target_user_id, target_mobile_number: final_target_mobile, image_url, margin_percent: margin_percent || 0, creation_source: creation_source || 'manual' }, { transaction: t });
 
 
         if (fixed_items && fixed_items.length > 0) {
@@ -52,7 +59,12 @@ export const createPackage = async (req, res) => {
         }
 
         if (max_select_count) {
-            await PackageSeasonalConfig.create({ package_id: pkg.id, max_select_count }, { transaction: t });
+            await PackageSeasonalConfig.create({ 
+                package_id: pkg.id, 
+                max_select_count, 
+                default_qty_gm: default_seasonal_qty_gm || null,
+                seasonal_quantities: seasonal_quantities || null
+            }, { transaction: t });
         }
 
         await t.commit();
@@ -203,7 +215,15 @@ export const updatePackage = async (req, res) => {
         const pkg = await Package.findByPk(req.params.id);
         if (!pkg) { await t.rollback(); return res.status(404).json({ success: false, message: "Package not found" }); }
 
-        const { name, num_persons, num_persons_max, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent, status, target_mobile_number } = req.body;
+        let { name, num_persons, num_persons_max, services_per_month, price, type, target_user_id, fixed_items, seasonal_pool, max_select_count, margin_percent, status, target_mobile_number, default_seasonal_qty_gm, seasonal_quantities } = req.body;
+        if (typeof fixed_items === 'string') fixed_items = JSON.parse(fixed_items);
+        if (typeof seasonal_pool === 'string') seasonal_pool = JSON.parse(seasonal_pool);
+        if (typeof seasonal_quantities === 'string') seasonal_quantities = JSON.parse(seasonal_quantities);
+        
+        let image_url = pkg.image_url;
+        if (req.file) {
+            image_url = `/uploads/${req.file.filename}`;
+        }
 
 
         // Re-validate if price-related fields changed
@@ -232,8 +252,12 @@ export const updatePackage = async (req, res) => {
             await PackageSeasonalPool.bulkCreate(seasonal_pool.map(product_id => ({ package_id: pkg.id, product_id })), { transaction: t });
         }
 
-        if (max_select_count !== undefined) {
-            await PackageSeasonalConfig.upsert({ package_id: pkg.id, max_select_count }, { transaction: t });
+        if (max_select_count !== undefined || default_seasonal_qty_gm !== undefined || seasonal_quantities !== undefined) {
+            const configPayload = { package_id: pkg.id };
+            if (max_select_count !== undefined) configPayload.max_select_count = max_select_count;
+            if (default_seasonal_qty_gm !== undefined) configPayload.default_qty_gm = default_seasonal_qty_gm || null;
+            if (seasonal_quantities !== undefined) configPayload.seasonal_quantities = seasonal_quantities || null;
+            await PackageSeasonalConfig.upsert(configPayload, { transaction: t });
         }
 
         let final_target_user_id = target_user_id !== undefined ? target_user_id : pkg.target_user_id;
@@ -244,7 +268,7 @@ export const updatePackage = async (req, res) => {
             if (user) final_target_user_id = user.id;
         }
 
-        await pkg.update({ name, num_persons, num_persons_max: num_persons_max !== undefined ? (num_persons_max || null) : pkg.num_persons_max, services_per_month, price, type, target_user_id: final_target_user_id, target_mobile_number: final_target_mobile, margin_percent: newMarginPercent, status }, { transaction: t });
+        await pkg.update({ name, num_persons, num_persons_max: num_persons_max !== undefined ? (num_persons_max || null) : pkg.num_persons_max, services_per_month, price, type, target_user_id: final_target_user_id, target_mobile_number: final_target_mobile, image_url, margin_percent: newMarginPercent, status }, { transaction: t });
 
         await t.commit();
         res.status(200).json({ success: true, message: "Package updated" });

@@ -17,6 +17,10 @@ export default function PackageCalculator() {
   const [numPersonsMax, setNumPersonsMax] = useState("");
   const [personRangeModeCalc, setPersonRangeModeCalc] = useState(false);
 
+  const [seasonalQuantities, setSeasonalQuantities] = useState([250, 250, 250]);
+  const [calculationMode, setCalculationMode] = useState("highest"); // "highest", "average", "custom"
+  const [customPrice, setCustomPrice] = useState("");
+
   // Global category filters
   const [fixedCategoryFilter, setFixedCategoryFilter] = useState("");
   const [seasonalCategoryFilter, setSeasonalCategoryFilter] = useState("");
@@ -26,11 +30,7 @@ export default function PackageCalculator() {
     { id: 1, product_id: "", qty: "", search: "" },
     { id: 2, product_id: "", qty: "", search: "" }
   ]);
-  const [seasonalItems, setSeasonalItems] = useState([
-    { id: 1, product_id: "", qty: "", search: "" },
-    { id: 2, product_id: "", qty: "", search: "" },
-    { id: 3, product_id: "", qty: "", search: "" }
-  ]);
+  const [seasonalPool, setSeasonalPool] = useState([]);
 
   // Saving state
   const [draftName, setDraftName] = useState("");
@@ -56,63 +56,73 @@ export default function PackageCalculator() {
     setFixedItems((prev) => prev.map((item) => item.id === id ? { ...item, [field]: value } : item));
   };
 
-  const updateSeasonalRow = (id, field, value) => {
-    setSeasonalItems((prev) => prev.map((item) => item.id === id ? { ...item, [field]: value } : item));
-  };
-
   const clearCalculator = () => {
     setFixedCount(2);
     setSeasonalCount(3);
     setFixedItems(Array.from({ length: 2 }).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
-    setSeasonalItems(Array.from({ length: 3 }).map((_, i) => ({ id: i + 1, product_id: "", qty: "", search: "" })));
+    setSeasonalPool([]);
+    setSeasonalCount(3);
+    setSeasonalQuantities([250, 250, 250]);
+    setCalculationMode("highest");
+    setCustomPrice("");
     setDraftName("");
     setNumPersonsMax("");
     setPersonRangeModeCalc(false);
     setMsg("");
   };
 
-  // Helper to map and calculate costs
-  const calculateListItems = (list) => {
-    return list.map((item) => {
-      const product = products.find((p) => p.id === parseInt(item.product_id));
-      const qty = parseFloat(item.qty || 0);
-      let unitLabel = product ? product.unit : "";
-      let purchasePrice = product ? parseFloat(product.purchase_price_per_gm || 0) : 0;
-      let sellingPrice = product ? parseFloat(product.selling_price_per_gm || 0) : 0;
+  // Fixed items processing
+  const calculatedFixed = fixedItems.map((item) => {
+    const product = products.find((p) => p.id === parseInt(item.product_id));
+    const qty = parseFloat(item.qty || 0);
+    let unitLabel = product ? product.unit : "";
+    let purchasePrice = product ? parseFloat(product.purchase_price_per_gm || 0) : 0;
+    const purchaseCost = qty * purchasePrice;
+    return { ...item, product, unitLabel, purchasePrice, purchaseCost };
+  });
 
-      // Purchase cost at this quantity
-      const purchaseCost = qty * purchasePrice;
-      const sellingRevenue = qty * sellingPrice;
-
-      return {
-        ...item,
-        product,
-        unitLabel,
-        purchasePrice,
-        sellingPrice,
-        purchaseCost,
-        sellingRevenue
-      };
-    });
-  };
-
-  const calculatedFixed = calculateListItems(fixedItems);
-  const calculatedSeasonal = calculateListItems(seasonalItems);
-
-  // Totals
   const totalFixedPurchaseCost = calculatedFixed.reduce((sum, item) => sum + item.purchaseCost, 0);
-  const totalSeasonalPurchaseCost = calculatedSeasonal.reduce((sum, item) => sum + item.purchaseCost, 0);
-  const totalBasePurchaseCost = totalFixedPurchaseCost + totalSeasonalPurchaseCost;
 
-  // Margin Pricing
-  // 1. Cost ko 2 se divide kiya
-  const dividedCost = totalBasePurchaseCost / 2;
-  // 2. Divided cost par margin nikala
-  const marginAmount = dividedCost * (parseFloat(marginPercent || 0) / 100);
-  // 3. Margin ko original cost me add kiya 
-  const pricePerService = totalBasePurchaseCost + marginAmount;
-  // 4. Deliveries (services) se multiply kiya
+  // New Fixed Budget Calculation: (Total Fixed Cost + ((Total Fixed Cost / Max Fixed Count) * Margin))
+  // However, user specifically answered: `(Total Fixed Cost + ((Total Fixed Cost / 2) * Margin))` where 2 is Max Fixed Count.
+  const actualFixedCount = parseInt(fixedCount) || 1;
+  const fixedBaseMarginPerItem = (totalFixedPurchaseCost / actualFixedCount) * (parseFloat(marginPercent || 0) / 100);
+  const fixedBudget = totalFixedPurchaseCost + fixedBaseMarginPerItem;
+
+  // Seasonal items processing
+  const selectedSeasonalProducts = seasonalPool.map(id => products.find(p => p.id === id)).filter(Boolean);
+  
+  let baseSeasonalPricePerGm = 0;
+  if (selectedSeasonalProducts.length > 0) {
+    if (calculationMode === "highest") {
+      baseSeasonalPricePerGm = Math.max(...selectedSeasonalProducts.map(p => parseFloat(p.purchase_price_per_gm || 0)));
+    } else if (calculationMode === "average") {
+      const sumPrices = selectedSeasonalProducts.reduce((sum, p) => sum + parseFloat(p.purchase_price_per_gm || 0), 0);
+      baseSeasonalPricePerGm = sumPrices / selectedSeasonalProducts.length;
+    }
+  }
+
+  if (calculationMode === "custom") {
+    // Treat customPrice as per kg, convert to per gm
+    baseSeasonalPricePerGm = parseFloat(customPrice || 0) / 1000;
+  }
+
+  // Seasonal Budget: Base Price -> Add Margin -> Multiply by Total Qty of all picks
+  const marginAddedSeasonalPricePerGm = baseSeasonalPricePerGm + (baseSeasonalPricePerGm * (parseFloat(marginPercent || 0) / 100));
+  const totalSeasonalQtyGm = seasonalQuantities.reduce((sum, q) => sum + (parseFloat(q) || 0), 0);
+  const seasonalBudget = marginAddedSeasonalPricePerGm * totalSeasonalQtyGm;
+
+  const pricePerService = fixedBudget + seasonalBudget;
   const finalPackagePrice = pricePerService * parseInt(servicesCount || 1);
+
+  const toggleSeasonalProduct = (product_id) => {
+    const id = parseInt(product_id);
+    if (seasonalPool.includes(id)) {
+      setSeasonalPool(seasonalPool.filter(p => p !== id));
+    } else {
+      setSeasonalPool([...seasonalPool, id]);
+    }
+  };
 
   // Save Draft package simulation
   const saveDraft = async () => {
@@ -133,15 +143,13 @@ export default function PackageCalculator() {
       }
     });
 
-    seasonalItems.forEach(item => {
-      if (item.product_id && item.qty) {
-        itemsPayload.push({
-          product_id: parseInt(item.product_id),
-          qty_gm: parseFloat(item.qty),
-          is_fixed: false,
-          is_seasonal: true
-        });
-      }
+    seasonalPool.forEach(id => {
+      itemsPayload.push({
+        product_id: id,
+        qty_gm: 0,
+        is_fixed: false,
+        is_seasonal: true
+      });
     });
 
     if (itemsPayload.length === 0) {
@@ -161,6 +169,8 @@ export default function PackageCalculator() {
       calculated_price: parseFloat(finalPackagePrice),
       max_fixed_count: parseInt(fixedCount || 0),
       max_seasonal_count: parseInt(seasonalCount || 0),
+      seasonal_quantities: seasonalQuantities.map(q => parseFloat(q) || 0),
+      draft_type: "price_calculator",
       items: itemsPayload
     };
 
@@ -305,33 +315,20 @@ export default function PackageCalculator() {
           />
         </div>
         <div>
-          <label className="label text-xs uppercase tracking-wider">Max Seasonal Products</label>
+          <label className="label text-xs uppercase tracking-wider">Max Seasonal Picks</label>
           <input
             type="number"
             min="0"
             className="input text-sm"
             value={seasonalCount}
             onChange={(e) => {
-              const newCount = parseInt(e.target.value) || 0;
-              if (newCount < seasonalCount) {
-                const removedItems = seasonalItems.slice(newCount);
-                const hasProductSelected = removedItems.some(item => item.product_id);
-                if (hasProductSelected) {
-                  const confirmRemove = window.confirm("You have selected products in the rows being removed. Are you sure you want to remove them?");
-                  if (!confirmRemove) return;
-                }
-              }
-              setSeasonalCount(newCount);
-              const newItems = [...seasonalItems];
-              if (newCount > newItems.length) {
-                for (let i = newItems.length; i < newCount; i++) {
-                  const nextId = newItems.length > 0 ? Math.max(...newItems.map((it) => it.id)) + 1 : 1;
-                  newItems.push({ id: nextId, product_id: "", qty: "", search: "" });
-                }
-              } else if (newCount < newItems.length) {
-                newItems.splice(newCount);
-              }
-              setSeasonalItems(newItems);
+              const count = parseInt(e.target.value) || 0;
+              setSeasonalCount(count);
+              setSeasonalQuantities(prev => {
+                const newArr = [...prev];
+                while(newArr.length < count) newArr.push(250);
+                return newArr.slice(0, count);
+              });
             }}
           />
         </div>
@@ -339,18 +336,18 @@ export default function PackageCalculator() {
 
       {/* ─── SUMMARY CARDS ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Base Cost */}
+        {/* Total Base Cost (Info only) */}
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
-          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Total Base Purchase Cost</p>
-          <p className="text-2xl font-bold text-gray-900">₹{totalBasePurchaseCost.toFixed(2)}</p>
-          <span className="text-[10px] text-gray-500">Fixed: ₹{totalFixedPurchaseCost.toFixed(2)} · Seasonal: ₹{totalSeasonalPurchaseCost.toFixed(2)}</span>
+          <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculation Budget</p>
+          <p className="text-2xl font-bold text-gray-900">₹{(fixedBudget + seasonalBudget).toFixed(2)}</p>
+          <span className="text-[10px] text-gray-500">Fixed: ₹{fixedBudget.toFixed(2)} · Seasonal: ₹{seasonalBudget.toFixed(2)}</span>
         </div>
 
-        {/* Per-Service Margin Price */}
+        {/* Per-Service Price */}
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
           <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Selling Price Per Service</p>
           <p className="text-2xl font-bold text-yellow-400">₹{pricePerService.toFixed(2)}</p>
-          <span className="text-[10px] text-gray-500">Base Cost + {marginPercent}% Margin</span>
+          <span className="text-[10px] text-gray-500">Includes {marginPercent}% Margin</span>
         </div>
 
         {/* Deliveries */}
@@ -392,9 +389,8 @@ export default function PackageCalculator() {
 
         <div className="space-y-3">
           {fixedItems.map((item, index) => {
-            const selectedSeasonalIds = seasonalItems.map(item => parseInt(item.product_id)).filter(id => !isNaN(id));
             const rowProducts = products.filter(
-              (p) => (!fixedCategoryFilter || p.category === fixedCategoryFilter) && !selectedSeasonalIds.includes(p.id)
+              (p) => (!fixedCategoryFilter || p.category === fixedCategoryFilter) && !seasonalPool.includes(p.id)
             );
 
             return (
@@ -490,13 +486,61 @@ export default function PackageCalculator() {
         </div>
       </div>
 
-      {/* ─── SEASONAL PRODUCTS BUILDER ────────────────────────────── */}
+      {/* ─── SEASONAL PRODUCTS POOL ────────────────────────────── */}
       <div className="card border-gray-200 bg-white/30 p-6 space-y-4">
-        <div className="flex justify-between items-center flex-wrap gap-4">
+        <div className="flex justify-between items-start flex-wrap gap-4">
           <div>
             <h3 className="font-semibold text-gray-900 text-lg">2. Seasonal Pool Simulation</h3>
-            <p className="text-xs text-gray-500">Configure {seasonalCount} seasonal products for customer options.</p>
+            <p className="text-xs text-gray-500 mb-4">Select items to form the seasonal pool. The customer can pick up to {seasonalCount} items from this pool.</p>
+            
+            <div className="flex flex-wrap gap-4 bg-white p-4 rounded-xl border border-gray-200">
+              <div>
+                <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Calculation Mode</label>
+                <select className="input py-1.5 px-3 text-sm w-40" value={calculationMode} onChange={(e) => setCalculationMode(e.target.value)}>
+                  <option value="highest">Highest Price</option>
+                  <option value="average">Average Price</option>
+                  <option value="custom">Custom Price</option>
+                </select>
+              </div>
+
+              {calculationMode === "custom" && (
+                <div>
+                  <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Custom Price (per kg)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 200"
+                    className="input py-1.5 px-3 text-sm w-32"
+                    value={customPrice}
+                    onChange={(e) => setCustomPrice(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-2 flex-wrap">
+                {seasonalQuantities.map((qty, idx) => (
+                  <div key={idx}>
+                    <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Pick {idx + 1} Qty (gm)</label>
+                    <input
+                      type="number" min="0" className="input py-1.5 px-3 text-sm w-24"
+                      value={qty}
+                      onChange={e => {
+                        const newArr = [...seasonalQuantities];
+                        newArr[idx] = e.target.value;
+                        setSeasonalQuantities(newArr);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col justify-center px-4 border-l border-gray-200 ml-2">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider">Base Seasonal Ref Price</span>
+                <span className="text-sm font-bold text-gray-900">₹{(baseSeasonalPricePerGm * 1000).toFixed(0)}/kg</span>
+              </div>
+            </div>
           </div>
+          
           <div>
             <select
               className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-white"
@@ -512,104 +556,35 @@ export default function PackageCalculator() {
           </div>
         </div>
 
-        <div className="space-y-3">
-          {seasonalItems.map((item, index) => {
-            const selectedFixedIds = fixedItems.map(item => parseInt(item.product_id)).filter(id => !isNaN(id));
-            const rowProducts = products.filter(
-              (p) => (!seasonalCategoryFilter || p.category === seasonalCategoryFilter) && !selectedFixedIds.includes(p.id)
-            );
-
-            return (
-              <div
-                key={item.id}
-                className="flex flex-wrap items-center gap-4 bg-gray-100/40 rounded-xl p-4 border border-gray-200 hover:border-gray-300 transition-all duration-200"
-              >
-                <div className="w-8 flex items-center justify-center font-bold text-gray-600">
-                  {index + 1}.
-                </div>
-
-                {/* Product Search */}
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Search & Select Product</label>
-                  <input
-                    type="text"
-                    list={`seasonal-products-list-${item.id}`}
-                    className="input py-1.5 px-3 text-sm w-full bg-white"
-                    placeholder="Type to search..."
-                    value={item.search || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      updateSeasonalRow(item.id, "search", val);
-                      const p = rowProducts.find(prod => `${prod.name} (${prod.category})` === val);
-                      if (p) updateSeasonalRow(item.id, "product_id", p.id);
-                      else updateSeasonalRow(item.id, "product_id", "");
-                    }}
-                    required
-                  />
-                  <datalist id={`seasonal-products-list-${item.id}`}>
-                    {rowProducts.map((p) => (
-                      <option key={p.id} value={`${p.name} (${p.category})`} />
-                    ))}
-                  </datalist>
-                </div>
-
-                {/* Quantity Input */}
-                <div className="w-full sm:w-32">
-                  <label className="text-[10px] text-gray-600 block mb-1 uppercase tracking-wider">Quantity</label>
-                  <div className="flex items-center bg-white rounded-xl border border-gray-300 px-2.5">
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Qty"
-                      value={item.qty}
-                      onChange={(e) => updateSeasonalRow(item.id, "qty", e.target.value)}
-                      className="w-full bg-transparent text-gray-900 border-none py-1.5 focus:outline-none text-sm text-center"
-                      required
-                    />
-                    <span className="text-xs text-gray-500 font-medium ml-1">
-                      {item.unitLabel || "gm"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Pricing per gm / unit */}
-                {item.product_id && products.find(p => p.id === parseInt(item.product_id)) && (
-                  <div className="flex gap-4 border-l border-gray-200 pl-4 py-1.5 w-full md:w-auto md:border-l md:pl-4">
-                    {/* Cost details */}
-                    <div className="text-left w-32">
-                      <span className="text-[10px] text-gray-600 block uppercase">Base Purchase Cost</span>
-                      <span className="text-xs font-semibold text-gray-900 block">
-                        ₹{(parseFloat(item.qty || 0) * parseFloat(products.find(p => p.id === parseInt(item.product_id))?.purchase_price_per_gm || 0)).toFixed(2)}
-                      </span>
-                      <span className="text-[9px] text-gray-500 block">
-                        (₹{(parseFloat(products.find(p => p.id === parseInt(item.product_id))?.purchase_price_per_gm || 0) * 1000).toFixed(0)}/kg)
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Remove Row Button */}
-                <div className="ml-auto md:ml-0 flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (item.product_id) {
-                        const confirmRemove = window.confirm("Are you sure you want to remove this row?");
-                        if (!confirmRemove) return;
-                      }
-                      setSeasonalItems(prev => prev.filter(p => p.id !== item.id));
-                      setSeasonalCount(prev => Math.max(0, prev - 1));
-                    }}
-                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Remove Row"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mt-4">
+          {products
+            .filter(p => (!seasonalCategoryFilter || p.category === seasonalCategoryFilter))
+            .map(p => {
+              const inPool = seasonalPool.includes(p.id);
+              const inFixed = fixedItems.some(fi => parseInt(fi.product_id) === p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={inFixed}
+                  onClick={() => !inFixed && toggleSeasonalProduct(p.id)}
+                  className={`text-left p-2.5 rounded-xl border text-xs transition-all duration-200 ${inFixed
+                    ? "border-gray-200 bg-gray-100/20 text-gray-600 cursor-not-allowed"
+                    : inPool
+                      ? "border-fresh-600/50 bg-fresh-100/30 text-fresh-700 shadow-sm"
+                      : "border-gray-300 bg-white hover:border-gray-600 shadow-sm"
+                    }`}
+                >
+                  <p className="font-medium truncate">{p.name}</p>
+                  <p className="text-gray-500 text-[10px] mt-0.5">₹{parseFloat(p.purchase_price_per_gm * 1000).toFixed(0)}/kg</p>
+                  {inFixed && <p className="text-yellow-600 text-[10px] mt-0.5">In fixed items</p>}
+                </button>
+              );
+            })}
         </div>
+        <p className="text-gray-500 text-xs mt-2 text-right">
+          {seasonalPool.length} products in pool.
+        </p>
       </div>
 
       {/* ─── DRAFT SAVING BAR ─────────────────────────────────────── */}
@@ -627,7 +602,7 @@ export default function PackageCalculator() {
         <div className="flex items-end justify-end pt-5">
           <button
             onClick={saveDraft}
-            disabled={saving || !draftName.trim() || totalBasePurchaseCost <= 0}
+            disabled={saving || !draftName.trim() || (fixedBudget + seasonalBudget) <= 0}
             className="btn-primary text-sm font-bold py-2.5 px-8"
           >
             {saving ? "Saving Draft..." : "💾 Save as calculated draft package"}

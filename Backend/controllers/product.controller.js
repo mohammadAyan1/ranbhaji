@@ -6,7 +6,7 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, S
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, margin_percentage, water_capacity_liters } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, drying_time_per_piece_seconds, drying_time_per_25g_seconds, margin_percentage, water_capacity_liters } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
@@ -30,7 +30,9 @@ export const createProduct = async (req, res) => {
             pieces_per_25g: pieces_per_25g || null,
             time_per_piece_seconds: time_per_piece_seconds || null,
             time_per_25g_seconds: time_per_25g_seconds || null,
-            drying_time_seconds: drying_time_seconds || 0
+            drying_time_seconds: drying_time_seconds || 0,
+            drying_time_per_piece_seconds: drying_time_per_piece_seconds || 0,
+            drying_time_per_25g_seconds: drying_time_per_25g_seconds || 0
         });
 
 
@@ -98,7 +100,7 @@ export const updateProduct = async (req, res) => {
 
         const updateData = { ...req.body };
 
-        const numericFields = ['pieces_per_25g', 'time_per_piece_seconds', 'time_per_25g_seconds', 'weighing_time_seconds', 'soaking_time_seconds', 'drying_time_seconds'];
+        const numericFields = ['pieces_per_25g', 'time_per_piece_seconds', 'time_per_25g_seconds', 'weighing_time_seconds', 'soaking_time_seconds', 'drying_time_seconds', 'drying_time_per_piece_seconds', 'drying_time_per_25g_seconds'];
         for (const field of numericFields) {
             if (updateData[field] === "") {
                 updateData[field] = null;

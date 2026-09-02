@@ -1,7 +1,8 @@
 import express from 'express';
 import { 
     getTodayBatches, getBatchDemand, assignNextTask, startTaskStage, 
-    pauseTask, resumeTask, completeTask, acknowledgeAlarm, joinTask, triggerAlarm, checkAlarms, syncTask
+    pauseTask, resumeTask, completeTask, acknowledgeAlarm, joinTask, triggerAlarm, checkAlarms, syncTask,
+    getTaskBuckets
 } from '../controllers/workerTask.controller.js';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware.js';
 
@@ -24,6 +25,7 @@ router.post('/tasks/:taskId/complete', completeTask);
 router.post('/tasks/:taskId/acknowledge', acknowledgeAlarm);
 router.post('/tasks/:taskId/join', joinTask);
 router.get('/tasks/:taskId/sync', syncTask);
+router.get('/tasks/:taskId/buckets', getTaskBuckets);
 
 // For testing/mocking the timer ending
 router.post('/tasks/:taskId/trigger-alarm', triggerAlarm);

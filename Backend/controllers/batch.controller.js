@@ -531,7 +531,8 @@ export const getLiveWorkers = async (req, res) => {
                         quantityGrams: task.quantity_grams,
                         startedAt: task.started_at,
                         pausedAt: task.paused_at,
-                        remainingSeconds: task.remaining_seconds
+                        remainingSeconds: task.remaining_seconds,
+                        dryingMode: task.drying_mode
                     };
                 }
             }
@@ -619,7 +620,8 @@ export const getWorkerTaskHistory = async (req, res) => {
                     taskStatus: task.status, 
                     taskCompletedAt: task.completed_at,
                     timerStatus: timerStatus,
-                    isBackgrounded: backgroundStatus
+                    isBackgrounded: backgroundStatus,
+                    dryingMode: task.drying_mode
                 };
             }).filter(item => item !== null);
 

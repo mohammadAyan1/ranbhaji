@@ -25,8 +25,8 @@ export const syncTask = async (taskId) => {
     return res.data;
 };
 
-export const startTaskStage = async (taskId) => {
-    const res = await api.post(`/worker-tasks/tasks/${taskId}/start`);
+export const startTaskStage = async (taskId, payload = {}) => {
+    const res = await api.post(`/worker-tasks/tasks/${taskId}/start`, payload);
     return res.data;
 };
 
@@ -63,5 +63,10 @@ export const triggerAlarm = async (taskId) => {
 // Attendance
 export const markAttendance = async () => {
     const res = await api.post('/attendance/mark');
+    return res.data;
+};
+
+export const getTaskBuckets = async (taskId) => {
+    const res = await api.get(`/worker-tasks/tasks/${taskId}/buckets`);
     return res.data;
 };

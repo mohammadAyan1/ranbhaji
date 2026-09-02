@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import api from "../../api/axios";
 
 const TYPES = ["standard", "custom", "yearly"];
 
 export default function AdminPackages() {
+  const topRef = useRef(null);
   const [packages, setPackages] = useState([]);
   const [products, setProducts] = useState([]);
   const [users, setUsers] = useState([]);
@@ -15,12 +16,13 @@ export default function AdminPackages() {
 
   // Form state
   const [form, setForm] = useState({
-    name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", target_mobile_number: "", margin_percent: 0,
+    name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", target_mobile_number: "", margin_percent: 0, image: null, creation_source: "manual"
   });
   const [personRangeMode, setPersonRangeMode] = useState(false); // toggle: single vs range
   const [fixedItems, setFixedItems] = useState([]); // [{ product_id, default_qty_gm }]
   const [seasonalPool, setSeasonalPool] = useState([]); // [product_id]
   const [maxSelectCount, setMaxSelectCount] = useState(3);
+  const [seasonalQuantities, setSeasonalQuantities] = useState([250, 250, 250]);
   const [drafts, setDrafts] = useState([]);
   const [selectedDraftId, setSelectedDraftId] = useState("");
 
@@ -59,6 +61,8 @@ export default function AdminPackages() {
       target_user_id: "",
       target_mobile_number: "",
       margin_percent: draft.margin_percent,
+      image: null,
+      creation_source: draft.draft_type === "margin_calculator" ? "draft_margin_calculator" : "draft_price_calculator"
     });
 
     const fixed = draft.Items
@@ -69,10 +73,15 @@ export default function AdminPackages() {
       }));
     setFixedItems(fixed);
 
-    const seasonal = draft.Items
-      .filter(item => item.is_seasonal)
-      .map(item => item.product_id);
+    const seasonalItemsList = draft.Items.filter(item => item.is_seasonal);
+    const seasonal = seasonalItemsList.map(item => item.product_id);
     setSeasonalPool(seasonal);
+    
+    if (draft.seasonal_quantities && draft.seasonal_quantities.length > 0) {
+      setSeasonalQuantities(draft.seasonal_quantities);
+    } else {
+      setSeasonalQuantities(Array(draft.max_seasonal_count || 3).fill(250));
+    }
 
     setMaxSelectCount(draft.max_seasonal_count || 3);
     setMsg(`✅ Auto-filled package from draft calculation: "${draft.name}"`);
@@ -96,11 +105,12 @@ export default function AdminPackages() {
   }, [fixedItems, form.price, form.services_per_month, products]);
 
   const resetForm = () => {
-    setForm({ name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", target_mobile_number: "", margin_percent: 0 });
+    setForm({ name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", target_mobile_number: "", margin_percent: 0, image: null, creation_source: "manual" });
     setPersonRangeMode(false);
     setFixedItems([]);
     setSeasonalPool([]);
     setMaxSelectCount(3);
+    setSeasonalQuantities([250, 250, 250]);
     setEditing(null);
     setShowForm(false);
     setValidationResult(null);
@@ -108,13 +118,18 @@ export default function AdminPackages() {
 
   const startEdit = (pkg) => {
     setEditing(pkg.id);
-    setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", target_mobile_number: pkg.target_mobile_number || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0 });
+    setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", target_mobile_number: pkg.target_mobile_number || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0, image: null, creation_source: pkg.creation_source || "manual" });
     setPersonRangeMode(!!pkg.num_persons_max); // enable range mode if max was set
     setFixedItems(pkg.FixedItems?.map(fi => ({ product_id: fi.product_id, default_qty_gm: fi.default_qty_gm })) || []);
     setSeasonalPool(pkg.SeasonalPool?.map(sp => sp.product_id) || []);
     setMaxSelectCount(pkg.SeasonalConfig?.max_select_count || 3);
+    if (pkg.SeasonalConfig?.seasonal_quantities) {
+      setSeasonalQuantities(pkg.SeasonalConfig.seasonal_quantities);
+    } else {
+      setSeasonalQuantities(Array(pkg.SeasonalConfig?.max_select_count || 3).fill(250));
+    }
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    topRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const handleSubmit = async (e) => {
@@ -125,29 +140,37 @@ export default function AdminPackages() {
     }
     setSubmitting(true); setMsg("");
 
-    const payload = {
-      ...form,
-      num_persons: parseInt(form.num_persons),
-      num_persons_max: personRangeMode && form.num_persons_max ? parseInt(form.num_persons_max) : null,
-      services_per_month: parseInt(form.services_per_month),
-      price: parseFloat(form.price),
-      margin_percent: parseFloat(form.margin_percent || 0),
-      target_user_id: form.type === "custom" && form.target_user_id ? parseInt(form.target_user_id) : null,
-      target_mobile_number: form.type === "custom" ? form.target_mobile_number : null,
-      fixed_items: fixedItems.filter(fi => fi.product_id && fi.default_qty_gm).map(fi => ({
-        product_id: parseInt(fi.product_id),
-        default_qty_gm: parseFloat(fi.default_qty_gm),
-      })),
-      seasonal_pool: seasonalPool.filter(Boolean).map(id => parseInt(id)),
-      max_select_count: parseInt(maxSelectCount),
-    };
+    const fd = new FormData();
+    fd.append("name", form.name);
+    fd.append("num_persons", parseInt(form.num_persons));
+    if (personRangeMode && form.num_persons_max) fd.append("num_persons_max", parseInt(form.num_persons_max));
+    fd.append("services_per_month", parseInt(form.services_per_month));
+    fd.append("price", parseFloat(form.price));
+    fd.append("type", form.type);
+    fd.append("margin_percent", parseFloat(form.margin_percent || 0));
+    fd.append("creation_source", form.creation_source || "manual");
+    if (form.type === "custom" && form.target_user_id) fd.append("target_user_id", parseInt(form.target_user_id));
+    if (form.type === "custom" && form.target_mobile_number) fd.append("target_mobile_number", form.target_mobile_number);
+    
+    const validFixedItems = fixedItems.filter(fi => fi.product_id && fi.default_qty_gm).map(fi => ({
+      product_id: parseInt(fi.product_id),
+      default_qty_gm: parseFloat(fi.default_qty_gm),
+    }));
+    fd.append("fixed_items", JSON.stringify(validFixedItems));
+    
+    const validSeasonalPool = seasonalPool.filter(Boolean).map(id => parseInt(id));
+    fd.append("seasonal_pool", JSON.stringify(validSeasonalPool));
+    
+    fd.append("max_select_count", parseInt(maxSelectCount));
+    fd.append("seasonal_quantities", JSON.stringify(seasonalQuantities.map(q => parseFloat(q) || 0)));
+    if (form.image) fd.append("image", form.image);
 
     try {
       if (editing) {
-        await api.put(`/packages/${editing}`, payload);
+        await api.put(`/packages/${editing}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
         setMsg("✅ Package updated successfully");
       } else {
-        await api.post("/packages", payload);
+        await api.post("/packages", fd, { headers: { "Content-Type": "multipart/form-data" } });
         setMsg("✅ Package created successfully");
       }
       resetForm();
@@ -188,7 +211,7 @@ export default function AdminPackages() {
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div ref={topRef} className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-header">Package Management 📦</h1>
@@ -322,6 +345,10 @@ export default function AdminPackages() {
                 {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
+            <div>
+              <label className="label">Package Image (Optional)</label>
+              <input type="file" accept="image/*" className="input file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-fresh-50 file:text-fresh-700 hover:file:bg-fresh-100" onChange={e => setForm({ ...form, image: e.target.files[0] })} />
+            </div>
             {form.type === "custom" && (
               <>
                 <div>
@@ -443,9 +470,34 @@ export default function AdminPackages() {
                 <input
                   type="number" min="1" max="20"
                   value={maxSelectCount}
-                  onChange={e => setMaxSelectCount(e.target.value)}
+                  onChange={e => {
+                    const count = parseInt(e.target.value) || 0;
+                    setMaxSelectCount(count);
+                    setSeasonalQuantities(prev => {
+                      const newArr = [...prev];
+                      while(newArr.length < count) newArr.push(250);
+                      return newArr.slice(0, count);
+                    });
+                  }}
                   className="input w-16 py-1 text-sm text-center"
                 />
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {seasonalQuantities.map((qty, idx) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <span className="text-gray-600 text-[10px] uppercase tracking-wider">Pick {idx+1} Qty:</span>
+                    <input
+                      type="number" min="0" step="any"
+                      className="input w-16 py-1 text-sm text-center"
+                      value={qty}
+                      onChange={e => {
+                        const newArr = [...seasonalQuantities];
+                        newArr[idx] = e.target.value;
+                        setSeasonalQuantities(newArr);
+                      }}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
             {/* Category filter tabs */}
@@ -520,6 +572,12 @@ export default function AdminPackages() {
                     <h3 className="text-lg font-bold text-gray-900">{pkg.name}</h3>
                     <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
                     <span className={pkg.status === "active" ? "badge-green badge" : "badge-red badge"}>{pkg.status}</span>
+                    {pkg.creation_source === 'draft_margin_calculator' && (
+                      <span className="badge bg-purple-100 text-purple-700 border-purple-200">Margin Calculator</span>
+                    )}
+                    {pkg.creation_source === 'draft_price_calculator' && (
+                      <span className="badge bg-indigo-100 text-indigo-700 border-indigo-200">Price Calculator</span>
+                    )}
                   </div>
                   <p className="text-gray-600 text-sm">
                     {pkg.num_persons_max
@@ -556,7 +614,7 @@ export default function AdminPackages() {
                 {pkg.SeasonalPool?.length > 0 && (
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-1.5">
-                      Seasonal Pool (pick {pkg.SeasonalConfig?.max_select_count})
+                      Seasonal Pool (pick {pkg.SeasonalConfig?.max_select_count}) {pkg.SeasonalConfig?.seasonal_quantities ? `[${pkg.SeasonalConfig.seasonal_quantities.join("g, ")}g]` : ""}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {pkg.SeasonalPool.map(sp => (

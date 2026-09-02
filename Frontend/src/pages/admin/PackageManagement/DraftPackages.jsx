@@ -45,6 +45,7 @@ export default function DraftPackages() {
                     <tr className="border-b border-gray-100 text-sm font-semibold text-gray-600 bg-white">
                       <th className="px-6 py-4">ID</th>
                       <th className="px-6 py-4">Name</th>
+                      <th className="px-6 py-4">Source</th>
                       <th className="px-6 py-4">Persons</th>
                       <th className="px-6 py-4">Services/Mo</th>
                       <th className="px-6 py-4">Price</th>
@@ -56,6 +57,11 @@ export default function DraftPackages() {
                       <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-4 text-sm font-medium text-gray-500">#{p.id}</td>
                         <td className="px-6 py-4 font-semibold text-gray-900">{p.name}</td>
+                        <td className="px-6 py-4">
+                          {p.creation_source === 'draft_margin_calculator' && <span className="badge bg-purple-100 text-purple-700 border-purple-200 text-xs px-2 py-1">Margin Calc</span>}
+                          {p.creation_source === 'draft_price_calculator' && <span className="badge bg-indigo-100 text-indigo-700 border-indigo-200 text-xs px-2 py-1">Price Calc</span>}
+                          {(!p.creation_source || p.creation_source === 'manual') && <span className="text-gray-400 text-xs font-medium">Manual</span>}
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           {p.num_persons}{p.num_persons_max ? ` - ${p.num_persons_max}` : ''}
                         </td>
@@ -82,6 +88,7 @@ export default function DraftPackages() {
                     <tr className="border-b border-gray-100 text-sm font-semibold text-gray-600 bg-white">
                       <th className="px-6 py-4">ID</th>
                       <th className="px-6 py-4">Name</th>
+                      <th className="px-6 py-4">Source</th>
                       <th className="px-6 py-4">Persons</th>
                       <th className="px-6 py-4">Services/Mo</th>
                       <th className="px-6 py-4">Calculated Price</th>
@@ -93,6 +100,11 @@ export default function DraftPackages() {
                       <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-4 text-sm font-medium text-gray-500">#{d.id}</td>
                         <td className="px-6 py-4 font-semibold text-gray-900">{d.name}</td>
+                        <td className="px-6 py-4">
+                          {d.draft_type === 'margin_calculator' && <span className="badge bg-purple-100 text-purple-700 border-purple-200 text-xs px-2 py-1">Margin Calc</span>}
+                          {d.draft_type === 'price_calculator' && <span className="badge bg-indigo-100 text-indigo-700 border-indigo-200 text-xs px-2 py-1">Price Calc</span>}
+                          {!d.draft_type && <span className="text-gray-400 text-xs font-medium">-</span>}
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-600">{d.num_persons}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{d.services_per_month}</td>
                         <td className="px-6 py-4 font-bold text-gray-900">₹{parseFloat(d.calculated_price).toFixed(0)}</td>

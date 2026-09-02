@@ -169,7 +169,8 @@ export default function MarginCalculator() {
       calculated_price: parseFloat(finalPackagePrice),
       max_fixed_count: parseInt(fixedCount || 0),
       max_seasonal_count: parseInt(seasonalCount || 0),
-      items: itemsPayload
+      items: itemsPayload,
+      draft_type: "margin_calculator"
     };
 
     try {

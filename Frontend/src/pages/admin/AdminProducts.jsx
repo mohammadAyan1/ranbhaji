@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -10,13 +10,15 @@ const emptyForm = {
   purchase_price_input: "", margin_percentage: "", unit: "gm", unit_id: "",
   description: "", min_retail_qty: "", water_capacity_liters: "",
   weighing_time_seconds: 0, soaking_time_seconds: 0, cutting_mode: "PER_25G", 
-  pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0, image: null
+  pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0, 
+  drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null
 };
 
 const showKgToggle = (category, unit) =>
   category !== "water" && unit === "gm";
 
 export default function AdminProducts() {
+  const topRef = useRef(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
@@ -283,6 +285,8 @@ export default function AdminProducts() {
     payload.append("time_per_piece_seconds", form.time_per_piece_seconds || "");
     payload.append("time_per_25g_seconds", form.time_per_25g_seconds || "");
     payload.append("drying_time_seconds", form.drying_time_seconds || 0);
+    payload.append("drying_time_per_piece_seconds", form.drying_time_per_piece_seconds || 0);
+    payload.append("drying_time_per_25g_seconds", form.drying_time_per_25g_seconds || 0);
     payload.append("margin_percentage", marginPercentage);
 
     if (form.image) {
@@ -374,9 +378,11 @@ export default function AdminProducts() {
       time_per_piece_seconds: p.time_per_piece_seconds || "",
       time_per_25g_seconds: p.time_per_25g_seconds || "",
       drying_time_seconds: p.drying_time_seconds || 0,
+      drying_time_per_piece_seconds: p.drying_time_per_piece_seconds || 0,
+      drying_time_per_25g_seconds: p.drying_time_per_25g_seconds || 0,
       image: null
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    topRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const calculateActualAvg = (productId, productName, unit) => {
@@ -488,7 +494,7 @@ export default function AdminProducts() {
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div ref={topRef} className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="page-header">Products & Stock Inventory 🥦</h1>
@@ -765,9 +771,19 @@ export default function AdminProducts() {
                   )}
 
                   <div>
-                    <label className="label text-[11px] mb-1">Drying (sec)</label>
+                    <label className="label text-[11px] mb-1">Drying (Machine sec)</label>
                     <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 300"
                       value={form.drying_time_seconds} onChange={e => handleFormChange("drying_time_seconds", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] mb-1">Drying (Piece sec)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 10"
+                      value={form.drying_time_per_piece_seconds} onChange={e => handleFormChange("drying_time_per_piece_seconds", e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-[11px] mb-1">Drying (25g sec)</label>
+                    <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 15"
+                      value={form.drying_time_per_25g_seconds} onChange={e => handleFormChange("drying_time_per_25g_seconds", e.target.value)} />
                   </div>
                 </div>
               )}

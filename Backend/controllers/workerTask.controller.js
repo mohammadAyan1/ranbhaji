@@ -6,7 +6,7 @@ import {
 } from '../models/index.js';
 import {
     calculateTotalProductTime, calculateWeighingDuration, calculateSoakingDuration,
-    calculateCuttingDuration, calculateDryingDuration, recalculateRemainingTime
+    calculateCuttingDuration, calculateDryingDuration, recalculateDryingDuration, recalculateRemainingTime
 } from '../utils/taskMath.js';
 import { computeBatchDemandHelper } from './batch.controller.js';
 
@@ -70,12 +70,12 @@ class Mutex {
     constructor() { this.queue = []; this.locked = false; }
     async lock() {
         return new Promise(resolve => {
-            if (this.locked) { this.queue.push(resolve); } 
+            if (this.locked) { this.queue.push(resolve); }
             else { this.locked = true; resolve(); }
         });
     }
     unlock() {
-        if (this.queue.length > 0) { const resolve = this.queue.shift(); resolve(); } 
+        if (this.queue.length > 0) { const resolve = this.queue.shift(); resolve(); }
         else { this.locked = false; }
     }
 }
@@ -86,44 +86,44 @@ const syncBatchDemand = async (batchId) => {
     try {
         const today = new Date().toISOString().split('T')[0];
 
-    // Compute demandMap using the exact same logic as Admin Dashboard
-    const demandMapObj = await computeBatchDemandHelper(batchId, today);
-    const demandMap = {};
-    Object.keys(demandMapObj).forEach(k => {
-        demandMap[k] = demandMapObj[k].total_quantity;
-    });
+        // Compute demandMap using the exact same logic as Admin Dashboard
+        const demandMapObj = await computeBatchDemandHelper(batchId, today);
+        const demandMap = {};
+        Object.keys(demandMapObj).forEach(k => {
+            demandMap[k] = demandMapObj[k].total_quantity;
+        });
 
-    // Clear old demands for this batch to remove products that no longer have demand today
-    await BatchProductDemand.destroy({ where: { batch_id: batchId } });
+        // Clear old demands for this batch to remove products that no longer have demand today
+        await BatchProductDemand.destroy({ where: { batch_id: batchId } });
 
-    // Fetch Purchase Logs for today to only show products actually purchased
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+        // Fetch Purchase Logs for today to only show products actually purchased
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
 
-    const purchases = await PurchaseLog.findAll({
-        where: { purchase_date: { [Op.between]: [startOfToday, endOfToday] } },
-        attributes: ['product_id']
-    });
-    const purchasedProductIds = new Set(purchases.map(p => p.product_id));
+        const purchases = await PurchaseLog.findAll({
+            where: { purchase_date: { [Op.between]: [startOfToday, endOfToday] } },
+            attributes: ['product_id']
+        });
+        const purchasedProductIds = new Set(purchases.map(p => parseInt(p.product_id)));
 
-    // Fetch product categories to always allow water
-    const products = await Product.findAll({
-        where: { id: Object.keys(demandMap) },
-        attributes: ['id', 'category']
-    });
-    const productCategories = {};
-    products.forEach(p => productCategories[p.id] = p.category);
+        // Fetch product categories to always allow water
+        const products = await Product.findAll({
+            where: { id: Object.keys(demandMap) },
+            attributes: ['id', 'category']
+        });
+        const productCategories = {};
+        products.forEach(p => productCategories[p.id] = p.category);
 
-    for (const [productId, qty] of Object.entries(demandMap)) {
-        const pId = parseInt(productId);
-        const isWater = productCategories[pId] === 'water';
+        for (const [productId, qty] of Object.entries(demandMap)) {
+            const pId = parseInt(productId);
+            const isWater = productCategories[pId] === 'water';
 
-        if (qty > 0 && (isWater || purchasedProductIds.has(pId))) {
-            await BatchProductDemand.create({ batch_id: batchId, product_id: pId, quantity_grams: qty });
+            if (qty > 0 && (isWater || purchasedProductIds.has(pId))) {
+                await BatchProductDemand.create({ batch_id: batchId, product_id: pId, quantity_grams: qty });
+            }
         }
-    }
     } finally {
         syncMutex.unlock();
     }
@@ -141,6 +141,9 @@ export const getBatchDemand = async (req, res) => {
             where: { batch_id: batchId },
             include: [{ model: Product, attributes: ['id', 'name'] }]
         });
+
+        // Filter out 'Alkaline' products from worker dashboard
+        demands = demands.filter(d => d.Product && !d.Product.name.toLowerCase().includes('alkaline'));
 
         const aggregated = {};
         for (const d of demands) {
@@ -165,23 +168,23 @@ export const checkAlarms = async (req, res) => {
     try {
         const { batchId } = req.query;
         const workerId = req.user.id;
-        
+
         if (!batchId) return res.status(400).json({ success: false, message: "batchId required" });
 
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
 
         const alarmTasks = await BatchProductTask.findAll({
-            where: { 
-                batch_id: batchId, 
+            where: {
+                batch_id: batchId,
                 status: 'ALARM',
                 created_at: { [Op.gte]: startOfToday }
             },
             include: [
                 { model: Product },
-                { 
-                    model: TaskWorkerAssignment, 
-                    as: 'worker_assignments', 
+                {
+                    model: TaskWorkerAssignment,
+                    as: 'worker_assignments',
                     where: { worker_id: workerId }
                 }
             ]
@@ -211,10 +214,13 @@ export const assignNextTask = async (req, res) => {
         await syncBatchDemand(batchId);
 
         // Get all demands for this batch to know the products and quantities
-        const demands = await BatchProductDemand.findAll({
+        let demands = await BatchProductDemand.findAll({
             where: { batch_id: batchId },
             include: [{ model: Product }]
         });
+
+        // Filter out 'Alkaline' products from worker dashboard assignments
+        demands = demands.filter(d => d.Product && !d.Product.name.toLowerCase().includes('alkaline'));
 
         if (!demands.length) {
             return res.status(200).json({ success: true, task: null, message: "No demand for this batch" });
@@ -225,7 +231,7 @@ export const assignNextTask = async (req, res) => {
         startOfTodayForTasks.setHours(0, 0, 0, 0);
 
         const tasks = await BatchProductTask.findAll({
-            where: { 
+            where: {
                 batch_id: batchId,
                 created_at: { [Op.gte]: startOfTodayForTasks }
             },
@@ -248,9 +254,9 @@ export const assignNextTask = async (req, res) => {
                     const activeAssignments = await TaskWorkerAssignment.findAll({ where: { task_id: taskToReturn.id, left_at: null } });
                     const oldWorkerCount = activeAssignments.length;
                     const newWorkerCount = oldWorkerCount + 1;
-                    
+
                     await TaskWorkerAssignment.create({ task_id: taskToReturn.id, worker_id: workerId, joined_at: new Date() });
-                    
+
                     // Recalculate time if it was running or not started and there's a change in worker count
                     if (['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(taskToReturn.status)) {
                         let currentRemaining = taskToReturn.remaining_seconds;
@@ -270,6 +276,52 @@ export const assignNextTask = async (req, res) => {
             return res.status(200).json({ success: true, task: taskToReturn, action });
         };
 
+        // Check if all batch processing is complete (all demands have finished DRYING)
+        const isBatchProcessingComplete = demands.length > 0 && demands.every(d => {
+            const completedDriedQty = tasks
+                .filter(t => t.product_id === d.product_id && t.stage === 'DRYING' && t.status === 'DONE')
+                .reduce((sum, t) => sum + parseFloat(t.quantity_grams || 0), 0);
+            return completedDriedQty >= parseFloat(d.quantity_grams);
+        });
+
+        if (isBatchProcessingComplete) {
+            // Check if BUCKET_ARRANGE tasks already exist
+            const bucketArrangeTasks = tasks.filter(t => t.stage === 'BUCKET_ARRANGE');
+            if (bucketArrangeTasks.length === 0) {
+                // Get all retail orders for this batch to count users per product
+                const retailOrders = await RetailOrder.findAll({
+                    where: { batch_id: batchId },
+                    include: [{ model: RetailOrderItem, as: 'Items' }]
+                });
+
+                // Generate BUCKET_ARRANGE task for each demanded product
+                for (const d of demands) {
+                    // Count how many users ordered this product
+                    let userCount = 0;
+                    for (const ro of retailOrders) {
+                        const hasProduct = ro.Items.some(item => item.product_id === d.product_id);
+                        if (hasProduct) userCount++;
+                    }
+                    if (userCount === 0) userCount = 1; // Fallback
+
+                    const baseTime = d.Product ? (d.Product.weighing_time_seconds || 30) : 30;
+                    const totalDuration = baseTime * userCount;
+
+                    const newTask = await BatchProductTask.create({
+                        batch_id: batchId,
+                        product_id: d.product_id,
+                        stage: 'BUCKET_ARRANGE',
+                        quantity_grams: d.quantity_grams,
+                        status: 'NOT_STARTED',
+                        duration_seconds: totalDuration,
+                        remaining_seconds: totalDuration
+                    });
+                    const loadedTask = await BatchProductTask.findByPk(newTask.id, { include: [{ model: Product }] });
+                    tasks.push(loadedTask);
+                }
+            }
+        }
+
         // Priority -1: Unacknowledged ALARMs?
         const alarmTasks = tasks.filter(t => t.status === 'ALARM');
         if (alarmTasks.length > 0) {
@@ -279,12 +331,12 @@ export const assignNextTask = async (req, res) => {
         // Priority 0: Is the worker already assigned to an active HANDS-ON task, or an unstarted task?
         const myCurrentTask = tasks.find(t => {
             if (!t.worker_assignments.some(a => a.worker_id === workerId)) return false;
-            
+
             // If it's a background task (SOAKING, DRYING), only return it if it's NOT_STARTED
             if (['SOAKING', 'DRYING'].includes(t.stage)) {
                 return t.status === 'NOT_STARTED';
             }
-            
+
             // If it's a hands-on task (WEIGHING, CUTTING), return it if it's active
             return ['NOT_STARTED', 'RUNNING', 'PAUSED'].includes(t.status);
         });
@@ -292,11 +344,11 @@ export const assignNextTask = async (req, res) => {
             return await returnTask(myCurrentTask, 'CONTINUE_TASK');
         }
 
-        // Priority 1: Advance existing products (NOT_STARTED for DRYING, CUTTING, SOAKING)
-        // Prefer stages closer to completion: DRYING > CUTTING > SOAKING
-        const stagePriority = { DRYING: 3, CUTTING: 2, SOAKING: 1, WEIGHING: 0 };
+        // Priority 1: Advance existing products (NOT_STARTED for DRYING, CUTTING, SOAKING, BUCKET_ARRANGE)
+        // Prefer stages closer to completion: BUCKET_ARRANGE > DRYING > CUTTING > SOAKING
+        const stagePriority = { BUCKET_ARRANGE: 4, DRYING: 3, CUTTING: 2, SOAKING: 1, WEIGHING: 0 };
         const notStartedPipelineTasks = tasks.filter(t => 
-            t.status === 'NOT_STARTED' && ['SOAKING', 'CUTTING', 'DRYING'].includes(t.stage) &&
+            t.status === 'NOT_STARTED' && ['SOAKING', 'CUTTING', 'DRYING', 'BUCKET_ARRANGE'].includes(t.stage) &&
             t.worker_assignments.length === 0
         ).sort((a, b) => stagePriority[b.stage] - stagePriority[a.stage]);
 
@@ -308,7 +360,7 @@ export const assignNextTask = async (req, res) => {
         const activeHandsOnTasks = tasks.filter(t => {
             if (!['WEIGHING', 'CUTTING'].includes(t.stage)) return false;
             if (!['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(t.status)) return false;
-            
+
             // If it's WEIGHING, only allow if NO worker is currently assigned
             if (t.stage === 'WEIGHING' && t.worker_assignments.length > 0) {
                 return false;
@@ -387,6 +439,14 @@ export const startTaskStage = async (req, res) => {
         if (task.status === 'NOT_STARTED') {
             task.status = 'RUNNING';
             task.started_at = new Date();
+            if (task.stage === 'DRYING' && req.body.drying_mode) {
+                task.drying_mode = req.body.drying_mode;
+                if (['piece', 'gram'].includes(req.body.drying_mode)) {
+                    const newDuration = recalculateDryingDuration(task.Product, task.quantity_grams, req.body.drying_mode);
+                    task.duration_seconds = newDuration;
+                    task.remaining_seconds = newDuration;
+                }
+            }
             await task.save();
 
             // Assign worker to this task if not already (for all stages so we know who initiated background tasks)
@@ -417,14 +477,14 @@ const handleStageCompletion = async (task) => {
     // Create the NEXT stage task in NOT_STARTED state
     const stageOrder = ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'];
     const currentIdx = stageOrder.indexOf(task.stage);
-    
+
     let nextTask = null;
     if (currentIdx >= 0 && currentIdx < stageOrder.length - 1) {
         let nextStage = stageOrder[currentIdx + 1];
         const product = task.Product || await Product.findByPk(task.product_id);
-        
+
         let duration = 0;
-        while(nextStage) {
+        while (nextStage) {
             if (nextStage === 'SOAKING') duration = calculateSoakingDuration(product);
             else if (nextStage === 'CUTTING') duration = calculateCuttingDuration(product, task.quantity_grams);
             else if (nextStage === 'DRYING') duration = calculateDryingDuration(product);
@@ -514,21 +574,21 @@ export const completeTask = async (req, res) => {
     try {
         const { taskId } = req.params;
         const workerId = req.user.id;
-        
+
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
         if (!task) return res.status(404).json({ success: false });
 
         const result = await handleStageCompletion(task);
-        
+
         // If there's a next task for this product, assign it to the worker who completed this stage
         if (result.nextTask && result.nextTask.status === 'NOT_STARTED') {
-            await TaskWorkerAssignment.create({ 
-                task_id: result.nextTask.id, 
-                worker_id: workerId, 
-                joined_at: new Date() 
+            await TaskWorkerAssignment.create({
+                task_id: result.nextTask.id,
+                worker_id: workerId,
+                joined_at: new Date()
             });
         }
-        
+
         res.status(200).json({ success: true, task: result.task, nextTask: result.nextTask });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -540,26 +600,26 @@ export const acknowledgeAlarm = async (req, res) => {
     try {
         const { taskId } = req.params;
         const workerId = req.user.id;
-        
+
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
-        
+
         if (!task) return res.status(404).json({ success: false, message: "Task not found" });
-        
+
         // If already completed (e.g. double click or another worker), return success to clear frontend modal
         if (task.status === 'DONE') {
             return res.status(200).json({ success: true, task });
         }
-        
+
         if (task.status !== 'ALARM' && task.status !== 'RUNNING') {
             return res.status(400).json({ success: false, message: "Task not in alarm or running" });
         }
 
         // Complete the alarm task and get next task
         const result = await handleStageCompletion(task);
-        
+
         // Option B: Auto-Switch. Leave the current task (it will be PAUSED)
         await leaveTaskHelper(workerId);
-        
+
         // Automatically assign the worker to the newly created CUTTING task
         if (result.nextTask && result.nextTask.status === 'NOT_STARTED') {
             await TaskWorkerAssignment.create({
@@ -568,7 +628,7 @@ export const acknowledgeAlarm = async (req, res) => {
                 joined_at: new Date()
             });
         }
-        
+
         res.status(200).json({ success: true, task: result.task, nextTask: result.nextTask });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -640,10 +700,36 @@ export const syncTask = async (req, res) => {
     try {
         const { taskId } = req.params;
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
-        
+
         if (!task) return res.status(404).json({ success: false, message: "Task not found" });
 
         res.status(200).json({ success: true, task });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Get buckets for a BUCKET_ARRANGE task
+export const getTaskBuckets = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const task = await BatchProductTask.findByPk(taskId);
+        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+        
+        const retailOrders = await RetailOrder.findAll({
+            where: { batch_id: task.batch_id },
+            include: [
+                { model: User },
+                { model: RetailOrderItem, as: "Items", where: { product_id: task.product_id } }
+            ]
+        });
+        
+        const buckets = retailOrders.map(ro => ({
+            userName: ro.User ? ro.User.name : "Unknown User",
+            quantity: ro.Items.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0)
+        }));
+        
+        res.status(200).json({ success: true, buckets });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
