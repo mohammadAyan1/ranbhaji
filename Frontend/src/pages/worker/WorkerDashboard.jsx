@@ -375,10 +375,13 @@ const WorkerDashboard = () => {
                                     <div className="w-full max-w-md bg-green-50 border border-green-200 p-4 rounded-lg mt-4 mb-4">
                                         <h3 className="font-bold text-green-800 mb-2">User Bucket List (Demands)</h3>
                                         {taskBuckets.length > 0 ? (
-                                            <ul className="list-disc pl-5 text-left text-sm text-green-900 font-medium">
+                                            <ul className="list-none pl-2 text-left text-sm text-green-900 font-medium space-y-2">
                                                 {taskBuckets.map((bucket, idx) => (
-                                                    <li key={idx}>
-                                                        {bucket.userName}: {bucket.quantity}g
+                                                    <li key={idx} className="flex items-center">
+                                                        <span className="font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded-full mr-2 min-w-[30px] text-center">
+                                                            #{idx + 1}
+                                                        </span>
+                                                        <span>{bucket.userName}: {bucket.quantity}g</span>
                                                     </li>
                                                 ))}
                                             </ul>

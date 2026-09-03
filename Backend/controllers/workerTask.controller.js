@@ -721,7 +721,8 @@ export const getTaskBuckets = async (req, res) => {
             include: [
                 { model: User },
                 { model: RetailOrderItem, as: "Items", where: { product_id: task.product_id } }
-            ]
+            ],
+            order: [['id', 'ASC']]
         });
         
         const buckets = retailOrders.map(ro => ({
