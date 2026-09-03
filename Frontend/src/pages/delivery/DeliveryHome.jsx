@@ -43,9 +43,9 @@ const LiveTimer = ({ startedAt, expectedMinutes, onAlarm }) => {
       if (expectedMinutes > 0 && elap >= Math.floor(expectedMinutes * 60) && !hasPlayedAlarm.current) {
         hasPlayedAlarm.current = true;
         if (onAlarm) {
-           onAlarm();
+          onAlarm();
         } else {
-           playBeep();
+          playBeep();
         }
       }
     };
@@ -153,11 +153,11 @@ export default function DeliveryHome() {
           gain.connect(ctx.destination);
           osc.type = "square";
           osc.frequency.setValueAtTime(440, ctx.currentTime);
-          
+
           // Create a repeating on/off beep effect for continuous alarm
           gain.gain.setValueAtTime(1, ctx.currentTime);
           // Instead of scheduling stops, we just let it run. In a real app, you might use an LFO for pulsing.
-          
+
           osc.start();
           window.activeAlarmOscillator = osc;
         }
@@ -337,9 +337,9 @@ export default function DeliveryHome() {
 
   const triggerLocalAlarm = (data) => {
     if (alarmData && alarmData.split_id === data.id) return;
-    
+
     setAlarmData({ split_id: data.id, stage: data.stage, message: `Target time for ${data.stage} has exceeded!` });
-    
+
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (AudioContext && !window.activeAlarmOscillator) {
       const ctx = new AudioContext();
