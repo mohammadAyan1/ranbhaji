@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { ProductionBatch, BatchSplit, SplitWorkerAssignment, WorkerAttendance, Product, User } from '../models/index.js';
+import { ProductionBatch, BatchSplit, SplitWorkerAssignment, WorkerAttendance, Product, User, BatchProductTask, TaskWorkerAssignment, Batch } from '../models/index.js';
 import { calculateProductProcessingTime } from '../utils/timeCalculator.js';
 
 const STAGES = ['pending', 'weighing_start', 'soaking', 'cleaning_cutting', 'drying', 'completed'];
@@ -21,14 +21,14 @@ const advanceStage = async (split) => {
     split.stage = nextStage;
     split.stage_started_at = null; // Wait for them to click "Start"
     split.stage_completed_at = null;
-    
+
     if (nextStage === 'completed') {
         split.status = 'completed';
     } else {
         // Every new stage starts as waiting until the worker clicks "Start"
-        split.status = 'waiting'; 
+        split.status = 'waiting';
     }
-    
+
     await split.save();
     return split;
 };
@@ -143,9 +143,9 @@ export const assignWorker = async (workerId) => {
     const activeBatchIds = activeWeighingSplits.map(s => s.batch_id);
 
     let pendingBatch = await ProductionBatch.findOne({
-        where: { 
-            pending_qty_kg: { [Op.gt]: 0 }, 
-            status: { [Op.ne]: 'completed' }, 
+        where: {
+            pending_qty_kg: { [Op.gt]: 0 },
+            status: { [Op.ne]: 'completed' },
             date: today,
             id: { [Op.notIn]: activeBatchIds.length > 0 ? activeBatchIds : [] }
         },
@@ -164,7 +164,7 @@ export const assignWorker = async (workerId) => {
 
     if (pendingBatch) {
         const qty_to_split = Math.min(10, parseFloat(pendingBatch.pending_qty_kg)); // Default 10kg
-        
+
         const timeData = calculateProductProcessingTime(pendingBatch.product, qty_to_split, 1);
         const totalWorkMinutes = timeData.stages.cleaning_cutting.total_work_minutes || 0;
 
@@ -183,9 +183,9 @@ export const assignWorker = async (workerId) => {
 
         await SplitWorkerAssignment.create({ split_id: newSplit.id, worker_id: workerId, joined_at: new Date() });
         await WorkerAttendance.update({ current_status: 'working' }, { where: { worker_id: workerId, date: today } });
-        
+
         await recalculateSplit(newSplit.id);
-        
+
         return { action: 'working', split: newSplit }; // No work available
     }
 
@@ -253,7 +253,7 @@ export const markAttendance = async (req, res) => {
     try {
         const { worker_id } = req.body;
         const today = new Date().toISOString().split('T')[0];
-        
+
         let attendance = await WorkerAttendance.findOne({
             where: { worker_id, date: today }
         });
@@ -279,7 +279,7 @@ export const startWork = async (req, res) => {
     try {
         const worker_id = req.user.id;
         const today = new Date().toISOString().split('T')[0];
-        
+
         let attendance = await WorkerAttendance.findOne({
             where: { worker_id, date: today }
         });
@@ -519,7 +519,7 @@ export const getMyStatus = async (req, res) => {
             else if (split.stage === 'packing') eta_minutes = timeData.stages.packing.time_min;
             else if (split.stage === 'weighing_start') eta_minutes = timeData.stages.weighing_start.time_min;
             else if (split.stage === 'weighing_end') eta_minutes = timeData.stages.weighing_end.time_min;
-            
+
             const dataToReturn = split.toJSON();
             dataToReturn.eta_minutes = eta_minutes !== null ? Number(Number(eta_minutes).toFixed(2)) : null;
 
@@ -534,7 +534,7 @@ export const getMyStatus = async (req, res) => {
         if (!attendance) {
             return res.status(200).json({ success: true, worker_id: req.user.id, status: 'no_attendance' });
         }
-        
+
         if (attendance.current_status === 'inactive') {
             return res.status(200).json({ success: true, worker_id: req.user.id, status: 'inactive' });
         }
@@ -555,7 +555,7 @@ export const getMyStatus = async (req, res) => {
                         }]
                     }]
                 });
-                
+
                 if (newAssignment && newAssignment.split) {
                     const split = newAssignment.split;
                     let eta_minutes = null;
@@ -568,7 +568,7 @@ export const getMyStatus = async (req, res) => {
                     else if (split.stage === 'packing') eta_minutes = timeData.stages.packing.time_min;
                     else if (split.stage === 'weighing_start') eta_minutes = timeData.stages.weighing_start.time_min;
                     else if (split.stage === 'weighing_end') eta_minutes = timeData.stages.weighing_end.time_min;
-                    
+
                     const dataToReturn = split.toJSON();
                     dataToReturn.eta_minutes = eta_minutes !== null ? Number(Number(eta_minutes).toFixed(2)) : null;
 
@@ -635,6 +635,76 @@ export const startProcess = async (req, res) => {
 
         emitUpdate(req);
         res.status(200).json({ success: true, message: "Process started", split });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// API: GET /api/production/detailed-worker-logs
+export const getDetailedWorkerLogs = async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        const todayStart = new Date(today + 'T00:00:00.000Z');
+
+        // Fetch all active tasks from today or pending/running tasks
+        const tasks = await BatchProductTask.findAll({
+            where: {
+                [Op.or]: [
+                    { created_at: { [Op.gte]: todayStart } },
+                    { status: { [Op.ne]: 'DONE' } } // Assuming you want ongoing tasks regardless of date
+                ]
+            },
+            include: [
+                {
+                    model: Product,
+                    attributes: ['name']
+                },
+                {
+                    model: TaskWorkerAssignment,
+                    as: 'worker_assignments',
+                    include: [
+                        {
+                            model: User,
+                            as: 'worker',
+                            attributes: ['name']
+                        }
+                    ]
+                },
+                {
+                    model: Batch,
+                    attributes: ['name']
+                }
+            ],
+            order: [['started_at', 'DESC']]
+        });
+
+        const logs = [];
+
+        tasks.forEach(task => {
+            task.worker_assignments.forEach(assignment => {
+                // Determine Role: The first worker assigned is usually the initiator
+                // Actually, let's just see if their joined_at is close to started_at
+                const isInitiator = Math.abs(new Date(assignment.joined_at).getTime() - new Date(task.started_at).getTime()) < 5000;
+
+                logs.push({
+                    worker_name: assignment.worker ? assignment.worker.name : 'Unknown',
+                    task: `${task.Product ? task.Product.name : 'Unknown'} - ${task.stage}`,
+                    status: task.status,
+                    assigned_at: assignment.joined_at,
+                    started_at: task.started_at,
+                    completed_at: assignment.left_at || task.completed_at,
+                    alarm_fired_at: task.alarm_fired_at,
+                    role: isInitiator ? 'Initiator' : 'Helper',
+                    duration_seconds: task.duration_seconds
+                });
+            });
+        });
+
+        // Sort logs by most recently assigned
+        logs.sort((a, b) => new Date(b.assigned_at) - new Date(a.assigned_at));
+
+        res.status(200).json({ success: true, logs });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

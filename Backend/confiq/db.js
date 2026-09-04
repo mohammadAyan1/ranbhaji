@@ -11,6 +11,11 @@ const sequelize = new Sequelize(
         host: process.env.DB_HOST,
         port: process.env.DB_PORT || 3306,
         dialect: 'mysql',
+        timezone: '+00:00', // Ensure Node parses DB times as UTC
+        dialectOptions: {
+            // Force MySQL session to UTC so CURRENT_TIMESTAMP and Date objects match
+            timezone: 'Z',
+        },
         logging: false, // Set to console.log to see SQL queries
         pool: {
             max: 10,

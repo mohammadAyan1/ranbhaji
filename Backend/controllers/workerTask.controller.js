@@ -6,7 +6,7 @@ import {
 } from '../models/index.js';
 import {
     calculateTotalProductTime, calculateWeighingDuration, calculateSoakingDuration,
-    calculateCuttingDuration, calculateDryingDuration, recalculateDryingDuration, recalculateRemainingTime
+    calculateCuttingDuration, calculateDryingDuration, recalculateDryingDuration, recalculateRemainingTime, calculateElapsedRealSeconds
 } from '../utils/taskMath.js';
 import { computeBatchDemandHelper } from './batch.controller.js';
 
@@ -45,12 +45,11 @@ const leaveTaskHelper = async (workerId) => {
             if (['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(task.status)) {
                 let currentRemaining = task.remaining_seconds;
                 if (task.status === 'RUNNING' && oldWorkerCount > 0) {
-                    const now = new Date();
-                    const elapsedRealSeconds = Math.floor((now.getTime() - new Date(task.started_at).getTime()) / 1000);
+                    const elapsedRealSeconds = calculateElapsedRealSeconds(task.started_at);
                     const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
                     currentRemaining = task.remaining_seconds - Math.floor(effectiveElapsed / oldWorkerCount);
                     if (currentRemaining < 0) currentRemaining = 0;
-                    task.started_at = now; // reset start time for the new speed
+                    task.started_at = new Date(); // reset start time for the new speed
                 }
                 task.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
                 if (newWorkerCount === 0 && task.status === 'RUNNING') {
@@ -185,7 +184,7 @@ export const checkAlarms = async (req, res) => {
                 {
                     model: TaskWorkerAssignment,
                     as: 'worker_assignments',
-                    where: { worker_id: workerId }
+                    where: { worker_id: workerId, left_at: null }
                 }
             ]
         });
@@ -266,7 +265,7 @@ export const assignNextTask = async (req, res) => {
                             const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
                             currentRemaining = taskToReturn.remaining_seconds - Math.floor(effectiveElapsed / oldWorkerCount);
                             if (currentRemaining < 0) currentRemaining = 0;
-                            taskToReturn.started_at = now; // reset start time for the new speed
+                            taskToReturn.started_at = new Date(); // reset start time for the new speed
                         }
                         taskToReturn.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
                         await taskToReturn.save();
@@ -276,13 +275,22 @@ export const assignNextTask = async (req, res) => {
             return res.status(200).json({ success: true, task: taskToReturn, action });
         };
 
-        // Check if all batch processing is complete (all demands have finished DRYING)
-        const isBatchProcessingComplete = demands.length > 0 && demands.every(d => {
-            const completedDriedQty = tasks
-                .filter(t => t.product_id === d.product_id && t.stage === 'DRYING' && t.status === 'DONE')
-                .reduce((sum, t) => sum + parseFloat(t.quantity_grams || 0), 0);
-            return completedDriedQty >= parseFloat(d.quantity_grams);
+        // Check if all batch processing is complete
+        // 1. Have all demands been weighed (i.e. entered the pipeline)?
+        const unweighedProductsForCheck = demands.filter(d => {
+            const processedQty = getProcessedQuantity(d.product_id, 'WEIGHING');
+            return processedQty < parseFloat(d.quantity_grams);
         });
+
+        // 2. Are there any active tasks still in the pipeline?
+        const activePipelineTasks = tasks.filter(t =>
+            ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'].includes(t.stage) &&
+            ['NOT_STARTED', 'RUNNING', 'PAUSED'].includes(t.status)
+        );
+
+        const isBatchProcessingComplete = demands.length > 0 &&
+            unweighedProductsForCheck.length === 0 &&
+            activePipelineTasks.length === 0;
 
         if (isBatchProcessingComplete) {
             // Check if BUCKET_ARRANGE tasks already exist
@@ -347,7 +355,7 @@ export const assignNextTask = async (req, res) => {
         // Priority 1: Advance existing products (NOT_STARTED for DRYING, CUTTING, SOAKING, BUCKET_ARRANGE)
         // Prefer stages closer to completion: BUCKET_ARRANGE > DRYING > CUTTING > SOAKING
         const stagePriority = { BUCKET_ARRANGE: 4, DRYING: 3, CUTTING: 2, SOAKING: 1, WEIGHING: 0 };
-        const notStartedPipelineTasks = tasks.filter(t => 
+        const notStartedPipelineTasks = tasks.filter(t =>
             t.status === 'NOT_STARTED' && ['SOAKING', 'CUTTING', 'DRYING', 'BUCKET_ARRANGE'].includes(t.stage) &&
             t.worker_assignments.length === 0
         ).sort((a, b) => stagePriority[b.stage] - stagePriority[a.stage]);
@@ -531,7 +539,7 @@ export const pauseTask = async (req, res) => {
         const activeWorkers = await TaskWorkerAssignment.count({ where: { task_id: taskId, left_at: null } });
 
         // Elapsed real seconds since last start
-        const elapsedRealSeconds = Math.floor((now.getTime() - new Date(task.started_at).getTime()) / 1000);
+        const elapsedRealSeconds = calculateElapsedRealSeconds(task.started_at);
 
         // Effective elapsed work units
         const effectiveElapsed = elapsedRealSeconds * activeWorkers;
@@ -661,12 +669,11 @@ export const joinTask = async (req, res) => {
         if (['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(task.status)) {
             let currentRemaining = task.remaining_seconds;
             if (task.status === 'RUNNING') {
-                const now = new Date();
-                const elapsedRealSeconds = Math.floor((now.getTime() - new Date(task.started_at).getTime()) / 1000);
+                const elapsedRealSeconds = calculateElapsedRealSeconds(task.started_at);
                 const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
                 currentRemaining = task.remaining_seconds - (oldWorkerCount > 0 ? Math.floor(effectiveElapsed / oldWorkerCount) : 0);
                 if (currentRemaining < 0) currentRemaining = 0;
-                task.started_at = now; // reset start time for the new speed
+                task.started_at = new Date(); // reset start time for the new speed
             }
             task.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
             await task.save();
@@ -713,23 +720,24 @@ export const syncTask = async (req, res) => {
 export const getTaskBuckets = async (req, res) => {
     try {
         const { taskId } = req.params;
-        const task = await BatchProductTask.findByPk(taskId);
-        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
-        
-        const retailOrders = await RetailOrder.findAll({
-            where: { batch_id: task.batch_id },
-            include: [
-                { model: User },
-                { model: RetailOrderItem, as: "Items", where: { product_id: task.product_id } }
-            ],
-            order: [['id', 'ASC']]
+        const task = await BatchProductTask.findByPk(taskId, {
+            include: [{ model: Batch }]
         });
-        
-        const buckets = retailOrders.map(ro => ({
-            userName: ro.User ? ro.User.name : "Unknown User",
-            quantity: ro.Items.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0)
-        }));
-        
+        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+
+        // Use today's date to match syncBatchDemand logic
+        const date = new Date().toISOString().split('T')[0];
+
+        const demandMap = await computeBatchDemandHelper(task.batch_id, date);
+        const productDemand = demandMap[task.product_id];
+
+        let buckets = [];
+        if (productDemand && productDemand.usersMap) {
+            buckets = Object.values(productDemand.usersMap)
+                .filter(b => b.quantity > 0)
+                .sort((a, b) => a.sortId - b.sortId);
+        }
+
         res.status(200).json({ success: true, buckets });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

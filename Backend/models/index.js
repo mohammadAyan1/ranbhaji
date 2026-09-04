@@ -83,12 +83,12 @@ const Product = sequelize.define('Product', {
   total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   current_stock: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
-  
+
   // Legacy time fields
-  soaking_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
-  cleaning_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
-  cutting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
-  drying_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 }, 
+  soaking_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  cleaning_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  cutting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
+  drying_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   weighting_time: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
 
   // New Time & Production fields

@@ -11,7 +11,8 @@ import {
     advanceSplitStage,
     startWork,
     acknowledgeAlarm,
-    startProcess
+    startProcess,
+    getDetailedWorkerLogs
 } from '../controllers/production.controller.js';
 
 const router = express.Router();
@@ -26,6 +27,7 @@ router.post('/splits/:id/advance', requireAuth, advanceSplitStage);
 router.post('/splits/:id/start-process', requireAuth, startProcess);
 router.post('/splits/:id/acknowledge-alarm', requireAuth, acknowledgeAlarm);
 router.get('/dashboard', requireAuth, requireRole(['admin']), getDashboard);
+router.get('/detailed-worker-logs', requireAuth, requireRole(['admin']), getDetailedWorkerLogs);
 router.get('/my-status', requireAuth, getMyStatus);
 
 export default router;

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     getTodayBatches, getBatchDemand, assignNextTask, startTaskStage,
     pauseTask, resumeTask, completeTask, acknowledgeAlarm, joinTask,
-    markAttendance, checkAlarms, syncTask, getTaskBuckets
+    markAttendance, checkAlarms, syncTask, getTaskBuckets, triggerAlarm
 } from '../../api/workerTask.api';
 
 const WorkerDashboard = () => {
@@ -33,8 +33,9 @@ const WorkerDashboard = () => {
             if (selectedBatch) {
                 checkAlarms(selectedBatch).then(res => {
                     if (res.success && res.task && res.task.status === 'ALARM') {
-                        setAlarmTask(res.task);
-                        setIsAlarmModalOpen(true);
+                        // Only open if modal is not already open — prevents loop
+                        setAlarmTask(prev => res.task);
+                        setIsAlarmModalOpen(prev => { if (!prev) return true; return prev; });
                     }
                 }).catch(e => console.error("Alarm poll error:", e));
             }
@@ -52,13 +53,29 @@ const WorkerDashboard = () => {
                     if (res.success && res.task) {
                         if (res.task.status === 'DONE') {
                             // Another worker completed this joint task. Move to next task.
+                            clearInterval(syncTimerRef.current);
                             setCurrentTask(null);
                             fetchNextTask();
+                        } else if (res.task.status === 'ALARM') {
+                            // Backend has fired alarm — stop sync, open modal ONCE.
+                            // Do NOT call setCurrentTask here, as that re-triggers
+                            // the timer useEffect and reopens the modal every 5 seconds.
+                            clearInterval(syncTimerRef.current);
+                            setAlarmTask(res.task);
+                            setIsAlarmModalOpen(true);
                         } else {
+                            // Only update remaining_seconds if server value differs
+                            // significantly (>2 sec) to avoid timer reset on every sync
                             setCurrentTask(prev => {
-                                // Only update if it hasn't changed locally to prevent race conditions
                                 if (prev && prev.id === res.task.id) {
-                                    return res.task;
+                                    const diff = Math.abs(
+                                        (prev.remaining_seconds || 0) - (res.task.remaining_seconds || 0)
+                                    );
+                                    // Only sync if worker count changed (remaining changed a lot)
+                                    // This avoids resetting the countdown timer on every poll
+                                    if (diff > 5) {
+                                        return res.task;
+                                    }
                                 }
                                 return prev;
                             });
@@ -75,31 +92,43 @@ const WorkerDashboard = () => {
         };
     }, [currentTask?.id, currentTask?.status]);
 
-    // Timer logic
+    // Timer logic — count down from remaining_seconds, not from started_at
+    // Using started_at causes IST/UTC timezone confusion and instant alarm bug
     useEffect(() => {
-        if (currentTask && currentTask.status === 'RUNNING') {
-            const updateTimer = () => {
-                const now = new Date();
-                const startedAt = new Date(currentTask.started_at);
-                const elapsedRealSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+        if (timerRef.current) clearInterval(timerRef.current);
 
-                // Assuming solo for simple local display. Server recalculates accurately on actions.
-                let remaining = currentTask.remaining_seconds - elapsedRealSeconds;
+        if (currentTask && currentTask.status === 'RUNNING') {
+            // Set initial time from what server says
+            const initialRemaining = currentTask.remaining_seconds;
+            setTimeLeft(initialRemaining);
+
+            if (initialRemaining <= 0) {
+                setAlarmTask(currentTask);
+                setIsAlarmModalOpen(true);
+                return;
+            }
+
+            // Track when this effect started so we can count down accurately
+            const effectStartTime = Date.now();
+            const startingRemaining = initialRemaining;
+
+            timerRef.current = setInterval(() => {
+                const elapsedSinceSync = Math.floor((Date.now() - effectStartTime) / 1000);
+                const remaining = startingRemaining - elapsedSinceSync;
+
                 if (remaining <= 0) {
-                    remaining = 0;
+                    setTimeLeft(0);
                     clearInterval(timerRef.current);
-                    // trigger local alarm UI
                     setAlarmTask(currentTask);
                     setIsAlarmModalOpen(true);
+                } else {
+                    setTimeLeft(remaining);
                 }
-                setTimeLeft(remaining);
-            };
-
-            updateTimer();
-            timerRef.current = setInterval(updateTimer, 1000);
+            }, 1000);
         } else if (currentTask) {
             setTimeLeft(currentTask.remaining_seconds);
-            if (currentTask.status === 'ALARM') {
+            // Only open modal if not already open to prevent re-opening on every render
+            if (currentTask.status === 'ALARM' && !isAlarmModalOpen) {
                 setAlarmTask(currentTask);
                 setIsAlarmModalOpen(true);
             }
@@ -187,6 +216,23 @@ const WorkerDashboard = () => {
         }
     };
 
+    // 🧪 TESTING ONLY: Skip timer and force alarm immediately
+    const handleSkipTimer = async () => {
+        if (!currentTask || currentTask.status !== 'RUNNING') return;
+        try {
+            const res = await triggerAlarm(currentTask.id);
+            if (res.success) {
+                // Sync the local state to show alarm
+                setAlarmTask(res.task || currentTask);
+                setIsAlarmModalOpen(true);
+                if (timerRef.current) clearInterval(timerRef.current);
+                if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const handlePauseTask = async () => {
         if (!currentTask) return;
         try {
@@ -229,9 +275,11 @@ const WorkerDashboard = () => {
                 setIsAlarmModalOpen(false);
                 setAlarmTask(null);
 
-                // Option B: Auto-Switch. The backend already killed the previous task and assigned the new one.
-                setCurrentTask(null);
-                fetchNextTask();
+                // Only auto-switch if the alarm was for the current active task
+                if (!currentTask || currentTask.id === alarmTask.id) {
+                    setCurrentTask(null);
+                    fetchNextTask();
+                }
             }
         } catch (e) {
             console.error(e);
@@ -371,6 +419,16 @@ const WorkerDashboard = () => {
                                 <button onClick={handlePauseTask} className="bg-yellow-500 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-yellow-600 w-full max-w-md">
                                     Pause
                                 </button>
+                                {/* 🧪 TESTING ONLY BUTTON — Remove before production */}
+                                {import.meta.env.DEV && (
+                                    <button
+                                        onClick={handleSkipTimer}
+                                        title="Testing only: Force complete timer now"
+                                        className="bg-orange-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-orange-600 w-full max-w-md border-2 border-dashed border-orange-300"
+                                    >
+                                        ⚡ Skip Timer (Test Only)
+                                    </button>
+                                )}
                                 {currentTask.stage === 'BUCKET_ARRANGE' ? (
                                     <div className="w-full max-w-md bg-green-50 border border-green-200 p-4 rounded-lg mt-4 mb-4">
                                         <h3 className="font-bold text-green-800 mb-2">User Bucket List (Demands)</h3>

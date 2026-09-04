@@ -55,6 +55,7 @@ const LiveTimer = ({ startedAt, expectedMinutes }) => {
 
 export default function AdminProduction() {
   const [batches, setBatches] = useState([]);
+  const [workerLogs, setWorkerLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -63,6 +64,11 @@ export default function AdminProduction() {
       const res = await api.get('/production/dashboard');
       if (res.data.success) {
         setBatches(res.data.batches);
+      }
+      
+      const logsRes = await api.get('/production/detailed-worker-logs');
+      if (logsRes.data.success) {
+        setWorkerLogs(logsRes.data.logs);
       }
     } catch (err) {
       console.error(err);
@@ -194,6 +200,75 @@ export default function AdminProduction() {
             ))}
           </div>
         )}
+
+        {/* Detailed Worker Logs Section */}
+        <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <Users className="text-blue-600" size={24} />
+              Detailed Worker Task Logs
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">Real-time breakdown of worker assignments and task statuses.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker Name</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task Details</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned At</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started At</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed / Left</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {workerLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-8 text-center text-gray-500 italic">No worker logs available yet.</td>
+                  </tr>
+                ) : (
+                  workerLogs.map((log, index) => (
+                    <tr key={index} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{log.worker_name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-600">{log.task}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                          log.role === 'Initiator' ? 'bg-indigo-100 text-indigo-800' : 'bg-pink-100 text-pink-800'
+                        }`}>
+                          {log.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                          log.status === 'DONE' ? 'bg-green-100 text-green-800' : 
+                          log.status === 'ALARM' ? 'bg-red-100 text-red-800' : 
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {log.assigned_at ? new Date(log.assigned_at).toLocaleTimeString() : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {log.started_at ? new Date(log.started_at).toLocaleTimeString() : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {log.completed_at ? new Date(log.completed_at).toLocaleTimeString() : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {log.duration_seconds > 0 ? `${Math.floor(log.duration_seconds / 60)}m ${log.duration_seconds % 60}s` : '-'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

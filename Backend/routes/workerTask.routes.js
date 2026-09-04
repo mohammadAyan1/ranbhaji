@@ -1,6 +1,6 @@
 import express from 'express';
-import { 
-    getTodayBatches, getBatchDemand, assignNextTask, startTaskStage, 
+import {
+    getTodayBatches, getBatchDemand, assignNextTask, startTaskStage,
     pauseTask, resumeTask, completeTask, acknowledgeAlarm, joinTask, triggerAlarm, checkAlarms, syncTask,
     getTaskBuckets
 } from '../controllers/workerTask.controller.js';

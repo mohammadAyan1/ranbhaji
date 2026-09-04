@@ -25,9 +25,9 @@ export const calculateSoakingDuration = (product) => {
  */
 export const calculateCuttingDuration = (product, quantityGrams) => {
     const q = Number(quantityGrams) || 0;
-    
+
     const isPerPiece = product.cutting_mode === 'PER_PIECE' && product.pieces_per_25g != null;
-    
+
     if (isPerPiece) {
         const totalPieces = (q / 25) * Number(product.pieces_per_25g);
         return totalPieces * (Number(product.time_per_piece_seconds) || 0);
@@ -55,9 +55,9 @@ export const recalculateDryingDuration = (product, quantityGrams, dryingMode) =>
     if (!dryingMode || dryingMode === 'machine') {
         return calculateDryingDuration(product);
     }
-    
+
     const q = Number(quantityGrams) || 0;
-    
+
     if (dryingMode === 'piece' && product.pieces_per_25g != null) {
         const totalPieces = (q / 25) * Number(product.pieces_per_25g);
         return totalPieces * (Number(product.drying_time_per_piece_seconds) || 0);
@@ -87,4 +87,16 @@ export const recalculateRemainingTime = (currentRemainingSeconds, oldWorkerCount
     const effectiveOldCount = oldWorkerCount > 0 ? oldWorkerCount : 1;
     const remainingWorkUnits = currentRemainingSeconds * effectiveOldCount;
     return Math.floor(remainingWorkUnits / newWorkerCount);
+};
+
+/**
+ * Robustly calculate elapsed seconds since a task started,
+ * avoiding timezone offset bugs from Sequelize parsing.
+ */
+export const calculateElapsedRealSeconds = (startedAt) => {
+    if (!startedAt) return 0;
+    const now = new Date();
+    const started = new Date(startedAt);
+    const elapsed = Math.floor((now.getTime() - started.getTime()) / 1000);
+    return elapsed > 0 ? elapsed : 0;
 };

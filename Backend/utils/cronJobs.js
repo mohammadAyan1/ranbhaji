@@ -38,7 +38,7 @@ const runNightlyJob = async () => {
         for (const order of pendingRetailOrders) {
             let orderChanged = false;
             let totalAmount = 0;
-            
+
             for (const item of order.RetailOrderItems) {
                 if (item.Product && item.Product.status !== 'active') {
                     await item.destroy({ transaction: t });
@@ -47,7 +47,7 @@ const runNightlyJob = async () => {
                     totalAmount += parseFloat(item.total_price);
                 }
             }
-            
+
             if (orderChanged) {
                 if (totalAmount === 0) {
                     await order.update({ delivery_status: 'cancelled', payment_status: 'failed' }, { transaction: t });
@@ -68,14 +68,14 @@ const runNightlyJob = async () => {
 
         for (const p of expiredPauses) {
             await p.update({ status: 'completed' }, { transaction: t });
-            
+
             // Standard Subscription Restart
             if (p.subscription_id) {
                 const subscription = await Subscription.findByPk(p.subscription_id, {
                     include: [{ model: Package }],
                     transaction: t
                 });
-                
+
                 if (subscription && subscription.status === 'paused') {
                     const remainingServices = subscription.total_services - subscription.services_completed;
                     const newDates = [];
@@ -102,7 +102,7 @@ const runNightlyJob = async () => {
                     console.log(`[CRON] Auto-restarted subscription ${subscription.id} for tomorrow`);
                 }
             }
-            
+
             // Water Subscription Restart
             if (p.water_subscription_id) {
                 const sub = await WaterSubscription.findByPk(p.water_subscription_id, { transaction: t });
@@ -327,7 +327,7 @@ const runNightlyJob = async () => {
                             where: { schedule_id: schedule.id },
                             transaction: t
                         });
-                        
+
                         if (selections.length > 0) {
                             rawItems.push(...selections.map(sel => ({
                                 product_id: sel.product_id,
@@ -382,7 +382,7 @@ const runNightlyJob = async () => {
                             const prod = as.product;
                             const extraQty = budgetPerActive / parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
                             as.qty_gm = parseFloat(as.qty_gm) + parseFloat(extraQty.toFixed(2));
-                            
+
                             if (as.selection_model) {
                                 as.selection_model.qty_gm = as.qty_gm;
                                 await as.selection_model.save({ transaction: t });
@@ -579,21 +579,21 @@ const notifyDisabledProductsJob = async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    
+
     try {
         const affectedUsers = new Set();
-        
+
         // Check Retail Orders
         const retailOrders = await RetailOrder.findAll({
             where: { delivery_status: 'pending', delivery_date: tomorrowStr },
             include: [{ model: RetailOrderItem, as: 'RetailOrderItems', include: [{ model: Product }] }]
         });
-        
+
         for (const order of retailOrders) {
             const hasDisabled = order.RetailOrderItems.some(item => item.Product && item.Product.status !== 'active');
             if (hasDisabled) affectedUsers.add(order.user_id);
         }
-        
+
         // Check Package Selections
         const schedules = await DeliverySchedule.findAll({
             where: { scheduled_date: tomorrowStr, status: 'pending' },
@@ -601,13 +601,13 @@ const notifyDisabledProductsJob = async () => {
                 { model: Subscription, as: 'Subscription' }
             ]
         });
-        
+
         const scheduleIds = schedules.map(s => s.id);
         const selections = await ScheduleSeasonalSelection.findAll({
             where: { schedule_id: { [Op.in]: scheduleIds } },
             include: [{ model: Product }]
         });
-        
+
         for (const sel of selections) {
             if (sel.Product && sel.Product.status !== 'active') {
                 const schedule = schedules.find(s => s.id === sel.schedule_id);
@@ -616,7 +616,7 @@ const notifyDisabledProductsJob = async () => {
                 }
             }
         }
-        
+
         // Send notifications
         for (const userId of affectedUsers) {
             await Notification.create({
@@ -643,14 +643,14 @@ const checkUnattendedStages = async () => {
             where: { status: 'in_progress' },
             include: [{ model: ProductionBatch, as: 'batch', include: [{ model: Product, as: 'product' }] }]
         });
-        
+
         for (const split of splits) {
             if (!split.batch || !split.batch.product) continue;
             const product = split.batch.product;
             const startedAt = new Date(split.stage_started_at || new Date());
-            
+
             let expectedTimeMin = 0;
-            
+
             if (split.stage === 'soaking') {
                 expectedTimeMin = parseFloat(product.soak_time_min || 0);
             } else if (split.stage === 'drying') {
@@ -671,9 +671,9 @@ const checkUnattendedStages = async () => {
             } else {
                 continue;
             }
-            
+
             const expectedEndTime = new Date(startedAt.getTime() + expectedTimeMin * 60000);
-            
+
             if (expectedEndTime <= now) {
                 // Find all workers who are/were assigned to this split
                 const assignments = await sequelize.models.SplitWorkerAssignment.findAll({
@@ -708,20 +708,36 @@ const checkBatchProductTaskAlarms = async () => {
     try {
         const now = new Date();
         const activeTasks = await sequelize.models.BatchProductTask.findAll({
-            where: { status: 'RUNNING' }
+            where: { status: 'RUNNING' },
+            raw: true // Get plain objects to access the raw DB string value
         });
-        
+
         for (const task of activeTasks) {
-            const startedAt = new Date(task.started_at);
+            // Guard: tasks with 0 duration should not trigger alarm via cron
+            if (!task.remaining_seconds || task.remaining_seconds <= 0) continue;
+            if (!task.started_at) continue;
+
+            // Force UTC parse: if started_at string lacks timezone info, append Z to treat as UTC
+            let startedAtStr = task.started_at;
+            if (typeof startedAtStr === 'string' && !startedAtStr.includes('+') && !startedAtStr.endsWith('Z')) {
+                startedAtStr = startedAtStr.replace(' ', 'T') + 'Z';
+            }
+            const startedAt = new Date(startedAtStr);
             const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-            const remaining = task.remaining_seconds - elapsed;
-            
+
+            console.log(`[CRON ALARM] Task ${task.id} (${task.stage}): started_at raw=${task.started_at}, parsed=${startedAt.toISOString()}, now=${now.toISOString()}, elapsed=${elapsed}s, remaining_seconds=${task.remaining_seconds}`);
+
+            // If somehow elapsed is negative (e.g. clock drift), treat as 0
+            const safeElapsed = elapsed > 0 ? elapsed : 0;
+            const remaining = task.remaining_seconds - safeElapsed;
+
             if (remaining <= 0) {
-                task.status = 'ALARM';
-                task.remaining_seconds = 0;
-                task.alarm_fired_at = new Date();
-                await task.save();
-                
+                await sequelize.models.BatchProductTask.update(
+                    { status: 'ALARM', remaining_seconds: 0, alarm_fired_at: now },
+                    { where: { id: task.id, status: 'RUNNING' } } // Only update if still RUNNING (prevent double-fire)
+                );
+                console.log(`[CRON ALARM] Task ${task.id} marked as ALARM`);
+
                 if (ioInstance) {
                     ioInstance.emit('worker:alarm', { task_id: task.id, stage: task.stage, batch_id: task.batch_id });
                 }
@@ -746,7 +762,7 @@ export const startCronJobs = (io) => {
         timezone: "Asia/Kolkata"
     });
     console.log("[CRON] Scheduled nightly job at 8 PM IST");
-    
+
     cron.schedule("0 */2 * * *", notifyDisabledProductsJob, {
         scheduled: true,
         timezone: "Asia/Kolkata"

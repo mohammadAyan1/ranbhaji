@@ -82,7 +82,7 @@ export const deleteBatch = async (req, res) => {
 // GET /api/admin/batches/:id/demands
 export const computeBatchDemandHelper = async (batch_id, date) => {
     const demandMap = {};
-    const addDemand = (p, qty) => {
+    const addDemand = (p, qty, user = null) => {
         if (!p) return;
         const quantity = parseFloat(qty) || 0;
         if (quantity <= 0) return;
@@ -92,10 +92,19 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
                 product_name: p.name,
                 total_quantity: 0,
                 unit: p.unit || 'gm',
-                product: p
+                product: p,
+                usersMap: {}
             };
         }
         demandMap[p.id].total_quantity += quantity;
+
+        if (user) {
+            const uid = user.id || 0;
+            if (!demandMap[p.id].usersMap[uid]) {
+                demandMap[p.id].usersMap[uid] = { userName: user.name || 'Unknown', quantity: 0, sortId: uid };
+            }
+            demandMap[p.id].usersMap[uid].quantity += quantity;
+        }
     };
 
     // 1. Fetch Subscription & Water Deliveries
@@ -108,7 +117,7 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
                 include: [
                     { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
                     { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }, { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }] },
-                    { model: User, attributes: ['id', 'disliked_products'] }
+                    { model: User, attributes: ['id', 'name', 'disliked_products'] }
                 ]
             },
             {
@@ -139,16 +148,20 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
     });
 
     schedules.forEach(schedule => {
+        let currentUser = null;
+        if (schedule.Subscription && schedule.Subscription.User) currentUser = schedule.Subscription.User;
+        else if (schedule.WaterSubscription && schedule.WaterSubscription.User) currentUser = schedule.WaterSubscription.User;
+
         const dbItems = schedule.DeliveryItems || [];
         if (dbItems.length > 0) {
             for (const item of dbItems) {
                 if (!item.Product) continue;
                 if (schedule.is_returned_serving) {
                     if (item.will_purchase) {
-                        addDemand(item.Product, parseFloat(item.qty_gm || 0));
+                        addDemand(item.Product, parseFloat(item.qty_gm || 0), currentUser);
                     }
                 } else {
-                    addDemand(item.Product, parseFloat(item.qty_gm || 0));
+                    addDemand(item.Product, parseFloat(item.qty_gm || 0), currentUser);
                 }
             }
         } else {
@@ -157,7 +170,7 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
                 if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
                     schedule.SeasonalSelections.forEach(sel => {
                         if (sel.Product) {
-                            addDemand(sel.Product, sel.qty_gm);
+                            addDemand(sel.Product, sel.qty_gm, currentUser);
                         }
                     });
                 } else if (sub.Package?.SeasonalConfig) {
@@ -195,7 +208,7 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
                                 const prod = poolItem.Product;
                                 const price = parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
                                 const qty = budgetPerProduct / price;
-                                addDemand(prod, parseFloat(qty.toFixed(2)));
+                                addDemand(prod, parseFloat(qty.toFixed(2)), currentUser);
                             }
                         }
                     } else if (pool.length > 0 && seasonalBudget > 0) {
@@ -208,20 +221,20 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
                                 const prod = item.Product;
                                 const price = parseFloat(prod.purchase_price_per_gm || prod.selling_price_per_gm || 1);
                                 const qty = budgetPerProduct / price;
-                                addDemand(prod, parseFloat(qty.toFixed(2)));
+                                addDemand(prod, parseFloat(qty.toFixed(2)), currentUser);
                             }
                         }
                     } else if (sub.Items) {
                         sub.Items.forEach(item => {
                             if (item.is_seasonal && item.is_active && item.Product) {
-                                addDemand(item.Product, item.qty_gm);
+                                addDemand(item.Product, item.qty_gm, currentUser);
                             }
                         });
                     }
                 } else if (sub.Items) {
                     sub.Items.forEach(item => {
                         if (item.is_seasonal && item.is_active && item.Product) {
-                            addDemand(item.Product, item.qty_gm);
+                            addDemand(item.Product, item.qty_gm, currentUser);
                         }
                     });
                 }
@@ -232,7 +245,7 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
                 const qty = ws.container === 'glass' ? 20 : 20;
                 const p = ws.water_type === 'health' ? defaultHealthWater : defaultMiracleWater;
                 if (p) {
-                    addDemand(p, qty);
+                    addDemand(p, qty, currentUser);
                 }
             }
         }
@@ -242,15 +255,17 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
     const retailOrders = await RetailOrder.findAll({
         where: { batch_id, delivery_date: date, delivery_status: ['pending', 'ready_for_delivery'] },
         include: [
+            { model: User },
             { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
         ]
     });
 
     retailOrders.forEach(order => {
+        const currentUser = order.User;
         if (order.Items) {
             order.Items.forEach(item => {
                 if (item.Product) {
-                    addDemand(item.Product, item.quantity);
+                    addDemand(item.Product, item.quantity, currentUser);
                 }
             });
         }
@@ -589,11 +604,11 @@ export const getWorkerTaskHistory = async (req, res) => {
                 }],
                 order: [['joined_at', 'ASC']]
             });
-            
+
             const timeline = assignments.map(a => {
                 const task = a.task;
                 if (!task) return null;
-                
+
                 let timerStatus = 'N/A';
                 if (task.status === 'DONE') {
                     if (task.alarm_fired_at) {
@@ -614,10 +629,10 @@ export const getWorkerTaskHistory = async (req, res) => {
                     productName: task.Product ? task.Product.name : 'Unknown',
                     stage: task.stage,
                     quantityGrams: task.quantity_grams,
-                    assignedAt: a.joined_at, 
+                    assignedAt: a.joined_at,
                     startedAt: task.started_at,
-                    leftAt: a.left_at, 
-                    taskStatus: task.status, 
+                    leftAt: a.left_at,
+                    taskStatus: task.status,
                     taskCompletedAt: task.completed_at,
                     timerStatus: timerStatus,
                     isBackgrounded: backgroundStatus,
