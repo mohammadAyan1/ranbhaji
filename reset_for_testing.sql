@@ -53,3 +53,31 @@ WHERE id IN (377, 381, 383, 385)
   
 
 COMMIT;
+
+
+
+START TRANSACTION;
+
+UPDATE batch_product_tasks
+SET
+    status = 'DONE',
+    remaining_seconds = 0,
+    completed_at = NOW(),
+    updated_at = NOW()
+WHERE id IN (516, 565,566,567,568,569,570,571,572,573,574,575,576,577,578)
+  AND status IN ('PAUSED', 'NOT_STARTED');
+
+COMMIT;
+
+
+
+SET SQL_SAFE_UPDATES = 0;
+
+DELETE FROM task_worker_assignments
+WHERE task_id IN (
+    SELECT id
+    FROM batch_product_tasks
+    WHERE batch_id IN (3, 4)
+);
+
+SET SQL_SAFE_UPDATES = 1;

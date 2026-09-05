@@ -723,11 +723,19 @@ const checkBatchProductTaskAlarms = async () => {
                 startedAtStr = startedAtStr.replace(' ', 'T') + 'Z';
             }
             const startedAt = new Date(startedAtStr);
-            const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+            let elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+
+            // Timezone Drift Fix: If DB timezone and Sequelize timezone mismatch by exactly 5.5 hours (IST),
+            // elapsed will be off by ~19800 seconds. We correct this automatically.
+            if (elapsed > 18000) {
+                elapsed -= 19800; // Subtract 5.5 hours
+            } else if (elapsed < -18000) {
+                elapsed += 19800; // Add 5.5 hours
+            }
 
             console.log(`[CRON ALARM] Task ${task.id} (${task.stage}): started_at raw=${task.started_at}, parsed=${startedAt.toISOString()}, now=${now.toISOString()}, elapsed=${elapsed}s, remaining_seconds=${task.remaining_seconds}`);
 
-            // If somehow elapsed is negative (e.g. clock drift), treat as 0
+            // If somehow elapsed is still negative (e.g. minor clock drift), treat as 0
             const safeElapsed = elapsed > 0 ? elapsed : 0;
             const remaining = task.remaining_seconds - safeElapsed;
 

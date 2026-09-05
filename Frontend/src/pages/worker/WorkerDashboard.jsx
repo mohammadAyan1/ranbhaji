@@ -14,12 +14,18 @@ const WorkerDashboard = () => {
     const [alarmTask, setAlarmTask] = useState(null);
     const [timeLeft, setTimeLeft] = useState(0);
     const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
+    const [wasPausedByAlarm, setWasPausedByAlarm] = useState(false);
     const [loading, setLoading] = useState(false);
     const [dryingModeSelection, setDryingModeSelection] = useState('machine');
     const [taskBuckets, setTaskBuckets] = useState([]);
+    const currentTaskRef = useRef(null);
 
     const timerRef = useRef(null);
     const syncTimerRef = useRef(null);
+
+    useEffect(() => {
+        currentTaskRef.current = currentTask;
+    }, [currentTask]);
 
     // Initial load and Alarm Polling
     useEffect(() => {
@@ -31,10 +37,26 @@ const WorkerDashboard = () => {
         // Poll for alarms every 10 seconds
         const alarmInterval = setInterval(() => {
             if (selectedBatch) {
-                checkAlarms(selectedBatch).then(res => {
-                    if (res.success && res.task && res.task.status === 'ALARM') {
+                checkAlarms(selectedBatch).then(async res => {
+                    if (res.success && res.tasks && res.tasks.length > 0) {
+                        const alarm = res.tasks[0];
+                        // Auto-pause current hands-on task if it's different from the alarm task
+                        const cTask = currentTaskRef.current;
+                        if (cTask && cTask.status === 'RUNNING' && cTask.id !== alarm.id) {
+                            try {
+                                const pauseRes = await pauseTask(cTask.id);
+                                if (pauseRes.success) {
+                                    setCurrentTask(pauseRes.task);
+                                    setWasPausedByAlarm(true);
+                                }
+                            } catch (e) { console.error("Error auto-pausing:", e); }
+                        }
+
                         // Only open if modal is not already open — prevents loop
-                        setAlarmTask(prev => res.task);
+                        setAlarmTask(prev => {
+                            if (!prev || prev.id !== alarm.id) return alarm;
+                            return prev;
+                        });
                         setIsAlarmModalOpen(prev => { if (!prev) return true; return prev; });
                     }
                 }).catch(e => console.error("Alarm poll error:", e));
@@ -275,8 +297,15 @@ const WorkerDashboard = () => {
                 setIsAlarmModalOpen(false);
                 setAlarmTask(null);
 
-                // Only auto-switch if the alarm was for the current active task
-                if (!currentTask || currentTask.id === alarmTask.id) {
+                // Auto-resume logic
+                if (wasPausedByAlarm && currentTask) {
+                    setWasPausedByAlarm(false);
+                    const resumeRes = await resumeTask(currentTask.id);
+                    if (resumeRes.success) {
+                        setCurrentTask(resumeRes.task);
+                    }
+                } else if (!currentTask || currentTask.id === alarmTask.id) {
+                    // Only auto-switch if no task was paused and we were on the alarm task itself
                     setCurrentTask(null);
                     fetchNextTask();
                 }

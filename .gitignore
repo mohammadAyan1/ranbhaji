@@ -12,6 +12,14 @@ backend/.env.local
 backend/.env.development
 backend/.env.production
 
+
+#App
+TimerApp/node_modules/
+TimerApp/.env
+TimerApp/.env.local
+TimerApp/.env.development
+TimerApp/.env.production
+
 # Logs
 *.log
 npm-debug.log*

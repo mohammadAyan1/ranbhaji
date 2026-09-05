@@ -33,6 +33,17 @@ const leaveTaskHelper = async (workerId) => {
 
     if (assignment && assignment.task) {
         const task = assignment.task;
+        
+        // Only hands-on tasks should be "left" and paused when workers switch.
+        // Background tasks (Soaking, Machine Drying) should continue running independently.
+        const isBackground = task.stage === 'SOAKING' || (task.stage === 'DRYING' && (!task.drying_mode || task.drying_mode === 'machine'));
+        
+        if (isBackground) {
+            // Do not leave or pause background tasks. 
+            // They will finish based on their own timer.
+            return;
+        }
+
         if (['RUNNING', 'PAUSED'].includes(task.status)) {
             const activeAssignments = await TaskWorkerAssignment.findAll({ where: { task_id: task.id, left_at: null } });
             const oldWorkerCount = activeAssignments.length;
@@ -199,6 +210,30 @@ export const checkAlarms = async (req, res) => {
     }
 };
 
+// Get all active tasks for the current worker
+export const getMyActiveTasks = async (req, res) => {
+    try {
+        const workerId = req.user.id;
+
+        const tasks = await BatchProductTask.findAll({
+            where: { status: { [Op.in]: ['RUNNING', 'PAUSED', 'ALARM'] } },
+            include: [
+                { model: Product },
+                {
+                    model: TaskWorkerAssignment,
+                    as: 'worker_assignments',
+                    where: { worker_id: workerId, left_at: null },
+                    required: true
+                }
+            ]
+        });
+
+        res.status(200).json({ success: true, tasks });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 const assignMutex = new Mutex();
 
 // Priority logic for assigning the next task to a worker
@@ -247,7 +282,8 @@ export const assignNextTask = async (req, res) => {
         };
 
         const returnTask = async (taskToReturn, action) => {
-            if (taskToReturn && ['WEIGHING', 'CUTTING'].includes(taskToReturn.stage)) {
+            const isManualDrying = taskToReturn && taskToReturn.stage === 'DRYING' && ['piece', 'gram'].includes(taskToReturn.drying_mode);
+            if (taskToReturn && (['WEIGHING', 'CUTTING'].includes(taskToReturn.stage) || isManualDrying)) {
                 const existing = await TaskWorkerAssignment.findOne({ where: { task_id: taskToReturn.id, worker_id: workerId, left_at: null } });
                 if (!existing) {
                     const activeAssignments = await TaskWorkerAssignment.findAll({ where: { task_id: taskToReturn.id, left_at: null } });
@@ -352,11 +388,16 @@ export const assignNextTask = async (req, res) => {
             return await returnTask(myCurrentTask, 'CONTINUE_TASK');
         }
 
-        // Priority 1: Advance existing products (NOT_STARTED for DRYING, CUTTING, SOAKING, BUCKET_ARRANGE)
-        // Prefer stages closer to completion: BUCKET_ARRANGE > DRYING > CUTTING > SOAKING
+        // Priority 1: Advance existing products (NOT_STARTED for DRYING, CUTTING, SOAKING)
+        // If the entire batch is complete, BUCKET_ARRANGE is also allowed
         const stagePriority = { BUCKET_ARRANGE: 4, DRYING: 3, CUTTING: 2, SOAKING: 1, WEIGHING: 0 };
+        const allowedStages = ['SOAKING', 'CUTTING', 'DRYING'];
+        if (isBatchProcessingComplete) {
+            allowedStages.push('BUCKET_ARRANGE');
+        }
+
         const notStartedPipelineTasks = tasks.filter(t =>
-            t.status === 'NOT_STARTED' && ['SOAKING', 'CUTTING', 'DRYING', 'BUCKET_ARRANGE'].includes(t.stage) &&
+            t.status === 'NOT_STARTED' && allowedStages.includes(t.stage) &&
             t.worker_assignments.length === 0
         ).sort((a, b) => stagePriority[b.stage] - stagePriority[a.stage]);
 
@@ -364,12 +405,14 @@ export const assignNextTask = async (req, res) => {
             return await returnTask(notStartedPipelineTasks[0], 'NEW_TASK');
         }
 
-        // Priority 2: Join active work (Only CUTTING can be joined by multiple workers. WEIGHING is strictly for one worker)
+        // Priority 2: Join active work (CUTTING and Manual DRYING only. WEIGHING strictly allows only ONE worker)
         const activeHandsOnTasks = tasks.filter(t => {
-            if (!['WEIGHING', 'CUTTING'].includes(t.stage)) return false;
+            const isManualDrying = t.stage === 'DRYING' && ['piece', 'gram'].includes(t.drying_mode);
+            if (!['WEIGHING', 'CUTTING'].includes(t.stage) && !isManualDrying) return false;
+            
             if (!['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(t.status)) return false;
 
-            // If it's WEIGHING, only allow if NO worker is currently assigned
+            // Strict rule: Weighing cannot be helped by a second worker
             if (t.stage === 'WEIGHING' && t.worker_assignments.length > 0) {
                 return false;
             }
@@ -425,8 +468,22 @@ export const assignNextTask = async (req, res) => {
             return await returnTask(newTask, 'NEW_TASK');
         }
 
-        // Idle
+        // Priority 4: Resume a PAUSED background task (SOAKING/DRYING) assigned to this worker
+        // This happens when all other work is done but some background tasks are PAUSED,
+        // blocking BUCKET_ARRANGE. We return them so the worker can resume normally via timer.
+        const myPausedBackgroundTasks = tasks.filter(t =>
+            t.status === 'PAUSED' &&
+            ['SOAKING', 'DRYING'].includes(t.stage) &&
+            t.worker_assignments.some(a => a.worker_id === workerId)
+        ).sort((a, b) => a.remaining_seconds - b.remaining_seconds); // shortest first
+
+        if (myPausedBackgroundTasks.length > 0) {
+            return await returnTask(myPausedBackgroundTasks[0], 'RESUME_TASK');
+        }
+
+        // Idle - truly nothing left to do
         return res.status(200).json({ success: true, task: null, action: 'IDLE' });
+
 
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -743,3 +800,84 @@ export const getTaskBuckets = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// Get stuck tasks (PAUSED or NOT_STARTED) assigned to the current worker
+// These tasks are blocking the pipeline (e.g. preventing BUCKET_ARRANGE from starting)
+export const getStuckTasks = async (req, res) => {
+    try {
+        const workerId = req.user.id;
+
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const stuckTasks = await BatchProductTask.findAll({
+            where: {
+                status: { [Op.in]: ['PAUSED', 'NOT_STARTED'] },
+                stage: { [Op.in]: ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'] } // pipeline stages only
+            },
+            include: [
+                { model: Product },
+                {
+                    model: TaskWorkerAssignment,
+                    as: 'worker_assignments',
+                    where: { worker_id: workerId }, // removed left_at: null so it catches past assignments too
+                    required: true
+                }
+            ]
+        });
+
+        res.status(200).json({ success: true, tasks: stuckTasks });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Force complete a stuck task (PAUSED or NOT_STARTED) from dashboard
+// This is the app equivalent of running the manual SQL UPDATE
+export const forceCompleteTask = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const workerId = req.user.id;
+
+        const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
+        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+
+        // Safety: only allow PAUSED or NOT_STARTED tasks
+        if (!['PAUSED', 'NOT_STARTED'].includes(task.status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Task is in '${task.status}' status. Only PAUSED or NOT_STARTED tasks can be force-completed.`
+            });
+        }
+
+        // Safety: worker must be assigned to this task
+        const assignment = await TaskWorkerAssignment.findOne({
+            where: { task_id: taskId, worker_id: workerId, left_at: null }
+        });
+        if (!assignment) {
+            return res.status(403).json({ success: false, message: "You are not assigned to this task." });
+        }
+
+        // Complete it and create next stage task (same logic as completeTask/acknowledgeAlarm)
+        const result = await handleStageCompletion(task);
+
+        // Auto-assign worker to next task if one was created
+        if (result.nextTask && result.nextTask.status === 'NOT_STARTED') {
+            await TaskWorkerAssignment.create({
+                task_id: result.nextTask.id,
+                worker_id: workerId,
+                joined_at: new Date()
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            task: result.task,
+            nextTask: result.nextTask,
+            message: `Task force-completed. ${result.nextTask ? `Next stage: ${result.nextTask.stage}` : 'No further stages.'}`
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+

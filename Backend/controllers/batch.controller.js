@@ -81,6 +81,41 @@ export const deleteBatch = async (req, res) => {
 
 // GET /api/admin/batches/:id/demands
 export const computeBatchDemandHelper = async (batch_id, date) => {
+    // 1. Fetch Subscription & Water Deliveries
+    const schedules = await DeliverySchedule.findAll({
+        where: { batch_id, scheduled_date: date, status: ['pending', 'ready_for_delivery'] },
+        include: [
+            {
+                model: Subscription,
+                required: false,
+                include: [
+                    { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
+                    { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }, { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }] },
+                    { model: User, attributes: ['id', 'name', 'disliked_products'] }
+                ]
+            },
+            {
+                model: WaterSubscription,
+                required: false,
+                include: [{ model: User, attributes: ['id', 'name'] }] // ensure User is fetched for water sub
+            },
+            { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
+            { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] }
+        ]
+    });
+
+    // Compute global user bucket map for consistent customer sequencing
+    const uniqueUsers = new Set();
+    schedules.forEach(schedule => {
+        if (schedule.Subscription && schedule.Subscription.User) uniqueUsers.add(schedule.Subscription.User.id);
+        else if (schedule.WaterSubscription && schedule.WaterSubscription.User) uniqueUsers.add(schedule.WaterSubscription.User.id);
+    });
+    const sortedUserIds = Array.from(uniqueUsers).sort((a, b) => a - b);
+    const userBucketMap = {};
+    sortedUserIds.forEach((uid, index) => {
+        userBucketMap[uid] = index + 1; // Global bucket number 1, 2, 3...
+    });
+
     const demandMap = {};
     const addDemand = (p, qty, user = null) => {
         if (!p) return;
@@ -100,34 +135,15 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
 
         if (user) {
             const uid = user.id || 0;
+            const bucketNumber = userBucketMap[uid] || uid;
             if (!demandMap[p.id].usersMap[uid]) {
-                demandMap[p.id].usersMap[uid] = { userName: user.name || 'Unknown', quantity: 0, sortId: uid };
+                demandMap[p.id].usersMap[uid] = { userName: user.name || 'Unknown', quantity: 0, sortId: bucketNumber };
             }
             demandMap[p.id].usersMap[uid].quantity += quantity;
         }
     };
 
-    // 1. Fetch Subscription & Water Deliveries
-    const schedules = await DeliverySchedule.findAll({
-        where: { batch_id, scheduled_date: date, status: ['pending', 'ready_for_delivery'] },
-        include: [
-            {
-                model: Subscription,
-                required: false,
-                include: [
-                    { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
-                    { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }, { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }] },
-                    { model: User, attributes: ['id', 'name', 'disliked_products'] }
-                ]
-            },
-            {
-                model: WaterSubscription,
-                required: false
-            },
-            { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
-            { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] }
-        ]
-    });
+    // (Schedules already fetched above)
 
     let defaultHealthWater, defaultMiracleWater;
     const waterProducts = await Product.findAll({ where: { category: 'water', status: 'active' } });
