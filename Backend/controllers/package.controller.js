@@ -1,5 +1,7 @@
 import { Package, PackageFixedItem, PackageSeasonalPool, PackageSeasonalConfig, Product, User, Subscription } from "../models/index.js";
 import { sequelize } from "../confiq/db.js";
+import fs from "fs";
+import path from "path";
 
 // POST /api/packages  (admin)
 export const createPackage = async (req, res) => {
@@ -59,9 +61,9 @@ export const createPackage = async (req, res) => {
         }
 
         if (max_select_count) {
-            await PackageSeasonalConfig.create({ 
-                package_id: pkg.id, 
-                max_select_count, 
+            await PackageSeasonalConfig.create({
+                package_id: pkg.id,
+                max_select_count,
                 default_qty_gm: default_seasonal_qty_gm || null,
                 seasonal_quantities: seasonal_quantities || null
             }, { transaction: t });
@@ -219,9 +221,13 @@ export const updatePackage = async (req, res) => {
         if (typeof fixed_items === 'string') fixed_items = JSON.parse(fixed_items);
         if (typeof seasonal_pool === 'string') seasonal_pool = JSON.parse(seasonal_pool);
         if (typeof seasonal_quantities === 'string') seasonal_quantities = JSON.parse(seasonal_quantities);
-        
+
         let image_url = pkg.image_url;
         if (req.file) {
+            if (pkg.image_url && pkg.image_url.startsWith("/uploads/")) {
+                const oldImagePath = path.join(process.cwd(), pkg.image_url);
+                if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
+            }
             image_url = `/uploads/${req.file.filename}`;
         }
 
@@ -257,7 +263,12 @@ export const updatePackage = async (req, res) => {
             if (max_select_count !== undefined) configPayload.max_select_count = max_select_count;
             if (default_seasonal_qty_gm !== undefined) configPayload.default_qty_gm = default_seasonal_qty_gm || null;
             if (seasonal_quantities !== undefined) configPayload.seasonal_quantities = seasonal_quantities || null;
-            await PackageSeasonalConfig.upsert(configPayload, { transaction: t });
+            const existingConfig = await PackageSeasonalConfig.findOne({ where: { package_id: pkg.id } });
+            if (existingConfig) {
+                await existingConfig.update(configPayload, { transaction: t });
+            } else {
+                await PackageSeasonalConfig.create(configPayload, { transaction: t });
+            }
         }
 
         let final_target_user_id = target_user_id !== undefined ? target_user_id : pkg.target_user_id;

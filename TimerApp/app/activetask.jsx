@@ -24,6 +24,7 @@ export default function TaskScreen() {
     // Alarm Modal State
     const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
     const [alarmTask, setAlarmTask] = useState(null);
+    const [wasPausedByAlarm, setWasPausedByAlarm] = useState(false);
 
     // DRYING Mode Selection Modal State
     const [isDryingModalOpen, setIsDryingModalOpen] = useState(false);
@@ -133,7 +134,7 @@ export default function TaskScreen() {
                                     sound: true
                                 },
                                 trigger: {
-                                    seconds: remaining,
+                                    date: new Date(Date.now() + remaining * 1000),
                                     channelId: channelId
                                 }
                             });

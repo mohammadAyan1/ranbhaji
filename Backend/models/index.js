@@ -129,7 +129,8 @@ const Package = sequelize.define('Package', {
   target_mobile_number: { type: DataTypes.STRING(15), allowNull: true },
   margin_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   creation_source: { type: DataTypes.STRING(255), defaultValue: 'manual' },
-  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  image_url: { type: DataTypes.STRING(255), allowNull: true }
 }, { tableName: 'packages', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 
@@ -147,7 +148,8 @@ const PackageSeasonalPool = sequelize.define('PackageSeasonalPool', {
 // 6. PACKAGE_SEASONAL_CONFIG
 const PackageSeasonalConfig = sequelize.define('PackageSeasonalConfig', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  max_select_count: { type: DataTypes.INTEGER }
+  max_select_count: { type: DataTypes.INTEGER },
+  seasonal_quantities: { type: DataTypes.JSON }
 }, { tableName: 'package_seasonal_config', timestamps: false });
 
 // 7. SUBSCRIPTIONS

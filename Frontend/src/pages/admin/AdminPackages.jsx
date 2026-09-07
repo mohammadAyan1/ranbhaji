@@ -118,7 +118,7 @@ export default function AdminPackages() {
 
   const startEdit = (pkg) => {
     setEditing(pkg.id);
-    setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", target_mobile_number: pkg.target_mobile_number || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0, image: null, creation_source: pkg.creation_source || "manual" });
+    setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", target_mobile_number: pkg.target_mobile_number || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0, image: null, image_url: pkg.image_url || "", creation_source: pkg.creation_source || "manual" });
     setPersonRangeMode(!!pkg.num_persons_max); // enable range mode if max was set
     setFixedItems(pkg.FixedItems?.map(fi => ({ product_id: fi.product_id, default_qty_gm: fi.default_qty_gm })) || []);
     setSeasonalPool(pkg.SeasonalPool?.map(sp => sp.product_id) || []);
@@ -347,7 +347,15 @@ export default function AdminPackages() {
             </div>
             <div>
               <label className="label">Package Image (Optional)</label>
-              <input type="file" accept="image/*" className="input file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-fresh-50 file:text-fresh-700 hover:file:bg-fresh-100" onChange={e => setForm({ ...form, image: e.target.files[0] })} />
+              <div className="flex flex-col gap-2">
+                <input type="file" accept="image/*" className="input file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-fresh-50 file:text-fresh-700 hover:file:bg-fresh-100" onChange={e => setForm({ ...form, image: e.target.files[0] })} />
+                {form.image && (
+                  <img src={URL.createObjectURL(form.image)} alt="Preview" className="h-16 w-16 object-cover rounded-xl border border-gray-200" />
+                )}
+                {!form.image && form.image_url && (
+                  <img src={`${import.meta.env.VITE_API_URL}${form.image_url}`} alt="Preview" className="h-16 w-16 object-cover rounded-xl border border-gray-200" />
+                )}
+              </div>
             </div>
             {form.type === "custom" && (
               <>
