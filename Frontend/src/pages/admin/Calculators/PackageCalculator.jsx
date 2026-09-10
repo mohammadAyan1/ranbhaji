@@ -83,11 +83,8 @@ export default function PackageCalculator() {
 
   const totalFixedPurchaseCost = calculatedFixed.reduce((sum, item) => sum + item.purchaseCost, 0);
 
-  // New Fixed Budget Calculation: (Total Fixed Cost + ((Total Fixed Cost / Max Fixed Count) * Margin))
-  // However, user specifically answered: `(Total Fixed Cost + ((Total Fixed Cost / 2) * Margin))` where 2 is Max Fixed Count.
-  const actualFixedCount = parseInt(fixedCount) || 1;
-  const fixedBaseMarginPerItem = (totalFixedPurchaseCost / actualFixedCount) * (parseFloat(marginPercent || 0) / 100);
-  const fixedBudget = totalFixedPurchaseCost + fixedBaseMarginPerItem;
+  // Fixed Budget Calculation: Total Fixed Cost * (1 + Margin/100)
+  const fixedBudget = totalFixedPurchaseCost * (1 + parseFloat(marginPercent || 0) / 100);
 
   // Seasonal items processing
   const selectedSeasonalProducts = seasonalPool.map(id => products.find(p => p.id === id)).filter(Boolean);

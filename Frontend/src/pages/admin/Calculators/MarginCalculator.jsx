@@ -113,11 +113,8 @@ export default function MarginCalculator() {
   // 2. Ek delivery ka margin amount nikala
   const calculatedMarginAmountPerService = pricePerService - totalBasePurchaseCost;
 
-  // 3. Cost ko 2 se divide kiya (jaisa Package Calculator me kiya tha)
-  const dividedCost = totalBasePurchaseCost / 2;
-
-  // 4. Margin percentage calculate kiya
-  const calculatedMarginPercent = dividedCost > 0 ? (calculatedMarginAmountPerService / dividedCost) * 100 : 0;
+  // 3. Margin percentage calculate kiya: (Margin Amount / Total Cost) * 100
+  const calculatedMarginPercent = totalBasePurchaseCost > 0 ? (calculatedMarginAmountPerService / totalBasePurchaseCost) * 100 : 0;
 
   // Just keeping this in case it's used elsewhere for total margin sum
   const calculatedMarginAmount = finalPackagePrice - (totalBasePurchaseCost * parseInt(servicesCount || 1));
