@@ -470,7 +470,7 @@ export const updateRetailPrice = async (req, res) => {
         const percentage = parseFloat(markup_percentage);
         const purchasePrice = parseFloat(product.purchase_price_per_gm || 0);
 
-        const newSellingPrice = purchasePrice * (1 + (percentage / 100));
+        const newSellingPrice = purchasePrice * (percentage / 100);
 
         await product.update({
             selling_price_per_gm: newSellingPrice

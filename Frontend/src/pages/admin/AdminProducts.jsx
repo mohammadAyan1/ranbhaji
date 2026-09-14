@@ -264,7 +264,7 @@ export default function AdminProducts() {
     const purchase_price_per_gm = useKg ? purchaseInput / 1000 : purchaseInput;
 
     // Calculate selling price based on purchase price and margin percentage
-    const selling_price_per_gm = purchase_price_per_gm * (1 + (marginPercentage / 100));
+    const selling_price_per_gm = purchase_price_per_gm * (marginPercentage / 100);
 
     const payload = new FormData();
     payload.append("name", form.name);
@@ -365,7 +365,7 @@ export default function AdminProducts() {
         : "",
       margin_percentage: (p.default_margin_percentage && parseFloat(p.default_margin_percentage) !== 0)
         ? parseFloat(p.default_margin_percentage).toString()
-        : (buyPrice > 0 ? (((sellPrice - buyPrice) / buyPrice) * 100).toFixed(1) : ""),
+        : (buyPrice > 0 ? ((sellPrice / buyPrice) * 100).toFixed(1) : ""),
       unit: unt || "",
       unit_id: uId || "",
       description: p.description || "",
@@ -461,8 +461,8 @@ export default function AdminProducts() {
   const purchasePerGm = useKgMode ? purchaseInput / 1000 : purchaseInput;
   const purchasePerKg = useKgMode ? purchaseInput : purchaseInput * 1000;
 
-  const sellingPerGm = purchasePerGm * (1 + marginPercentage / 100);
-  const sellingPerKg = purchasePerKg * (1 + marginPercentage / 100);
+  const sellingPerGm = purchasePerGm * (marginPercentage / 100);
+  const sellingPerKg = purchasePerKg * (marginPercentage / 100);
 
   const profit = marginPercentage;
 
@@ -879,7 +879,7 @@ export default function AdminProducts() {
                 <tbody>
                   {filteredProducts.map(p => {
                     const margin = p.selling_price_per_gm && p.purchase_price_per_gm
-                      ? (((p.selling_price_per_gm - p.purchase_price_per_gm) / p.selling_price_per_gm) * 100).toFixed(1)
+                      ? ((p.selling_price_per_gm / p.purchase_price_per_gm) * 100).toFixed(1)
                       : "—";
 
                     return (
@@ -1127,7 +1127,7 @@ export default function AdminProducts() {
                 ) : (
                   pendingRetailPricing.map((item, idx) => {
                     const margin = parseFloat(item.margin_percentage) || 0;
-                    const retailPrice = item.calculated_purchase_price * (1 + margin / 100);
+                    const retailPrice = item.calculated_purchase_price * (margin / 100);
                     return (
                       <tr key={idx} className="table-row">
                         <td className="p-3 font-medium text-gray-900">{item.name}</td>
