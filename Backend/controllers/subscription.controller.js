@@ -3,7 +3,7 @@ import { sequelize } from "../confiq/db.js";
 import {
     Subscription, Package, PackageFixedItem, PackageSeasonalPool, PackageSeasonalConfig,
     SubscriptionItem, DeliverySchedule, WalletTransaction, PaymentTransaction, PauseLog, User, Product, Address,
-    ScheduleSeasonalSelection, DeliveryItem, MissedProductLog, ReturnedProductLog
+    ScheduleSeasonalSelection, DeliveryItem, MissedProductLog, ReturnedProductLog, WaterSubscription
 } from "../models/index.js";
 import { generateDeliveryDates } from "../utils/scheduleEngine.js";
 
