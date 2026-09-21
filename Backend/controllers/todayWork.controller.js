@@ -128,10 +128,11 @@ export const assignBatchToOrders = async (req, res) => {
         const newBatchId = batch_id === 'unassigned' ? null : batch_id;
 
         for (const order of orders) {
+            const targetId = order.order_id || order.id;
             if (order.type === 'retail') {
-                await RetailOrder.update({ batch_id: newBatchId }, { where: { id: order.id } });
+                await RetailOrder.update({ batch_id: newBatchId }, { where: { id: targetId } });
             } else if (order.type === 'subscription' || order.type === 'water') {
-                await DeliverySchedule.update({ batch_id: newBatchId }, { where: { id: order.order_id } });
+                await DeliverySchedule.update({ batch_id: newBatchId }, { where: { id: targetId } });
             }
         }
 

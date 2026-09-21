@@ -51,7 +51,7 @@ const adminLinks = [
     children: [
       { to: "/admin/products?tab=purchase", label: "Today Purchases" },
       { to: "/admin/today-work/batch-assign", label: "Batch Assign" },
-      { to: "/admin/working-logs", label: "Current Process" },
+      // { to: "/admin/working-logs", label: "Current Process" },
       { to: "/admin/today-work/missing", label: "Missing" },
       { to: "/admin/today-work/ready", label: "Dispatch" },
       { to: "/admin/today-work/assign-delivery", label: "Assign Delivery Boy" },

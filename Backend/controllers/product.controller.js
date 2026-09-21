@@ -258,9 +258,14 @@ export const getStockSummary = async (req, res) => {
         });
 
         if (startDate && endDate) {
+            const startDateTime = new Date(startDate);
+            startDateTime.setHours(0, 0, 0, 0);
+            const endDateTime = new Date(endDate);
+            endDateTime.setHours(23, 59, 59, 999);
+
             // 1. Calculate Purchased Qty
             const purchases = await PurchaseLog.findAll({
-                where: { purchase_date: { [Op.between]: [startDate, endDate] } },
+                where: { purchase_date: { [Op.between]: [startDateTime, endDateTime] } },
                 attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('quantity')), 'total_qty']],
                 group: ['product_id'],
                 raw: true
@@ -269,6 +274,27 @@ export const getStockSummary = async (req, res) => {
             const purchaseMap = {};
             purchases.forEach(p => {
                 purchaseMap[p.product_id] = parseFloat(p.total_qty || 0);
+            });
+
+            // Calculate Yesterday's Purchased Qty
+            const prevDayStart = new Date(startDate);
+            prevDayStart.setDate(prevDayStart.getDate() - 1);
+            prevDayStart.setHours(0, 0, 0, 0);
+
+            const prevDayEnd = new Date(startDate);
+            prevDayEnd.setDate(prevDayEnd.getDate() - 1);
+            prevDayEnd.setHours(23, 59, 59, 999);
+
+            const yesterdayPurchases = await PurchaseLog.findAll({
+                where: { purchase_date: { [Op.between]: [prevDayStart, prevDayEnd] } },
+                attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('quantity')), 'total_qty']],
+                group: ['product_id'],
+                raw: true
+            });
+
+            const yesterdayPurchaseMap = {};
+            yesterdayPurchases.forEach(p => {
+                yesterdayPurchaseMap[p.product_id] = parseFloat(p.total_qty || 0);
             });
 
             // 2. Calculate Sold Qty
@@ -302,10 +328,6 @@ export const getStockSummary = async (req, res) => {
             });
 
             deliveryItems.forEach(item => {
-                // Convert gm to kg if product unit is kg/gm (assuming backend deals in gm mostly or according to product unit)
-                // Actually the existing getProductSales just sums it up. Wait, RetailOrderItem quantity is usually in unit (like kg).
-                // Let's look at getProductSales: it just adds them.
-                // Wait! getProductSales code:
                 salesMap[item.product_id] = (salesMap[item.product_id] || 0) + parseFloat(item.totalQty || 0);
             });
 
@@ -329,20 +351,13 @@ export const getStockSummary = async (req, res) => {
             products = products.map(p => {
                 let purchased = purchaseMap[p.id] || 0;
                 let sold = salesMap[p.id] || 0;
+                let yesterday_purchased = yesterdayPurchaseMap[p.id] || 0;
 
-                // Adjust gm to kg if needed based on unit, but wait...
-                // In product.controller.js, `getProductSales` doesn't convert gm to kg.
-                // Wait, if `PurchaseLog.quantity` is in KG, and `DeliveryItem.qty_gm` is in GM, then adding them directly is WRONG.
-                // Let's check how total_sold_qty is normally calculated in the app.
-                // Normally when order is completed, they probably do conversion. Let me just sum them and assume the unit matches what the frontend expects, or convert them if necessary.
-                
-                // Let's just do exactly what we need to show the data.
                 return {
                     ...p,
                     total_purchased_qty: purchased,
                     total_sold_qty: sold,
-                    // current_stock remains the global actual stock unless they want calculated stock. 
-                    // I will leave current_stock as is.
+                    yesterday_purchased_qty: yesterday_purchased
                 };
             });
         }

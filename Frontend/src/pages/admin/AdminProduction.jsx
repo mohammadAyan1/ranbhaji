@@ -8,9 +8,9 @@ const LiveTimer = ({ startedAt, expectedMinutes }) => {
 
   useEffect(() => {
     if (!startedAt || expectedMinutes === null) return;
-    
+
     const start = new Date(startedAt).getTime();
-    
+
     const updateTimer = () => {
       const now = new Date().getTime();
       setElapsed(Math.max(0, Math.floor((now - start) / 1000)));
@@ -65,7 +65,7 @@ export default function AdminProduction() {
       if (res.data.success) {
         setBatches(res.data.batches);
       }
-      
+
       const logsRes = await api.get('/production/detailed-worker-logs');
       if (logsRes.data.success) {
         setWorkerLogs(logsRes.data.logs);
@@ -84,7 +84,7 @@ export default function AdminProduction() {
     // Determine socket URL from axios baseURL
     const baseURL = api.defaults.baseURL || 'http://localhost:3000/api';
     const socketURL = baseURL.replace('/api', '');
-    
+
     const socket = io(socketURL);
 
     socket.on('production:update', () => {
@@ -108,7 +108,9 @@ export default function AdminProduction() {
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 flex items-center justify-between">
+
+
+        {/* <header className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold text-gray-900 flex items-center gap-3">
               <Activity className="text-green-600" size={40} />
@@ -156,7 +158,7 @@ export default function AdminProduction() {
                     </span>
                   )}
                 </div>
-                
+
                 <div className="p-6">
                   {batch.splits.length === 0 ? (
                     <p className="text-gray-400 italic">No splits have started processing yet.</p>
@@ -164,19 +166,18 @@ export default function AdminProduction() {
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                       {batch.splits.map((split) => (
                         <div key={split.id} className="border border-gray-100 rounded-lg bg-gray-50 p-4 shadow-sm relative overflow-hidden">
-                          {/* Top indicator bar */}
+
                           <div className={`absolute top-0 left-0 w-full h-1 ${split.stage === 'completed' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
-                          
+
                           <div className="flex justify-between items-start mb-3 mt-1">
                             <div>
                               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Split #{split.id}</span>
                               <h3 className="font-bold text-lg text-gray-800 mt-1">{split.qty_kg} kg</h3>
                             </div>
-                            <span className={`px-2 py-1 text-xs font-bold rounded-md ${
-                              split.stage === 'cleaning_cutting' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                            <span className={`px-2 py-1 text-xs font-bold rounded-md ${split.stage === 'cleaning_cutting' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
                               split.stage === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' :
-                              'bg-blue-100 text-blue-700 border border-blue-200'
-                            }`}>
+                                'bg-blue-100 text-blue-700 border border-blue-200'
+                              }`}>
                               {split.stage.replace('_', ' ').toUpperCase()}
                             </span>
                           </div>
@@ -186,7 +187,7 @@ export default function AdminProduction() {
                               <Users size={16} className="mr-2 text-gray-400" />
                               <span>{split.workers.length > 0 ? split.workers.join(', ') : 'No workers assigned'}</span>
                             </div>
-                            
+
                             {split.eta_minutes !== null && (
                               <LiveTimer startedAt={split.started_at} expectedMinutes={split.eta_minutes} />
                             )}
@@ -199,7 +200,9 @@ export default function AdminProduction() {
               </div>
             ))}
           </div>
-        )}
+        )} */}
+
+
 
         {/* Detailed Worker Logs Section */}
         <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -235,18 +238,16 @@ export default function AdminProduction() {
                       <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{log.worker_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600">{log.task}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                          log.role === 'Initiator' ? 'bg-indigo-100 text-indigo-800' : 'bg-pink-100 text-pink-800'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${log.role === 'Initiator' ? 'bg-indigo-100 text-indigo-800' : 'bg-pink-100 text-pink-800'
+                          }`}>
                           {log.role}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${
-                          log.status === 'DONE' ? 'bg-green-100 text-green-800' : 
-                          log.status === 'ALARM' ? 'bg-red-100 text-red-800' : 
-                          'bg-blue-100 text-blue-800'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${log.status === 'DONE' ? 'bg-green-100 text-green-800' :
+                          log.status === 'ALARM' ? 'bg-red-100 text-red-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
                           {log.status}
                         </span>
                       </td>

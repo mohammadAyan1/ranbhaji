@@ -730,7 +730,7 @@ export const reviewReturn = async (req, res) => {
                 });
 
                 if (existingNextItem) {
-                    await existingNextItem.update({ 
+                    await existingNextItem.update({
                         qty_gm: parseFloat(existingNextItem.qty_gm) + returnQty,
                         will_purchase: will_purchase || existingNextItem.will_purchase
                     }, { transaction: t });
@@ -1096,9 +1096,9 @@ export const getProductDemands = async (req, res) => {
             waterDemandsMap[cap].total += 1;
             if (sub.container === 'glass') waterDemandsMap[cap].glass += 1;
             else if (sub.container === 'plastic') waterDemandsMap[cap].plastic += 1;
-            
-            waterDemandsMap[cap].orders.push({ 
-                userName: user ? user.name : 'Unknown', 
+
+            waterDemandsMap[cap].orders.push({
+                userName: user ? user.name : 'Unknown',
                 phone: user ? user.phone : 'Unknown',
                 water_type: sub.water_type,
                 container: sub.container,
@@ -1167,7 +1167,7 @@ export const getProductDemands = async (req, res) => {
             if (dbItems.length > 0) {
                 for (const item of dbItems) {
                     if (!item.Product) continue;
-                    
+
                     if (schedule.is_returned_serving) {
                         if (item.will_purchase) {
                             addDemand(item.Product, parseFloat(item.qty_gm || 0), 'return', batchName, user);
@@ -1229,9 +1229,9 @@ export const getProductDemands = async (req, res) => {
             retail_details: Object.values(d.retail_details)
         }));
 
-        res.status(200).json({ 
-            success: true, 
-            date: dateStr, 
+        res.status(200).json({
+            success: true,
+            date: dateStr,
             demands: demandsList,
             waterDemands: Object.values(waterDemandsMap)
         });
@@ -1791,7 +1791,7 @@ export const packOrders = async (req, res) => {
             if (payloadItem) {
                 if (payloadItem.isChecked) {
                     for (let i = 0; i < productItems.length; i++) {
-                        const { type, item } = productItems[i];
+                        const { type, item, parent } = productItems[i];
                         const demanded = parseFloat(type === 'retail' ? (item.quantity || 0) : (item.qty_gm || 0));
                         const rem = remainingPacked[productId] || 0;
                         const isLast = (i === productItems.length - 1);
@@ -1806,14 +1806,50 @@ export const packOrders = async (req, res) => {
                         await item.update({ packed_qty: alloc });
                         remainingPacked[productId] = Math.max(0, rem - alloc);
 
+                        // Revert any previously created MissedProductLog and next-day carry-over
+                        if (type === 'package') {
+                            const schedule = parent;
+                            const existingMissed = await MissedProductLog.findOne({
+                                where: { source_type: 'subscription', source_id: schedule.id, product_id: item.product_id }
+                            });
+                            
+                            if (existingMissed) {
+                                const scheduleDateObj = new Date(schedule.scheduled_date);
+                                scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
+                                if (scheduleDateObj.getDay() === 0) {
+                                    scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
+                                }
+                                const tomorrowStr = scheduleDateObj.toISOString().split('T')[0];
+                                
+                                const nextSchedule = await DeliverySchedule.findOne({
+                                    where: { subscription_id: schedule.subscription_id, scheduled_date: tomorrowStr }
+                                });
+                                
+                                if (nextSchedule) {
+                                    const existingNextItem = await DeliveryItem.findOne({
+                                        where: { schedule_id: nextSchedule.id, product_id: item.product_id }
+                                    });
+                                    if (existingNextItem) {
+                                        const revertedQty = parseFloat(existingNextItem.qty_gm) - parseFloat(existingMissed.missed_qty);
+                                        if (revertedQty <= 0) {
+                                            await existingNextItem.destroy();
+                                        } else {
+                                            await existingNextItem.update({ qty_gm: revertedQty });
+                                        }
+                                    }
+                                }
+                                await existingMissed.destroy();
+                            }
+                        }
+
                         // If we packed more than demanded, log the extra as loss
                         if (alloc > demanded) {
                             const extra = alloc - demanded;
-                            
+
                             // Find recent purchase price
                             const lastPurchase = await PurchaseLog.findOne({
-                                where: { 
-                                    product_id: productId, 
+                                where: {
+                                    product_id: productId,
                                     purchase_date: { [Op.lte]: new Date() }
                                 },
                                 order: [['purchase_date', 'DESC']]
@@ -1826,10 +1862,10 @@ export const packOrders = async (req, res) => {
                                 const p = await Product.findByPk(productId);
                                 if (p) baseRate = parseFloat(p.purchase_price_per_gm) * (p.unit === 'piece' ? 1 : 1000); // Wait, if purchase_price_per_gm is used for kg calculation, let's just use purchase_price_per_gm directly.
                             }
-                            
+
                             const p = await Product.findByPk(productId);
                             let safeRate = p ? parseFloat(p.purchase_price_per_gm) : 0;
-                            
+
                             await LossLog.create({
                                 product_id: productId,
                                 loss_date: new Date().toISOString().split('T')[0],
@@ -1850,6 +1886,9 @@ export const packOrders = async (req, res) => {
                             // Next-day delivery logic
                             const scheduleDateObj = new Date(schedule.scheduled_date);
                             scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
+                            if (scheduleDateObj.getDay() === 0) {
+                                scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
+                            }
                             const tomorrowStr = scheduleDateObj.toISOString().split('T')[0];
 
                             let nextSchedule = await DeliverySchedule.findOne({
@@ -2533,7 +2572,7 @@ export const getTodayIncoming = async (req, res) => {
         const formattedDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
 
         const schedules = await DeliverySchedule.findAll({
-            where: { 
+            where: {
                 scheduled_date: formattedDate,
                 status: ['out_for_delivery', 'ready_for_delivery'] // or just out_for_delivery if user wants dispatch
             },

@@ -73,13 +73,13 @@ export default function AdminProducts() {
     return d.toISOString().split('T')[0];
   };
 
-  const [stockStartDate, setStockStartDate] = useState(getStartOfWeek());
-  const [stockEndDate, setStockEndDate] = useState(getEndOfWeek());
-
   const getToday = () => {
     const d = new Date();
     return d.toISOString().split('T')[0];
   };
+
+  const [stockStartDate, setStockStartDate] = useState(getToday());
+  const [stockEndDate, setStockEndDate] = useState(getToday());
 
   const [logStartDate, setLogStartDate] = useState(getToday());
   const [logEndDate, setLogEndDate] = useState(getToday());
@@ -1212,6 +1212,7 @@ export default function AdminProducts() {
                 <tr className="table-header">
                   <th className="text-left p-3 rounded-tl-xl">Product ID & Name</th>
                   <th className="text-left p-3">Category</th>
+                  <th className="text-right p-3">Previous Day Qty</th>
                   <th className="text-right p-3">Total Purchased Qty</th>
                   <th className="text-right p-3">Total Sold Qty</th>
                   <th className="text-right p-3">Current Remaining Stock</th>
@@ -1232,6 +1233,7 @@ export default function AdminProducts() {
                         <p className="text-gray-600 text-[10px]">ID: {p.id}</p>
                       </td>
                       <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
+                      <td className="p-3 text-right font-medium text-purple-400">{formatQuantity(p.yesterday_purchased_qty, p.unit)}</td>
                       <td className="p-3 text-right font-medium text-blue-400">{formatQuantity(p.total_purchased_qty, p.unit)}</td>
                       <td className="p-3 text-right font-medium text-orange-400">{formatQuantity(p.total_sold_qty, p.unit)}</td>
                       <td className={`p-3 text-right font-bold ${isLow ? 'text-red-600' : 'text-fresh-600'}`}>
