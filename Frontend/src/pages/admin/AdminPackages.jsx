@@ -29,6 +29,8 @@ export default function AdminPackages() {
   // Validation preview
   const [validationResult, setValidationResult] = useState(null);
   const [seasonalFilter, setSeasonalFilter] = useState("all");
+  const [sharePackage, setSharePackage] = useState(null);
+  const [sharePhone, setSharePhone] = useState("");
 
   const fetchAll = () => {
     setLoading(true);
@@ -45,6 +47,39 @@ export default function AdminPackages() {
     }).finally(() => setLoading(false));
   };
   useEffect(fetchAll, []);
+
+  const handleWhatsAppShare = () => {
+    if (!sharePhone || sharePhone.length < 10) {
+      alert("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    const pkg = sharePackage;
+    let text = `Hello! Check out our *${pkg.name}* package at Rambhaji.\n\n`;
+    text += `*Type:* ${pkg.type}\n`;
+    text += `*Persons:* ${pkg.num_persons}${pkg.num_persons_max ? `-${pkg.num_persons_max}` : ''}\n`;
+    text += `*Deliveries per month:* ${pkg.services_per_month}\n`;
+    text += `*Price:* ₹${pkg.price}/month\n\n`;
+    
+    if (pkg.FixedItems?.length > 0) {
+      text += `*Fixed Items:*\n`;
+      pkg.FixedItems.forEach(fi => {
+        text += `- ${fi.Product?.name} (${fi.default_qty_gm}g)\n`;
+      });
+      text += `\n`;
+    }
+    
+    if (pkg.SeasonalPool?.length > 0) {
+      text += `*Seasonal Pool (Pick ${pkg.SeasonalConfig?.max_select_count || 0}):*\n`;
+      pkg.SeasonalPool.forEach(sp => {
+        text += `- ${sp.Product?.name}\n`;
+      });
+    }
+    
+    const url = `https://wa.me/91${sharePhone}?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+    setSharePackage(null);
+    setSharePhone("");
+  };
 
   const handleApplyDraft = () => {
     if (!selectedDraftId) return;
@@ -496,7 +531,7 @@ export default function AdminPackages() {
                     <span className="text-gray-600 text-[10px] uppercase tracking-wider">Pick {idx+1} Qty:</span>
                     <input
                       type="number" min="0" step="any"
-                      className="input w-16 py-1 text-sm text-center"
+                      className="input w-24 py-1 text-sm text-center"
                       value={qty}
                       onChange={e => {
                         const newArr = [...seasonalQuantities];
@@ -598,7 +633,10 @@ export default function AdminPackages() {
                     Visible Budget: ₹{((parseFloat(pkg.price) / pkg.services_per_month) / (1 + (pkg.margin_percent || 0) / 100)).toFixed(2)}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => setSharePackage(pkg)} className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-200 transition-colors flex items-center gap-1">
+                    💬 Share
+                  </button>
                   <button onClick={() => startEdit(pkg)} className="btn-secondary text-xs py-1.5 px-3">✏️ Edit</button>
                   {pkg.status === "active" && (
                     <button onClick={() => handleDeactivate(pkg.id)} className="btn-danger text-xs py-1.5 px-3">Deactivate</button>
@@ -638,6 +676,39 @@ export default function AdminPackages() {
           ))
         )}
       </div>
+
+      {/* Share Modal */}
+      {sharePackage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="text-green-500">💬</span> Share Package
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Enter customer's 10-digit WhatsApp number to share <b>{sharePackage.name}</b>
+            </p>
+            <div className="flex items-center gap-2 mb-6">
+              <span className="text-gray-500 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200 font-medium">+91</span>
+              <input
+                type="text"
+                placeholder="9876543210"
+                value={sharePhone}
+                onChange={(e) => setSharePhone(e.target.value.replace(/\D/g, ''))}
+                className="input w-full"
+                maxLength={10}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setSharePackage(null); setSharePhone(""); }} className="btn-secondary py-2 px-4">Cancel</button>
+              <button onClick={handleWhatsAppShare} className="btn-primary py-2 px-4 flex items-center gap-2 bg-green-600 hover:bg-green-700 border-green-600">
+                Send to WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

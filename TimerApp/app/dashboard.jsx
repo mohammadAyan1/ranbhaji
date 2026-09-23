@@ -1,10 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, Alert, Modal, AppState, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as SecureStore from '../src/utils/storage';
-import { getTodayBatches, markAttendance, getBatchDemand, assignNextTask, getMyActiveTasks, acknowledgeAlarm, getStuckTasks, forceCompleteTask } from '../src/api/workerTask.api';
+import { getTodayBatches, markAttendance, assignNextTask, getMyActiveTasks, acknowledgeAlarm, getStuckTasks, forceCompleteTask, getMyTaskHistory } from '../src/api/workerTask.api';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const formatStageName = (stage) => {
+    if (!stage) return "";
+    switch(stage.toUpperCase()) {
+        case 'SOAKING': return 'SOAKING (भिगोना)';
+        case 'WEIGHING': return 'WEIGHING (तोलना)';
+        case 'CUTTING': return 'CUTTING (काटना)';
+        case 'DRYING': return 'DRYING (सुखाना)';
+        default: return stage;
+    }
+};
 
 // ─── Live Countdown Timer Component ───────────────────────────────────────────
 function LiveCountdown({ task }) {
@@ -65,11 +77,21 @@ function LiveCountdown({ task }) {
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
     const router = useRouter();
+    const isFocused = useIsFocused();
+    const isFocusedRef = useRef(isFocused);
+
+    useEffect(() => {
+        isFocusedRef.current = isFocused;
+        if (!isFocused) {
+            stopAlarmSound();
+        }
+    }, [isFocused]);
+
     const [loading, setLoading] = useState(false);
     const [attendanceMarked, setAttendanceMarked] = useState(false);
     const [batches, setBatches] = useState([]);
     const [selectedBatch, setSelectedBatch] = useState(null);
-    const [demands, setDemands] = useState([]);
+    const [taskHistory, setTaskHistory] = useState([]);
     const [myTasks, setMyTasks] = useState([]);
     const [stuckTasks, setStuckTasks] = useState([]);
     const [forcingComplete, setForcingComplete] = useState(null); // taskId being force-completed
@@ -82,17 +104,23 @@ export default function DashboardScreen() {
     const soundRef = useRef(null);
     const alarmTaskRef = useRef(null); // avoid stale closure
     const appStateRef = useRef(AppState.currentState);
+    const isPlayingSound = useRef(false);
 
     // ─── Sound helpers ──────────────────────────────────────────────────────
     const playAlarmSound = async () => {
+        if (isPlayingSound.current) return;
+        isPlayingSound.current = true;
         try {
-            if (soundRef.current) {
-                await soundRef.current.unloadAsync();
-            }
             const userId = await SecureStore.getItemAsync('user_id') || '1';
             let numId = parseInt(userId);
             let soundIdx = numId % 5;
             if (soundIdx === 0) soundIdx = 5;
+
+            if (soundRef.current) {
+                await soundRef.current.stopAsync();
+                await soundRef.current.unloadAsync();
+            }
+
             let soundModule;
             switch (soundIdx) {
                 case 1: soundModule = require('../assets/sounds/alarm1.wav'); break;
@@ -108,6 +136,7 @@ export default function DashboardScreen() {
             await sound.playAsync();
         } catch (e) {
             console.error('Dashboard alarm sound error:', e);
+            isPlayingSound.current = false;
         }
     };
 
@@ -119,6 +148,7 @@ export default function DashboardScreen() {
             } catch (e) { /* ignore */ }
             soundRef.current = null;
         }
+        isPlayingSound.current = false;
     };
 
     // ─── Fetch background tasks & detect ALARM ──────────────────────────────
@@ -131,7 +161,7 @@ export default function DashboardScreen() {
 
                 // Check for any ALARM task - show modal on dashboard itself
                 const foundAlarm = tasks.find(t => t.status === 'ALARM');
-                if (foundAlarm && alarmTaskRef.current?.id !== foundAlarm.id) {
+                if (isFocusedRef.current && foundAlarm && alarmTaskRef.current?.id !== foundAlarm.id) {
                     alarmTaskRef.current = foundAlarm;
                     setAlarmTask(foundAlarm);
                     setIsAlarmModalOpen(true);
@@ -164,13 +194,25 @@ export default function DashboardScreen() {
         }
     }, []);
 
+    const fetchTaskHistoryData = useCallback(async () => {
+        try {
+            const res = await getMyTaskHistory();
+            if (res.success) setTaskHistory(res.history || []);
+        } catch (e) {
+            console.error('fetchTaskHistory error:', e.response?.data?.message || e.message);
+            if (e.response?.data?.stack) console.error(e.response.data.stack);
+        }
+    }, []);
+
     useEffect(() => {
         loadBatches();
         fetchMyTasks();
         fetchStuckTasksData();
+        fetchTaskHistoryData();
         const interval = setInterval(() => {
             fetchMyTasks();
             fetchStuckTasksData();
+            fetchTaskHistoryData();
         }, 8000);
         return () => clearInterval(interval);
     }, []);
@@ -207,12 +249,6 @@ export default function DashboardScreen() {
 
     const selectBatch = async (batchId) => {
         setSelectedBatch(batchId);
-        try {
-            const res = await getBatchDemand(batchId);
-            if (res.success) setDemands(res.demand);
-        } catch (e) {
-            console.error(e);
-        }
     };
 
     const fetchNextTask = async () => {
@@ -270,24 +306,25 @@ export default function DashboardScreen() {
                         pathname: '/activetask',
                         params: { batchId: res.nextTask.batch_id }
                     });
-                } else if (selectedBatch) {
+                } else {
                     // Try to get next task from batch
-                    try {
-                        const assignRes = await assignNextTask(selectedBatch);
-                        if (assignRes.success && assignRes.task) {
-                            SecureStore.setMemoryItem('current_task', JSON.stringify(assignRes.task));
-                            router.push({
-                                pathname: '/activetask',
-                                params: { batchId: selectedBatch }
-                            });
-                            return;
+                    const actualBatchId = selectedBatch || alarmTask.batch_id;
+                    if (actualBatchId) {
+                        try {
+                            const assignRes = await assignNextTask(actualBatchId);
+                            if (assignRes.success && assignRes.task) {
+                                SecureStore.setMemoryItem('current_task', JSON.stringify(assignRes.task));
+                                router.push({
+                                    pathname: '/activetask',
+                                    params: { batchId: assignRes.task.batch_id }
+                                });
+                                return;
+                            }
+                        } catch (assignErr) {
+                            console.error("Assign after alarm ack error:", assignErr);
                         }
-                    } catch (assignErr) {
-                        console.error("Assign after alarm ack error:", assignErr);
                     }
                     Alert.alert('✅ Done!', 'Alarm acknowledged! Fetch next task to continue.');
-                } else {
-                    Alert.alert('✅ Done!', 'Alarm acknowledged! Select a batch and fetch next task.');
                 }
             }
         } catch (e) {
@@ -371,7 +408,7 @@ export default function DashboardScreen() {
                                     return (
                                         <View key={task.id.toString()} style={styles.stuckCard}>
                                             <View style={styles.stuckCardLeft}>
-                                                <Text style={styles.stuckCardStage}>{task.stage}</Text>
+                                                <Text style={styles.stuckCardStage}>{formatStageName(task.stage)}</Text>
                                                 <Text style={styles.stuckCardProduct}>{task.Product?.name}</Text>
                                                 <Text style={styles.stuckCardQty}>{task.quantity_grams}g</Text>
                                                 <Text style={styles.stuckCardRemaining}>⏱ ~{remainingMin} min bacha</Text>
@@ -406,7 +443,7 @@ export default function DashboardScreen() {
                                         onPress={() => openTask(item)}
                                     >
                                         <View style={styles.taskCardLeft}>
-                                            <Text style={styles.taskCardTitle}>{item.stage} - {item.Product?.name}</Text>
+                                            <Text style={styles.taskCardTitle}>{formatStageName(item.stage)} - {item.Product?.name}</Text>
                                             <Text style={styles.taskCardSub}>Qty: {item.quantity_grams}g</Text>
                                             <LiveCountdown task={item} />
                                         </View>
@@ -444,20 +481,32 @@ export default function DashboardScreen() {
                             />
                         )}
 
-                        {/* ─── Batch Demands ───────────────────────────── */}
-                        {selectedBatch && (
-                            <View style={styles.demandSection}>
-                                <Text style={styles.sectionTitle}>📋 Batch Demands</Text>
-                                <View style={styles.demandList}>
-                                    {demands.length > 0 ? demands.map((d, idx) => (
-                                        <View key={idx} style={styles.demandRow}>
-                                            <Text style={styles.demandName}>{d.productName}</Text>
-                                            <Text style={styles.demandQty}>{d.quantity}g</Text>
+                        {/* ─── Task History (My Worked Products) ───────────────────────────── */}
+                        <View style={styles.demandSection}>
+                            <Text style={styles.sectionTitle}>📋 My Worked Products</Text>
+                            <View style={styles.demandList}>
+                                {taskHistory.length > 0 ? taskHistory.map((item, idx) => (
+                                    <View key={idx} style={styles.historyRow}>
+                                        <Text style={styles.demandName}>{item.productName}</Text>
+                                        <View style={styles.stageBadges}>
+                                            {Object.entries(item.stages).map(([stage, status]) => (
+                                                <View key={stage} style={[
+                                                    styles.stageBadge,
+                                                    status === 'completed' ? styles.stageBadgeCompleted : styles.stageBadgeActive
+                                                ]}>
+                                                    <Text style={[
+                                                        styles.stageBadgeText,
+                                                        status === 'completed' ? styles.stageBadgeTextCompleted : styles.stageBadgeTextActive
+                                                    ]}>
+                                                        {formatStageName(stage)}
+                                                    </Text>
+                                                </View>
+                                            ))}
                                         </View>
-                                    )) : <Text style={styles.emptyText}>No demands found.</Text>}
-                                </View>
+                                    </View>
+                                )) : <Text style={styles.emptyText}>No products worked on today.</Text>}
                             </View>
-                        )}
+                        </View>
                     </View>
                 )}
             />
@@ -479,7 +528,7 @@ export default function DashboardScreen() {
                     <View style={styles.alarmModalContent}>
                         <Text style={styles.alarmEmoji}>🚨</Text>
                         <Text style={styles.alarmTitle}>ALARM!</Text>
-                        <Text style={styles.alarmStage}>{alarmTask?.stage} Stage Complete</Text>
+                        <Text style={styles.alarmStage}>{formatStageName(alarmTask?.stage)} Stage Complete</Text>
                         <Text style={styles.alarmProduct}>{alarmTask?.Product?.name}</Text>
                         <Text style={styles.alarmQty}>{alarmTask?.quantity_grams}g</Text>
 
@@ -496,7 +545,8 @@ export default function DashboardScreen() {
 
                         <TouchableOpacity
                             style={styles.alarmViewBtn}
-                            onPress={() => {
+                            onPress={async () => {
+                                await stopAlarmSound();
                                 setIsAlarmModalOpen(false);
                                 openTask(alarmTask);
                             }}
@@ -548,12 +598,18 @@ const styles = StyleSheet.create({
     batchCardActive: { backgroundColor: '#4CAF50', borderColor: '#4CAF50' },
     batchText: { color: '#4B5563', fontWeight: 'bold' },
     batchTextActive: { color: '#fff' },
-    // Demands
+    // History Badges
     demandSection: { marginTop: 20 },
     demandList: { backgroundColor: '#fff', borderRadius: 10, padding: 15, elevation: 1 },
-    demandRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    demandName: { fontSize: 16, color: '#374151', fontWeight: '500' },
-    demandQty: { fontSize: 16, color: '#2E7D32', fontWeight: 'bold' },
+    historyRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+    demandName: { fontSize: 16, color: '#374151', fontWeight: 'bold', marginBottom: 8 },
+    stageBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    stageBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
+    stageBadgeActive: { backgroundColor: '#FFF3E0', borderColor: '#FFB74D' }, // Orange for active
+    stageBadgeCompleted: { backgroundColor: '#E8F5E9', borderColor: '#81C784' }, // Green for completed
+    stageBadgeText: { fontSize: 12, fontWeight: 'bold' },
+    stageBadgeTextActive: { color: '#E65100' },
+    stageBadgeTextCompleted: { color: '#2E7D32' },
     // Footer
     footer: { padding: 20, backgroundColor: '#fff', elevation: 10 },
     // Alarm Modal

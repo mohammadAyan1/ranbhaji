@@ -410,9 +410,11 @@ const CalculatorDraft = sequelize.define('CalculatorDraft', {
   margin_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   services_per_month: { type: DataTypes.INTEGER, defaultValue: 1 },
   num_persons: { type: DataTypes.INTEGER, defaultValue: 2 },
+  num_persons_max: { type: DataTypes.INTEGER, allowNull: true },
   calculated_price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   max_fixed_count: { type: DataTypes.INTEGER, defaultValue: 0 },
   max_seasonal_count: { type: DataTypes.INTEGER, defaultValue: 0 },
+  seasonal_quantities: { type: DataTypes.JSON, allowNull: true },
   draft_type: { type: DataTypes.STRING(50), defaultValue: 'standard' }
 }, { tableName: 'calculator_drafts', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 

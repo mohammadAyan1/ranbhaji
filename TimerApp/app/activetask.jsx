@@ -7,6 +7,17 @@ import { Audio } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { startTaskStage, pauseTask, resumeTask, completeTask, acknowledgeAlarm, syncTask, getTaskBuckets, triggerAlarm, assignNextTask } from '../src/api/workerTask.api';
 
+const formatStageName = (stage) => {
+    if (!stage) return "";
+    switch(stage.toUpperCase()) {
+        case 'SOAKING': return 'SOAKING (भिगोना)';
+        case 'WEIGHING': return 'WEIGHING (तोलना)';
+        case 'CUTTING': return 'CUTTING (काटना)';
+        case 'DRYING': return 'DRYING (सुखाना)';
+        default: return stage;
+    }
+};
+
 export default function TaskScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
@@ -46,8 +57,8 @@ export default function TaskScreen() {
             if (isAlarmModalOpen) return;
             try {
                 const res = await checkAlarms(batchId);
-                if (res.success && res.tasks && res.tasks.length > 0) {
-                    const alarm = res.tasks[0];
+                if (res.success && res.task) {
+                    const alarm = res.task;
                     const cTask = currentTaskRef.current;
                     
                     if (cTask && cTask.status === 'RUNNING' && cTask.id !== alarm.id) {
@@ -196,7 +207,11 @@ export default function TaskScreen() {
     }, [currentTask?.id, currentTask?.status, currentTask?.started_at, currentTask?.remaining_seconds]);
 
 
+    const isPlayingSound = useRef(false);
+
     const playForegroundAlarm = async () => {
+        if (isPlayingSound.current) return;
+        isPlayingSound.current = true;
         try {
             const userId = await SecureStore.getItemAsync('user_id') || '1';
             let numId = parseInt(userId);
@@ -204,6 +219,7 @@ export default function TaskScreen() {
             if (soundIdx === 0) soundIdx = 5;
 
             if (soundRef.current) {
+                await soundRef.current.stopAsync();
                 await soundRef.current.unloadAsync();
             }
 
@@ -223,6 +239,7 @@ export default function TaskScreen() {
             await sound.playAsync();
         } catch (e) {
             console.error("Audio play error", e);
+            isPlayingSound.current = false;
         }
     };
 
@@ -232,6 +249,7 @@ export default function TaskScreen() {
             await soundRef.current.unloadAsync();
             soundRef.current = null;
         }
+        isPlayingSound.current = false;
         await Notifications.dismissAllNotificationsAsync();
     };
 
@@ -258,17 +276,49 @@ export default function TaskScreen() {
         }
     };
 
+    const handleRunInBackground = async () => {
+        setLoading(true);
+        try {
+            const actualBatchId = batchId || currentTask?.batch_id;
+            if (actualBatchId) {
+                const res = await assignNextTask(actualBatchId);
+                if (res.success && res.task) {
+                    Alert.alert('✅ Running in Background', `Moved previous task to background. Now starting next task: ${res.task.stage}`);
+                    handleNextTaskOrBack(res.task, actualBatchId);
+                    return;
+                }
+            }
+            router.back();
+        } catch (e) {
+            console.error(e);
+            router.back();
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // ─── DRYING Mode Selection ────────────────────────────────────────────
     const handleStartStageDrying = () => {
         // Show drying mode selection modal first
         setIsDryingModalOpen(true);
     };
 
-    const handleDryingModeSelected = async (mode) => {
+    const handleDryingModeSelected = async (mode, forceLeaveOther = false) => {
         setIsDryingModalOpen(false);
         setLoading(true);
         try {
-            const res = await startTaskStage(currentTask.id, { drying_mode: mode });
+            const res = await startTaskStage(currentTask.id, { drying_mode: mode, forceLeaveOther });
+            if (res.conflict) {
+                Alert.alert(
+                    "Conflict Found",
+                    res.conflictMessage,
+                    [
+                        { text: "No", style: "cancel" },
+                        { text: "Yes", onPress: () => handleDryingModeSelected(mode, true) }
+                    ]
+                );
+                return;
+            }
             if (res.success) {
                 setCurrentTask(res.task);
             }
@@ -280,16 +330,29 @@ export default function TaskScreen() {
     };
 
     // ─── Start Stage (non-DRYING) ─────────────────────────────────────────
-    const handleStartStage = async () => {
+    const handleStartStage = async (forceLeaveOther = false) => {
+        const isForce = typeof forceLeaveOther === 'boolean' ? forceLeaveOther : false;
+
         // DRYING gets its own flow
-        if (currentTask.stage === 'DRYING') {
+        if (currentTask.stage === 'DRYING' && !isForce) {
             handleStartStageDrying();
             return;
         }
 
         setLoading(true);
         try {
-            const res = await startTaskStage(currentTask.id, {});
+            const res = await startTaskStage(currentTask.id, { forceLeaveOther: isForce });
+            if (res.conflict) {
+                Alert.alert(
+                    "Conflict Found",
+                    res.conflictMessage,
+                    [
+                        { text: "No", style: "cancel" },
+                        { text: "Yes", onPress: () => handleStartStage(true) }
+                    ]
+                );
+                return;
+            }
             if (res.success) {
                 setCurrentTask(res.task);
             }
@@ -307,6 +370,10 @@ export default function TaskScreen() {
             if (res.success) {
                 setCurrentTask(res.task);
                 await Notifications.cancelScheduledNotificationAsync(`task-${currentTask.id}`);
+                if (res.task.status === 'RUNNING') {
+                    Alert.alert('Left Task', 'You have paused your work. Others are still working on it.');
+                    router.back();
+                }
             }
         } catch (e) {
             Alert.alert('Error', e.message);
@@ -344,9 +411,10 @@ export default function TaskScreen() {
                     Alert.alert('✅ Stage Complete!', `Next: ${res.nextTask.stage} stage ready to start.`);
                 } else {
                     // No immediate next task - try to get one from server
-                    if (batchId) {
+                    const actualBatchId = batchId || currentTask?.batch_id;
+                    if (actualBatchId) {
                         try {
-                            const assignRes = await assignNextTask(batchId);
+                            const assignRes = await assignNextTask(actualBatchId);
                             if (assignRes.success && assignRes.task) {
                                 SecureStore.setMemoryItem('current_task', JSON.stringify(assignRes.task));
                                 setCurrentTask(assignRes.task);
@@ -393,25 +461,26 @@ export default function TaskScreen() {
                         Alert.alert('✅ Alarm Acknowledged!', `Next: ${res.nextTask.stage} stage ready. Press "Start Stage" to begin.`);
                     } else {
                         // No direct next task - try assignNextTask to get what's available
-                        if (batchId) {
-                        try {
-                            const assignRes = await assignNextTask(batchId);
-                            if (assignRes.success && assignRes.task) {
-                                SecureStore.setMemoryItem('current_task', JSON.stringify(assignRes.task));
-                                setCurrentTask(assignRes.task);
-                                setTimeLeft(assignRes.task.remaining_seconds || 0);
-                                Alert.alert('✅ Alarm Acknowledged!', `Next task: ${assignRes.task.stage} for ${assignRes.task.Product?.name}`);
-                                return;
+                        const actualBatchId = batchId || currentTask?.batch_id || alarmTask?.batch_id;
+                        if (actualBatchId) {
+                            try {
+                                const assignRes = await assignNextTask(actualBatchId);
+                                if (assignRes.success && assignRes.task) {
+                                    SecureStore.setMemoryItem('current_task', JSON.stringify(assignRes.task));
+                                    setCurrentTask(assignRes.task);
+                                    setTimeLeft(assignRes.task.remaining_seconds || 0);
+                                    Alert.alert('✅ Alarm Acknowledged!', `Next task: ${assignRes.task.stage} for ${assignRes.task.Product?.name}`);
+                                    return;
+                                }
+                            } catch (assignErr) {
+                                console.error("Assign next task after acknowledge error:", assignErr);
                             }
-                        } catch (assignErr) {
-                            console.error("Assign next task after acknowledge error:", assignErr);
                         }
-                    }
                     Alert.alert('✅ Done!', 'Alarm acknowledged & stage complete!');
                     router.back();
+                    }
                 }
             }
-        } // Missing brace added here to close if (res.success)
         } catch (e) {
             Alert.alert('Error', e.message);
         } finally {
@@ -461,7 +530,7 @@ export default function TaskScreen() {
 
             <View style={styles.content}>
                 <View style={styles.infoCard}>
-                    <Text style={styles.stageText}>{currentTask.stage}</Text>
+                    <Text style={styles.stageText}>{formatStageName(currentTask.stage)}</Text>
                     <Text style={styles.statusBadge}>{currentTask.status}</Text>
 
                     <View style={styles.row}>
@@ -533,17 +602,18 @@ export default function TaskScreen() {
                             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>⏸ Pause</Text>}
                         </TouchableOpacity>
 
-                        {/* Skip Timer - not needed for BUCKET_ARRANGE */}
+                        {/* Skip Timer - not needed for BUCKET_ARRANGE
                         {currentTask.stage !== 'BUCKET_ARRANGE' && (
                             <TouchableOpacity style={styles.dangerBtnOutline} onPress={handleSkipTimer} disabled={loading}>
                                 {loading ? <ActivityIndicator color="#d32f2f" /> : <Text style={styles.dangerBtnText}>⚡ Skip Timer (Test)</Text>}
                             </TouchableOpacity>
                         )}
+                        */}
 
                         {/* Background button ONLY for machine drying and soaking */}
                         {canRunInBackground ? (
-                            <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.back()}>
-                                <Text style={styles.btnText}>🏃 Run in Background & Next Task</Text>
+                            <TouchableOpacity style={styles.secondaryBtn} onPress={handleRunInBackground} disabled={loading}>
+                                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>🏃 Run in Background & Next Task</Text>}
                             </TouchableOpacity>
                         ) : currentTask.stage !== 'BUCKET_ARRANGE' ? (
                             /* Manual stages: per piece, per 25g, weighing, cutting - NOT bucket_arrange (has its own btn) */

@@ -493,9 +493,14 @@ export const updateRetailPrice = async (req, res) => {
 
         // Update today's purchase log so frontend knows the margin is set
         const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
+        todayStart.setMinutes(todayStart.getMinutes() + 330);
+        todayStart.setUTCHours(0, 0, 0, 0);
+        todayStart.setMinutes(todayStart.getMinutes() - 330);
+
         const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
+        todayEnd.setMinutes(todayEnd.getMinutes() + 330);
+        todayEnd.setUTCHours(23, 59, 59, 999);
+        todayEnd.setMinutes(todayEnd.getMinutes() - 330);
 
         const recentLog = await PurchaseLog.findOne({
             where: {

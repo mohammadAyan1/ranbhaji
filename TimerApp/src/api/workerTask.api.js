@@ -55,8 +55,8 @@ export const acknowledgeAlarm = async (taskId) => {
     return res.data;
 };
 
-export const joinTask = async (taskId) => {
-    const res = await api.post(`/worker-tasks/tasks/${taskId}/join`);
+export const joinTask = async (taskId, payload = {}) => {
+    const res = await api.post(`/worker-tasks/tasks/${taskId}/join`, payload);
     return res.data;
 };
 
@@ -90,6 +90,12 @@ export const getStuckTasks = async () => {
 // Force complete a stuck task from dashboard (replaces manual SQL)
 export const forceCompleteTask = async (taskId) => {
     const res = await api.post(`/worker-tasks/tasks/${taskId}/force-complete`);
+    return res.data;
+};
+
+// Get the worker's task history for today
+export const getMyTaskHistory = async () => {
+    const res = await api.get(`/worker-tasks/tasks/history`);
     return res.data;
 };
 

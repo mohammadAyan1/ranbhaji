@@ -43,6 +43,59 @@ export const createDraft = async (req, res) => {
     }
 };
 
+// PUT /api/calculator/drafts/:id (admin)
+export const updateDraft = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { name, margin_percent, services_per_month, num_persons, calculated_price, max_fixed_count, max_seasonal_count, items, seasonal_quantities, draft_type } = req.body;
+
+        const draft = await CalculatorDraft.findByPk(id);
+        if (!draft) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Draft not found" });
+        }
+
+        if (!name) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Draft name is required" });
+        }
+
+        await draft.update({
+            name,
+            margin_percent: parseFloat(margin_percent || 0),
+            services_per_month: parseInt(services_per_month || 1),
+            num_persons: parseInt(num_persons || 2),
+            calculated_price: parseFloat(calculated_price || 0),
+            max_fixed_count: parseInt(max_fixed_count || 0),
+            max_seasonal_count: parseInt(max_seasonal_count || 0),
+            seasonal_quantities: seasonal_quantities ? JSON.parse(JSON.stringify(seasonal_quantities)) : null,
+            draft_type: draft_type || 'price_calculator'
+        }, { transaction: t });
+
+        // Remove old items
+        await CalculatorDraftItem.destroy({ where: { draft_id: id }, transaction: t });
+
+        // Insert new items
+        if (items && items.length > 0) {
+            const itemRows = items.map(item => ({
+                draft_id: draft.id,
+                product_id: parseInt(item.product_id),
+                qty_gm: parseFloat(item.qty_gm || 0),
+                is_fixed: !!item.is_fixed,
+                is_seasonal: !!item.is_seasonal
+            }));
+            await CalculatorDraftItem.bulkCreate(itemRows, { transaction: t });
+        }
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Draft updated successfully", draft });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // GET /api/calculator/drafts (admin)
 export const getDrafts = async (req, res) => {
     try {

@@ -35,6 +35,14 @@ export default function PackageCalculator() {
   // Saving state
   const [draftName, setDraftName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [drafts, setDrafts] = useState([]);
+  const [editingDraftId, setEditingDraftId] = useState(null);
+
+  const fetchDrafts = () => {
+    api.get("/calculator/drafts").then((res) => {
+      setDrafts(res.data.drafts || []);
+    }).catch(console.error);
+  };
 
   useEffect(() => {
     api.get("/products")
@@ -45,6 +53,7 @@ export default function PackageCalculator() {
         showMsg(`❌ Failed to load products: ${err.message}`, "error");
       })
       .finally(() => setLoading(false));
+    fetchDrafts();
   }, []);
 
   const showMsg = (text, type = "error") => {
@@ -69,6 +78,7 @@ export default function PackageCalculator() {
     setNumPersonsMax("");
     setPersonRangeModeCalc(false);
     setMsg("");
+    setEditingDraftId(null);
   };
 
   // Fixed items processing
@@ -121,8 +131,50 @@ export default function PackageCalculator() {
     }
   };
 
+  const loadDraftIntoForm = (draft) => {
+    setEditingDraftId(draft.id);
+    setDraftName(draft.name);
+    setMarginPercent(draft.margin_percent);
+    setServicesCount(draft.services_per_month);
+    setNumPersons(draft.num_persons || 2);
+    setNumPersonsMax(draft.num_persons_max || "");
+    setPersonRangeModeCalc(!!draft.num_persons_max);
+    setFixedCount(draft.max_fixed_count || 0);
+    setSeasonalCount(draft.max_seasonal_count || 0);
+    
+    if (draft.seasonal_quantities && draft.seasonal_quantities.length > 0) {
+      setSeasonalQuantities(draft.seasonal_quantities);
+    } else {
+      setSeasonalQuantities(Array(draft.max_seasonal_count || 3).fill(250));
+    }
+
+    // Fixed Items mapping
+    const draftFixed = draft.Items?.filter(i => i.is_fixed) || [];
+    const newFixedItems = [];
+    const maxCount = draft.max_fixed_count || Math.max(draftFixed.length, 2);
+    for (let i = 0; i < maxCount; i++) {
+      if (draftFixed[i]) {
+        const prod = products.find(p => p.id === draftFixed[i].product_id);
+        newFixedItems.push({
+          id: i + 1,
+          product_id: draftFixed[i].product_id,
+          qty: draftFixed[i].qty_gm,
+          search: prod ? `${prod.name} (${prod.category})` : ""
+        });
+      } else {
+        newFixedItems.push({ id: i + 1, product_id: "", qty: "", search: "" });
+      }
+    }
+    setFixedItems(newFixedItems);
+
+    // Seasonal Pool mapping
+    const draftSeasonal = draft.Items?.filter(i => i.is_seasonal).map(i => i.product_id) || [];
+    setSeasonalPool(draftSeasonal);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Save Draft package simulation
-  const saveDraft = async () => {
+  const saveDraftData = async (method = "POST") => {
     if (!draftName.trim()) {
       showMsg("❌ Please enter a name for the draft", "error");
       return;
@@ -172,9 +224,15 @@ export default function PackageCalculator() {
     };
 
     try {
-      await api.post("/calculator/drafts", payload);
+      if (method === "PUT" && editingDraftId) {
+        await api.put(`/calculator/drafts/${editingDraftId}`, payload);
+        showMsg("✅ Draft package updated successfully!", "success");
+      } else {
+        await api.post("/calculator/drafts", payload);
+        showMsg("✅ Package create ho chuka hai draft me!", "success");
+      }
       clearCalculator();
-      showMsg("✅ Package create ho chuka hai draft me!", "success");
+      fetchDrafts();
     } catch (err) {
       showMsg(`❌ Failed to save draft: ${err.response?.data?.message || err.message}`, "error");
     } finally {
@@ -596,15 +654,70 @@ export default function PackageCalculator() {
             onChange={(e) => setDraftName(e.target.value)}
           />
         </div>
-        <div className="flex items-end justify-end pt-5">
-          <button
-            onClick={saveDraft}
-            disabled={saving || !draftName.trim() || (fixedBudget + seasonalBudget) <= 0}
-            className="btn-primary text-sm font-bold py-2.5 px-8"
-          >
-            {saving ? "Saving Draft..." : "💾 Save as calculated draft package"}
-          </button>
+        <div className="flex items-end justify-end pt-5 gap-2 flex-wrap">
+          {editingDraftId ? (
+            <>
+              <button
+                onClick={clearCalculator}
+                className="btn-secondary text-sm font-bold py-2.5 px-6"
+              >
+                Cancel Edit
+              </button>
+              <button
+                onClick={() => saveDraftData("PUT")}
+                disabled={saving || !draftName.trim() || (fixedBudget + seasonalBudget) <= 0}
+                className="btn-primary text-sm font-bold py-2.5 px-6"
+              >
+                {saving ? "Saving..." : "💾 Save Changes"}
+              </button>
+              <button
+                onClick={() => saveDraftData("POST")}
+                disabled={saving || !draftName.trim() || (fixedBudget + seasonalBudget) <= 0}
+                className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200 text-sm font-bold py-2.5 px-6 rounded-xl transition-colors"
+              >
+                {saving ? "Saving..." : "📄 Save as New Draft"}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => saveDraftData("POST")}
+              disabled={saving || !draftName.trim() || (fixedBudget + seasonalBudget) <= 0}
+              className="btn-primary text-sm font-bold py-2.5 px-8"
+            >
+              {saving ? "Saving Draft..." : "💾 Save as calculated draft package"}
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* ─── DRAFTS LIST ────────────────────────────────────────── */}
+      <div className="mt-8 pt-8 border-t border-gray-200">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Saved Calculator Drafts</h2>
+        {drafts.filter(d => d.draft_type === "price_calculator").length === 0 ? (
+          <p className="text-gray-500 text-sm">No price calculator drafts saved yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {drafts.filter(d => d.draft_type === "price_calculator").map(draft => (
+              <div key={draft.id} className={`card p-4 border ${editingDraftId === draft.id ? 'border-fresh-500 bg-fresh-50' : 'border-gray-200'} transition-all`}>
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="font-bold text-gray-900">{draft.name}</h3>
+                  <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">₹{parseFloat(draft.calculated_price).toFixed(2)}</span>
+                </div>
+                <p className="text-xs text-gray-500 mb-4">
+                  {draft.services_per_month} deliveries · {draft.margin_percent}% margin
+                </p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => loadDraftIntoForm(draft)}
+                    className="btn-secondary text-xs py-1.5 px-3 flex-1"
+                  >
+                    ✏️ Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
