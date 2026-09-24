@@ -415,7 +415,9 @@ const CalculatorDraft = sequelize.define('CalculatorDraft', {
   max_fixed_count: { type: DataTypes.INTEGER, defaultValue: 0 },
   max_seasonal_count: { type: DataTypes.INTEGER, defaultValue: 0 },
   seasonal_quantities: { type: DataTypes.JSON, allowNull: true },
-  draft_type: { type: DataTypes.STRING(50), defaultValue: 'standard' }
+  draft_type: { type: DataTypes.STRING(50), defaultValue: 'standard' },
+  target_user_id: { type: DataTypes.INTEGER, allowNull: true },
+  target_mobile_number: { type: DataTypes.STRING(15), allowNull: true }
 }, { tableName: 'calculator_drafts', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 19. CALCULATOR_DRAFT_ITEMS

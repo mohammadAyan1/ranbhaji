@@ -4,6 +4,7 @@ import api from "../../../api/axios";
 
 export default function PackageCalculator() {
   const [products, setProducts] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState("error"); // "success" | "error"
@@ -38,22 +39,32 @@ export default function PackageCalculator() {
   const [drafts, setDrafts] = useState([]);
   const [editingDraftId, setEditingDraftId] = useState(null);
 
-  const fetchDrafts = () => {
-    api.get("/calculator/drafts").then((res) => {
-      setDrafts(res.data.drafts || []);
-    }).catch(console.error);
-  };
+  // New fields for Draft Type
+  const [packageType, setPackageType] = useState("standard");
+  const [targetUserId, setTargetUserId] = useState("");
+  const [targetMobileNumber, setTargetMobileNumber] = useState("");
+  
+  const [shareDraft, setShareDraft] = useState(null);
+  const [sharePhone, setSharePhone] = useState("");
 
   useEffect(() => {
-    api.get("/products")
-      .then((res) => {
-        setProducts(res.data.products?.filter(p => p.status === "active") || []);
-      })
-      .catch((err) => {
-        showMsg(`❌ Failed to load products: ${err.message}`, "error");
-      })
-      .finally(() => setLoading(false));
-    fetchDrafts();
+    setLoading(true);
+    Promise.all([
+      api.get("/products"),
+      api.get("/admin/users"),
+      api.get("/calculator/drafts")
+    ])
+    .then(([prodRes, userRes, draftRes]) => {
+      setProducts(prodRes.data.products?.filter(p => p.status === "active") || []);
+      setUsers(userRes.data.users?.filter(u => u.role === "user") || []);
+      setDrafts(draftRes.data.drafts || []);
+    })
+    .catch((err) => {
+      showMsg(`❌ Failed to load data: ${err.message}`, "error");
+    })
+    .finally(() => {
+      setLoading(false);
+    });
   }, []);
 
   const showMsg = (text, type = "error") => {
@@ -77,8 +88,48 @@ export default function PackageCalculator() {
     setDraftName("");
     setNumPersonsMax("");
     setPersonRangeModeCalc(false);
+    setPackageType("standard");
+    setTargetUserId("");
+    setTargetMobileNumber("");
     setMsg("");
     setEditingDraftId(null);
+  };
+
+  const handleWhatsAppShare = () => {
+    if (!sharePhone || sharePhone.length < 10) {
+      alert("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    const draft = shareDraft;
+    let text = `Hello! Check out our *${draft.name}* package draft at Rambhaji.\n\n`;
+    text += `*Type:* ${draft.packageType || 'custom'}\n`;
+    text += `*Persons:* ${draft.num_persons}${draft.num_persons_max ? `-${draft.num_persons_max}` : ''}\n`;
+    text += `*Deliveries per month:* ${draft.services_per_month}\n`;
+    text += `*Price:* ₹${parseFloat(draft.calculated_price).toFixed(2)}/month\n\n`;
+    
+    const fixedItems = draft.Items?.filter(i => i.is_fixed) || [];
+    if (fixedItems.length > 0) {
+      text += `*Fixed Items:*\n`;
+      fixedItems.forEach(fi => {
+        const p = products.find(prod => prod.id === fi.product_id);
+        text += `- ${p?.name || 'Product'} (${fi.qty_gm}g)\n`;
+      });
+      text += `\n`;
+    }
+    
+    const seasonalItems = draft.Items?.filter(i => i.is_seasonal) || [];
+    if (seasonalItems.length > 0) {
+      text += `*Seasonal Pool (Pick ${draft.max_seasonal_count || 0}):*\n`;
+      seasonalItems.forEach(si => {
+        const p = products.find(prod => prod.id === si.product_id);
+        text += `- ${p?.name || 'Product'}\n`;
+      });
+    }
+    
+    const url = `https://wa.me/91${sharePhone}?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+    setShareDraft(null);
+    setSharePhone("");
   };
 
   // Fixed items processing
@@ -141,6 +192,9 @@ export default function PackageCalculator() {
     setPersonRangeModeCalc(!!draft.num_persons_max);
     setFixedCount(draft.max_fixed_count || 0);
     setSeasonalCount(draft.max_seasonal_count || 0);
+    setPackageType(draft.packageType || "standard"); // assuming we might store it in DB later, or default to standard
+    setTargetUserId(draft.target_user_id || "");
+    setTargetMobileNumber(draft.target_mobile_number || "");
     
     if (draft.seasonal_quantities && draft.seasonal_quantities.length > 0) {
       setSeasonalQuantities(draft.seasonal_quantities);
@@ -219,7 +273,9 @@ export default function PackageCalculator() {
       max_fixed_count: parseInt(fixedCount || 0),
       max_seasonal_count: parseInt(seasonalCount || 0),
       seasonal_quantities: seasonalQuantities.map(q => parseFloat(q) || 0),
-      draft_type: "price_calculator",
+      draft_type: packageType, // mapping draft_type to our packageType ("standard" or "custom")
+      target_user_id: packageType === "custom" && targetUserId ? parseInt(targetUserId) : null,
+      target_mobile_number: packageType === "custom" ? targetMobileNumber : null,
       items: itemsPayload
     };
 
@@ -232,7 +288,9 @@ export default function PackageCalculator() {
         showMsg("✅ Package create ho chuka hai draft me!", "success");
       }
       clearCalculator();
-      fetchDrafts();
+      api.get("/calculator/drafts").then((res) => {
+        setDrafts(res.data.drafts || []);
+      }).catch(console.error);
     } catch (err) {
       showMsg(`❌ Failed to save draft: ${err.response?.data?.message || err.message}`, "error");
     } finally {
@@ -387,6 +445,28 @@ export default function PackageCalculator() {
             }}
           />
         </div>
+        <div>
+          <label className="label text-xs uppercase tracking-wider">Package Type</label>
+          <select className="input text-sm" value={packageType} onChange={e => setPackageType(e.target.value)}>
+            <option value="standard">Standard</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        {packageType === "custom" && (
+          <>
+            <div>
+              <label className="label text-xs uppercase tracking-wider">Target Customer</label>
+              <select className="input text-sm" value={targetUserId} onChange={e => setTargetUserId(e.target.value)}>
+                <option value="">Select (optional)</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label text-xs uppercase tracking-wider">Target Mobile</label>
+              <input type="text" className="input text-sm" placeholder="e.g. 9876543210" value={targetMobileNumber} onChange={e => setTargetMobileNumber(e.target.value)} />
+            </div>
+          </>
+        )}
       </div>
 
       {/* ─── SUMMARY CARDS ────────────────────────────────────────── */}
@@ -693,15 +773,20 @@ export default function PackageCalculator() {
       {/* ─── DRAFTS LIST ────────────────────────────────────────── */}
       <div className="mt-8 pt-8 border-t border-gray-200">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Saved Calculator Drafts</h2>
-        {drafts.filter(d => d.draft_type === "price_calculator").length === 0 ? (
+        {drafts.length === 0 ? (
           <p className="text-gray-500 text-sm">No price calculator drafts saved yet.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {drafts.filter(d => d.draft_type === "price_calculator").map(draft => (
+            {drafts.map(draft => (
               <div key={draft.id} className={`card p-4 border ${editingDraftId === draft.id ? 'border-fresh-500 bg-fresh-50' : 'border-gray-200'} transition-all`}>
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-bold text-gray-900">{draft.name}</h3>
-                  <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">₹{parseFloat(draft.calculated_price).toFixed(2)}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">₹{parseFloat(draft.calculated_price).toFixed(2)}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${draft.draft_type === 'custom' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                      {draft.draft_type === 'custom' ? 'Custom' : 'Standard'}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-500 mb-4">
                   {draft.services_per_month} deliveries · {draft.margin_percent}% margin
@@ -713,12 +798,49 @@ export default function PackageCalculator() {
                   >
                     ✏️ Edit
                   </button>
+                  {draft.draft_type === "custom" && (
+                    <button onClick={() => setShareDraft(draft)} className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-200 transition-colors flex items-center gap-1">
+                      💬 Share
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Share Modal */}
+      {shareDraft && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <span className="text-green-500">💬</span> Share Draft Package
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Enter customer's 10-digit WhatsApp number to share <b>{shareDraft.name}</b>
+            </p>
+            <div className="flex items-center gap-2 mb-6">
+              <span className="text-gray-500 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200 font-medium">+91</span>
+              <input
+                type="text"
+                placeholder="9876543210"
+                value={sharePhone}
+                onChange={(e) => setSharePhone(e.target.value.replace(/\D/g, ''))}
+                className="input w-full"
+                maxLength={10}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setShareDraft(null); setSharePhone(""); }} className="btn-secondary py-2 px-4">Cancel</button>
+              <button onClick={handleWhatsAppShare} className="btn-primary py-2 px-4 flex items-center gap-2 bg-green-600 hover:bg-green-700 border-green-600">
+                Send to WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

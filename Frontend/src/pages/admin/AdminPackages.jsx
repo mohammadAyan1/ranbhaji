@@ -13,6 +13,7 @@ export default function AdminPackages() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isDraftApplied, setIsDraftApplied] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -59,7 +60,7 @@ export default function AdminPackages() {
     text += `*Persons:* ${pkg.num_persons}${pkg.num_persons_max ? `-${pkg.num_persons_max}` : ''}\n`;
     text += `*Deliveries per month:* ${pkg.services_per_month}\n`;
     text += `*Price:* ₹${pkg.price}/month\n\n`;
-    
+
     if (pkg.FixedItems?.length > 0) {
       text += `*Fixed Items:*\n`;
       pkg.FixedItems.forEach(fi => {
@@ -67,14 +68,14 @@ export default function AdminPackages() {
       });
       text += `\n`;
     }
-    
+
     if (pkg.SeasonalPool?.length > 0) {
       text += `*Seasonal Pool (Pick ${pkg.SeasonalConfig?.max_select_count || 0}):*\n`;
       pkg.SeasonalPool.forEach(sp => {
         text += `- ${sp.Product?.name}\n`;
       });
     }
-    
+
     const url = `https://wa.me/91${sharePhone}?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
     setSharePackage(null);
@@ -92,12 +93,12 @@ export default function AdminPackages() {
       num_persons_max: "",
       services_per_month: draft.services_per_month,
       price: draft.calculated_price,
-      type: "standard",
-      target_user_id: "",
-      target_mobile_number: "",
+      type: draft.draft_type === "custom" ? "custom" : "standard",
+      target_user_id: draft.target_user_id || "",
+      target_mobile_number: draft.target_mobile_number || "",
       margin_percent: draft.margin_percent,
       image: null,
-      creation_source: draft.draft_type === "margin_calculator" ? "draft_margin_calculator" : "draft_price_calculator"
+      creation_source: "draft_price_calculator"
     });
 
     const fixed = draft.Items
@@ -111,7 +112,7 @@ export default function AdminPackages() {
     const seasonalItemsList = draft.Items.filter(item => item.is_seasonal);
     const seasonal = seasonalItemsList.map(item => item.product_id);
     setSeasonalPool(seasonal);
-    
+
     if (draft.seasonal_quantities && draft.seasonal_quantities.length > 0) {
       setSeasonalQuantities(draft.seasonal_quantities);
     } else {
@@ -119,6 +120,7 @@ export default function AdminPackages() {
     }
 
     setMaxSelectCount(draft.max_seasonal_count || 3);
+    setIsDraftApplied(true);
     setMsg(`✅ Auto-filled package from draft calculation: "${draft.name}"`);
   };
 
@@ -149,6 +151,7 @@ export default function AdminPackages() {
     setEditing(null);
     setShowForm(false);
     setValidationResult(null);
+    setIsDraftApplied(false);
   };
 
   const startEdit = (pkg) => {
@@ -164,6 +167,7 @@ export default function AdminPackages() {
       setSeasonalQuantities(Array(pkg.SeasonalConfig?.max_select_count || 3).fill(250));
     }
     setShowForm(true);
+    setIsDraftApplied(false);
     topRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
@@ -186,16 +190,16 @@ export default function AdminPackages() {
     fd.append("creation_source", form.creation_source || "manual");
     if (form.type === "custom" && form.target_user_id) fd.append("target_user_id", parseInt(form.target_user_id));
     if (form.type === "custom" && form.target_mobile_number) fd.append("target_mobile_number", form.target_mobile_number);
-    
+
     const validFixedItems = fixedItems.filter(fi => fi.product_id && fi.default_qty_gm).map(fi => ({
       product_id: parseInt(fi.product_id),
       default_qty_gm: parseFloat(fi.default_qty_gm),
     }));
     fd.append("fixed_items", JSON.stringify(validFixedItems));
-    
+
     const validSeasonalPool = seasonalPool.filter(Boolean).map(id => parseInt(id));
     fd.append("seasonal_pool", JSON.stringify(validSeasonalPool));
-    
+
     fd.append("max_select_count", parseInt(maxSelectCount));
     fd.append("seasonal_quantities", JSON.stringify(seasonalQuantities.map(q => parseFloat(q) || 0)));
     if (form.image) fd.append("image", form.image);
@@ -315,15 +319,15 @@ export default function AdminPackages() {
                 <label className="label mb-0">For Persons *</label>
                 <button
                   type="button"
+                  disabled={isDraftApplied}
                   onClick={() => {
                     setPersonRangeMode(!personRangeMode);
                     if (personRangeMode) setForm({ ...form, num_persons_max: "" });
                   }}
-                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all ${
-                    personRangeMode
-                      ? "bg-fresh-100/50 border-fresh-600/50 text-fresh-600"
-                      : "bg-gray-100 border-gray-300 text-gray-600 hover:text-gray-900"
-                  }`}
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all ${personRangeMode
+                    ? "bg-fresh-100/50 border-fresh-600/50 text-fresh-600"
+                    : "bg-gray-100 border-gray-300 text-gray-600 hover:text-gray-900"
+                    }`}
                 >
                   {personRangeMode ? "📏 Range Mode" : "🔢 Single → Range?"}
                 </button>
@@ -336,6 +340,7 @@ export default function AdminPackages() {
                     placeholder="Min"
                     value={form.num_persons}
                     onChange={e => setForm({ ...form, num_persons: e.target.value })}
+                    disabled={isDraftApplied}
                     required
                   />
                   <span className="text-gray-500 font-bold text-sm">to</span>
@@ -345,6 +350,7 @@ export default function AdminPackages() {
                     placeholder="Max"
                     value={form.num_persons_max}
                     onChange={e => setForm({ ...form, num_persons_max: e.target.value })}
+                    disabled={isDraftApplied}
                     required
                   />
                 </div>
@@ -354,6 +360,7 @@ export default function AdminPackages() {
                   className="input"
                   value={form.num_persons}
                   onChange={e => setForm({ ...form, num_persons: e.target.value })}
+                  disabled={isDraftApplied}
                   required
                 />
               )}
@@ -364,15 +371,15 @@ export default function AdminPackages() {
 
             <div>
               <label className="label">Deliveries per Month *</label>
-              <input type="number" min="1" max="31" className="input" value={form.services_per_month} onChange={e => setForm({ ...form, services_per_month: e.target.value })} required />
+              <input type="number" min="1" max="31" className="input" value={form.services_per_month} onChange={e => setForm({ ...form, services_per_month: e.target.value })} disabled={isDraftApplied} required />
             </div>
             <div>
               <label className="label">Monthly Price (₹) *</label>
-              <input type="number" min="1" step="any" className="input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} required />
+              <input type="number" min="1" step="any" className="input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} disabled={isDraftApplied} required />
             </div>
             <div>
               <label className="label">Margin Percentage (%) *</label>
-              <input type="number" min="0" step="any" className="input" value={form.margin_percent} onChange={e => setForm({ ...form, margin_percent: e.target.value })} required />
+              <input type="number" min="0" step="any" className="input" value={form.margin_percent} onChange={e => setForm({ ...form, margin_percent: e.target.value })} disabled={isDraftApplied} required />
             </div>
             <div>
               <label className="label">Package Type *</label>
@@ -396,14 +403,14 @@ export default function AdminPackages() {
               <>
                 <div>
                   <label className="label">Target Customer</label>
-                  <select className="input" value={form.target_user_id || ""} onChange={e => setForm({ ...form, target_user_id: e.target.value })}>
+                  <select className="input" value={form.target_user_id || ""} onChange={e => setForm({ ...form, target_user_id: e.target.value })} disabled={isDraftApplied}>
                     <option value="">Select customer (optional)</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.phone})</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="label">Target Mobile Number</label>
-                  <input type="text" className="input" placeholder="e.g. 9876543210" value={form.target_mobile_number || ""} onChange={e => setForm({ ...form, target_mobile_number: e.target.value })} />
+                  <input type="text" className="input" placeholder="e.g. 9876543210" value={form.target_mobile_number || ""} onChange={e => setForm({ ...form, target_mobile_number: e.target.value })} disabled={isDraftApplied} />
                 </div>
               </>
             )}
@@ -439,10 +446,10 @@ export default function AdminPackages() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="label mb-0">Fixed Items (included in every delivery)</label>
-              <button type="button" onClick={addFixedItem} className="text-fresh-600 text-xs hover:text-fresh-700 font-medium">+ Add Item</button>
+              {!isDraftApplied && <button type="button" onClick={addFixedItem} className="text-fresh-600 text-xs hover:text-fresh-700 font-medium">+ Add Item</button>}
             </div>
             {fixedItems.length === 0 ? (
-              <p className="text-gray-600 text-sm">No fixed items yet. <button type="button" onClick={addFixedItem} className="text-fresh-600 hover:underline">Add one →</button></p>
+              <p className="text-gray-600 text-sm">No fixed items yet. {!isDraftApplied && <button type="button" onClick={addFixedItem} className="text-fresh-600 hover:underline">Add one →</button>}</p>
             ) : (
               <div className="space-y-2">
                 {fixedItems.map((fi, idx) => {
@@ -458,6 +465,7 @@ export default function AdminPackages() {
                         className="input w-36 text-xs"
                         value={fi.filterCategory || ""}
                         onChange={e => updateFixedItem(idx, "filterCategory", e.target.value)}
+                        disabled={isDraftApplied}
                       >
                         <option value="">All Categories</option>
                         <option value="vegetable">Vegetables</option>
@@ -471,6 +479,7 @@ export default function AdminPackages() {
                         className="input flex-1 min-w-[150px]"
                         value={fi.product_id}
                         onChange={e => updateFixedItem(idx, "product_id", e.target.value)}
+                        disabled={isDraftApplied}
                         required
                       >
                         <option value="">Select product...</option>
@@ -489,6 +498,7 @@ export default function AdminPackages() {
                         value={fi.default_qty_gm}
                         onChange={e => updateFixedItem(idx, "default_qty_gm", e.target.value)}
                         className="input w-28"
+                        disabled={isDraftApplied}
                         required
                       />
                       <span className="text-gray-500 text-xs">
@@ -496,7 +506,7 @@ export default function AdminPackages() {
                           ? `₹${(parseFloat(fi.default_qty_gm) * parseFloat(products.find(p => p.id === parseInt(fi.product_id))?.purchase_price_per_gm || 0)).toFixed(2)}`
                           : ""}
                       </span>
-                      <button type="button" onClick={() => removeFixedItem(idx)} className="text-red-600 hover:text-red-300 text-xl leading-none">×</button>
+                      {!isDraftApplied && <button type="button" onClick={() => removeFixedItem(idx)} className="text-red-600 hover:text-red-300 text-xl leading-none">×</button>}
                     </div>
                   );
                 })}
@@ -513,12 +523,13 @@ export default function AdminPackages() {
                 <input
                   type="number" min="1" max="20"
                   value={maxSelectCount}
+                  disabled={isDraftApplied}
                   onChange={e => {
                     const count = parseInt(e.target.value) || 0;
                     setMaxSelectCount(count);
                     setSeasonalQuantities(prev => {
                       const newArr = [...prev];
-                      while(newArr.length < count) newArr.push(250);
+                      while (newArr.length < count) newArr.push(250);
                       return newArr.slice(0, count);
                     });
                   }}
@@ -528,11 +539,12 @@ export default function AdminPackages() {
               <div className="flex gap-2 flex-wrap">
                 {seasonalQuantities.map((qty, idx) => (
                   <div key={idx} className="flex items-center gap-1">
-                    <span className="text-gray-600 text-[10px] uppercase tracking-wider">Pick {idx+1} Qty:</span>
+                    <span className="text-gray-600 text-[10px] uppercase tracking-wider">Pick {idx + 1} Qty:</span>
                     <input
                       type="number" min="0" step="any"
                       className="input w-24 py-1 text-sm text-center"
                       value={qty}
+                      disabled={isDraftApplied}
                       onChange={e => {
                         const newArr = [...seasonalQuantities];
                         newArr[idx] = e.target.value;
@@ -568,7 +580,7 @@ export default function AdminPackages() {
                     <button
                       key={p.id}
                       type="button"
-                      disabled={inFixed}
+                      disabled={inFixed || isDraftApplied}
                       onClick={() => !inFixed && toggleSeasonalProduct(p.id)}
                       className={`text-left p-2.5 rounded-xl border text-xs transition-all duration-200 ${inFixed
                         ? "border-gray-200 bg-gray-100/20 text-gray-600 cursor-not-allowed"
@@ -634,9 +646,9 @@ export default function AdminPackages() {
                   </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => setSharePackage(pkg)} className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-200 transition-colors flex items-center gap-1">
+                  {/* <button onClick={() => setSharePackage(pkg)} className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-200 transition-colors flex items-center gap-1">
                     💬 Share
-                  </button>
+                  </button> */}
                   <button onClick={() => startEdit(pkg)} className="btn-secondary text-xs py-1.5 px-3">✏️ Edit</button>
                   {pkg.status === "active" && (
                     <button onClick={() => handleDeactivate(pkg.id)} className="btn-danger text-xs py-1.5 px-3">Deactivate</button>
