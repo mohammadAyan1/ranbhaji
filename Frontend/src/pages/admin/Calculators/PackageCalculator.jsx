@@ -192,9 +192,15 @@ export default function PackageCalculator() {
     setPersonRangeModeCalc(!!draft.num_persons_max);
     setFixedCount(draft.max_fixed_count || 0);
     setSeasonalCount(draft.max_seasonal_count || 0);
-    setPackageType(draft.packageType || "standard"); // assuming we might store it in DB later, or default to standard
+    setPackageType(draft.draft_type || "standard");
     setTargetUserId(draft.target_user_id || "");
     setTargetMobileNumber(draft.target_mobile_number || "");
+    setCalculationMode(draft.calculation_mode || "highest");
+    if (draft.custom_price !== null && draft.custom_price !== undefined) {
+      setCustomPrice(draft.custom_price);
+    } else {
+      setCustomPrice("");
+    }
     
     if (draft.seasonal_quantities && draft.seasonal_quantities.length > 0) {
       setSeasonalQuantities(draft.seasonal_quantities);
@@ -276,6 +282,8 @@ export default function PackageCalculator() {
       draft_type: packageType, // mapping draft_type to our packageType ("standard" or "custom")
       target_user_id: packageType === "custom" && targetUserId ? parseInt(targetUserId) : null,
       target_mobile_number: packageType === "custom" ? targetMobileNumber : null,
+      calculation_mode: calculationMode,
+      custom_price: calculationMode === "custom" && customPrice ? parseFloat(customPrice) : null,
       items: itemsPayload
     };
 
@@ -525,7 +533,10 @@ export default function PackageCalculator() {
         <div className="space-y-3">
           {fixedItems.map((item, index) => {
             const rowProducts = products.filter(
-              (p) => (!fixedCategoryFilter || p.category === fixedCategoryFilter) && !seasonalPool.includes(p.id)
+              (p) => {
+                const matchesFilter = !fixedCategoryFilter || (p.category && p.category.toLowerCase().includes(fixedCategoryFilter.toLowerCase()));
+                return matchesFilter && !seasonalPool.includes(p.id);
+              }
             );
 
             return (
@@ -693,7 +704,10 @@ export default function PackageCalculator() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mt-4">
           {products
-            .filter(p => (!seasonalCategoryFilter || p.category === seasonalCategoryFilter))
+            .filter(p => {
+              const matchesFilter = !seasonalCategoryFilter || (p.category && p.category.toLowerCase().includes(seasonalCategoryFilter.toLowerCase()));
+              return matchesFilter;
+            })
             .map(p => {
               const inPool = seasonalPool.includes(p.id);
               const inFixed = fixedItems.some(fi => parseInt(fi.product_id) === p.id);

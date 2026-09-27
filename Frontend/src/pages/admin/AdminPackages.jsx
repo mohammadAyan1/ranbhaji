@@ -457,7 +457,7 @@ export default function AdminPackages() {
                     .filter((_, i) => i !== idx)
                     .map(item => parseInt(item.product_id))
                     .filter(id => !isNaN(id));
-                  const filteredRowProducts = products.filter(p => p.category !== "water" && (!fi.filterCategory || p.category === fi.filterCategory));
+                  const filteredRowProducts = products.filter(p => p.category !== "water" && (!fi.filterCategory || (p.category && p.category.toLowerCase().includes(fi.filterCategory.toLowerCase()))));
                   return (
                     <div key={idx} className="flex flex-wrap items-center gap-3 bg-white rounded-xl p-3 border border-gray-300">
                       {/* Category filter */}
@@ -572,7 +572,7 @@ export default function AdminPackages() {
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {products
-                .filter(p => p.category !== "water" && (seasonalFilter === "all" || p.category === seasonalFilter))
+                .filter(p => p.category !== "water" && (seasonalFilter === "all" || (p.category && p.category.toLowerCase().includes(seasonalFilter.toLowerCase()))))
                 .map(p => {
                   const inPool = seasonalPool.includes(p.id);
                   const inFixed = fixedItems.some(fi => parseInt(fi.product_id) === p.id);

@@ -83,6 +83,7 @@ export default function AdminProducts() {
 
   const [logStartDate, setLogStartDate] = useState(getToday());
   const [logEndDate, setLogEndDate] = useState(getToday());
+  const [demandDate, setDemandDate] = useState(getToday());
   const [logCategory, setLogCategory] = useState("regular");
 
   const [submittingPurchase, setSubmittingPurchase] = useState(false);
@@ -185,8 +186,7 @@ export default function AdminProducts() {
   };
 
   const fetchDemands = () => {
-    const today = new Date().toISOString().split('T')[0];
-    api.get(`/admin/demands?date=${today}`).then(r => setDemands(r.data.demands || [])).catch(err => console.error(err));
+    api.get(`/admin/demands?date=${demandDate}`).then(r => setDemands(r.data.demands || [])).catch(err => console.error(err));
   };
 
   const fetchCategories = () => {
@@ -220,7 +220,7 @@ export default function AdminProducts() {
     if (activeTab === "stock") fetchStockSummary();
     if (activeTab === "catalog") fetchProducts();
     if (activeTab === "purchase") fetchDemands();
-  }, [activeTab]);
+  }, [activeTab, demandDate]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -961,11 +961,24 @@ export default function AdminProducts() {
       {/* ─── TAB 2: LOG STOCK PURCHASE ───────────────────────────────── */}
       {activeTab === "purchase" && (
         <div className="card">
-          <h3 className="font-semibold text-gray-900 mb-5">Stock Demand List & Purchase Entry</h3>
-          <p className="text-gray-600 text-xs mb-6">
-            Admin jo bhi fruits/vegetables buy karega, uska wajan (kg/pieces) aur total price yahan enter karein.
-            System automatically per-kg/per-piece rate calculate kar lega.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-2">Stock Demand List & Purchase Entry</h3>
+              <p className="text-gray-600 text-xs">
+                Admin jo bhi fruits/vegetables buy karega, uska wajan (kg/pieces) aur total price yahan enter karein.
+                System automatically per-kg/per-piece rate calculate kar lega.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-2">Filter Date:</label>
+              <input 
+                type="date" 
+                value={demandDate} 
+                onChange={(e) => setDemandDate(e.target.value)} 
+                className="input py-1 px-2 text-sm bg-white"
+              />
+            </div>
+          </div>
 
           <div className="overflow-x-auto mb-8">
             <table className="w-full text-sm">

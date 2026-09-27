@@ -5,7 +5,7 @@ import { sequelize } from "../confiq/db.js";
 export const createDraft = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { name, margin_percent, services_per_month, num_persons, calculated_price, max_fixed_count, max_seasonal_count, items, seasonal_quantities, draft_type, target_user_id, target_mobile_number } = req.body;
+        const { name, margin_percent, services_per_month, num_persons, calculated_price, max_fixed_count, max_seasonal_count, items, seasonal_quantities, draft_type, target_user_id, target_mobile_number, calculation_mode, custom_price } = req.body;
 
         if (!name) {
             await t.rollback();
@@ -23,7 +23,9 @@ export const createDraft = async (req, res) => {
             seasonal_quantities: seasonal_quantities ? JSON.parse(JSON.stringify(seasonal_quantities)) : null,
             draft_type: draft_type || 'price_calculator',
             target_user_id: target_user_id || null,
-            target_mobile_number: target_mobile_number || null
+            target_mobile_number: target_mobile_number || null,
+            calculation_mode: calculation_mode || 'highest',
+            custom_price: custom_price ? parseFloat(custom_price) : null
         }, { transaction: t });
 
         if (items && items.length > 0) {
@@ -50,7 +52,7 @@ export const updateDraft = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { id } = req.params;
-        const { name, margin_percent, services_per_month, num_persons, calculated_price, max_fixed_count, max_seasonal_count, items, seasonal_quantities, draft_type, target_user_id, target_mobile_number } = req.body;
+        const { name, margin_percent, services_per_month, num_persons, calculated_price, max_fixed_count, max_seasonal_count, items, seasonal_quantities, draft_type, target_user_id, target_mobile_number, calculation_mode, custom_price } = req.body;
 
         const draft = await CalculatorDraft.findByPk(id);
         if (!draft) {
@@ -74,7 +76,9 @@ export const updateDraft = async (req, res) => {
             seasonal_quantities: seasonal_quantities ? JSON.parse(JSON.stringify(seasonal_quantities)) : null,
             draft_type: draft_type || 'price_calculator',
             target_user_id: target_user_id || null,
-            target_mobile_number: target_mobile_number || null
+            target_mobile_number: target_mobile_number || null,
+            calculation_mode: calculation_mode || 'highest',
+            custom_price: custom_price ? parseFloat(custom_price) : null
         }, { transaction: t });
 
         // Remove old items

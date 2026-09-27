@@ -18,6 +18,14 @@ export default function AdminUserHistory() {
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [addressForm, setAddressForm] = useState({
+    address_line: "",
+    city: "Nagpur",
+    pincode: "",
+    landmark: "",
+    zone: ""
+  });
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [batches, setBatches] = useState([]);
@@ -161,6 +169,31 @@ export default function AdminUserHistory() {
     }
   };
 
+  const handleAddAddress = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setActionMsg("");
+    try {
+      await api.post("/addresses/admin/create", {
+        user_id: selectedUserId,
+        ...addressForm
+      });
+      setActionMsg("✅ Address added successfully!");
+      
+      setLoading(true);
+      const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      setAnalytics(res.data.analytics);
+      setLoading(false);
+
+      setShowAddressModal(false);
+      setAddressForm({ address_line: "", city: "Nagpur", pincode: "", landmark: "", zone: "" });
+    } catch (err) {
+      setActionMsg(`❌ Action failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -194,6 +227,9 @@ export default function AdminUserHistory() {
           </button>
           <button onClick={() => setShowWalletModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
             <span>💰</span> Adjust Wallet
+          </button>
+          <button onClick={() => setShowAddressModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100">
+            <span>📍</span> Add Address
           </button>
         </div>
       )}
@@ -663,6 +699,47 @@ export default function AdminUserHistory() {
           });
         }}
       />
+
+      {/* ADD ADDRESS MODAL */}
+      {showAddressModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">Add New Address</h2>
+              <button onClick={() => setShowAddressModal(false)} className="text-gray-400 hover:text-gray-600">✖</button>
+            </div>
+            <form onSubmit={handleAddAddress} className="p-6 space-y-4">
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Address Line</label>
+                <textarea 
+                  className="input w-full text-sm" 
+                  rows="2"
+                  value={addressForm.address_line} 
+                  onChange={e => setAddressForm({...addressForm, address_line: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">City</label>
+                  <input type="text" className="input w-full text-sm" value={addressForm.city} onChange={e => setAddressForm({...addressForm, city: e.target.value})} required />
+                </div>
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Pincode</label>
+                  <input type="text" className="input w-full text-sm" value={addressForm.pincode} onChange={e => setAddressForm({...addressForm, pincode: e.target.value})} required />
+                </div>
+              </div>
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Landmark (Optional)</label>
+                <input type="text" className="input w-full text-sm" value={addressForm.landmark} onChange={e => setAddressForm({...addressForm, landmark: e.target.value})} />
+              </div>
+              <button type="submit" disabled={saving} className="btn-primary w-full py-3">
+                {saving ? "Saving..." : "Add Address"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

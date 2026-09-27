@@ -6,7 +6,7 @@ const User = sequelize.define('User', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(100) },
   phone: { type: DataTypes.STRING(15), unique: true },
-  email: { type: DataTypes.STRING(100), unique: true, allowNull: true },
+  email: { type: DataTypes.STRING(100), allowNull: true },
   password_hash: { type: DataTypes.STRING(255) },
   actual_password: { type: DataTypes.STRING(255), allowNull: true },
   gender: { type: DataTypes.ENUM('male', 'female', 'other'), allowNull: true },
@@ -417,7 +417,9 @@ const CalculatorDraft = sequelize.define('CalculatorDraft', {
   seasonal_quantities: { type: DataTypes.JSON, allowNull: true },
   draft_type: { type: DataTypes.STRING(50), defaultValue: 'standard' },
   target_user_id: { type: DataTypes.INTEGER, allowNull: true },
-  target_mobile_number: { type: DataTypes.STRING(15), allowNull: true }
+  target_mobile_number: { type: DataTypes.STRING(15), allowNull: true },
+  calculation_mode: { type: DataTypes.STRING(50), defaultValue: 'highest' },
+  custom_price: { type: DataTypes.DECIMAL(10, 2), allowNull: true }
 }, { tableName: 'calculator_drafts', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 19. CALCULATOR_DRAFT_ITEMS

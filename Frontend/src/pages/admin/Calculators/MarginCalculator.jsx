@@ -403,7 +403,10 @@ export default function MarginCalculator() {
           {fixedItems.map((item, index) => {
             const selectedSeasonalIds = seasonalItems.map(item => parseInt(item.product_id)).filter(id => !isNaN(id));
             const rowProducts = products.filter(
-              (p) => (!fixedCategoryFilter || p.category === fixedCategoryFilter) && !selectedSeasonalIds.includes(p.id)
+              (p) => {
+                const matchesFilter = !fixedCategoryFilter || (p.category && p.category.toLowerCase().includes(fixedCategoryFilter.toLowerCase()));
+                return matchesFilter && !selectedSeasonalIds.includes(p.id);
+              }
             );
 
             return (
@@ -525,7 +528,10 @@ export default function MarginCalculator() {
           {seasonalItems.map((item, index) => {
             const selectedFixedIds = fixedItems.map(item => parseInt(item.product_id)).filter(id => !isNaN(id));
             const rowProducts = products.filter(
-              (p) => (!seasonalCategoryFilter || p.category === seasonalCategoryFilter) && !selectedFixedIds.includes(p.id)
+              (p) => {
+                const matchesFilter = !seasonalCategoryFilter || (p.category && p.category.toLowerCase().includes(seasonalCategoryFilter.toLowerCase()));
+                return matchesFilter && !selectedFixedIds.includes(p.id);
+              }
             );
 
             return (

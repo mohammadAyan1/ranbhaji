@@ -1,0 +1,74 @@
+Product Name,Hindi Name,Category,Sub Category,Average Cost Price Per Kg,Retail Margin Percentage,Unit,Min Retail Quantity,Weighing Time (seconds),Soaking Time (seconds),Cutting Time - Per Piece (seconds),Cutting Time - Per 25g (seconds),Pieces in 25 gm,Drying Time - Machine (seconds),Drying Time - Per Piece (seconds),Drying Time - Per 25g (seconds)
+Potato,आलू (Aloo),Vegetable,Roots,15,100,Grams,250,30,720,30,0,0.300,1,3,0
+Onion,प्याज (Pyaz),Vegetable,Roots,25,100,Grams,250,30,720,30,0,0.300,1,3,0
+Lemon,नींबू (Nimbu),Vegetable,Fruit Vegetable,100,100,Grams,30,30,720,6,0,0.750,1,3,0
+Garlic,लहसुन (Lahsun),Vegetable,Roots,100,100,Grams,30,30,720,0,21,0.000,5,0,5
+Ginger,अदरक (Adrak),Vegetable,Roots,100,100,Grams,30,30,720,0,120,0.000,5,0,5
+Taro Root,अरबी (Arbi),Vegetable,Roots,40,100,Grams,250,30,720,0,30,0.000,2,0,2
+Yam,जिमीकंद (Jimikand),Vegetable,Roots,50,100,Grams,250,30,720,0,3,0.000,5,0,2
+Beetroot,चुकंदर (Chukandar),Vegetable,Roots,30,100,Grams,250,30,720,30,0,0.500,1,3,0
+Radish,मूली (Mooli),Vegetable,Roots,25,100,Grams,250,30,720,18,0,0.400,1,3,0
+Sweet Potato,शकरकंद (Shakarkand),Vegetable,Roots,40,100,Grams,250,30,720,0,30,0.000,1,3,0
+Turnip,शलजम (Shalgam),Vegetable,Roots,30,100,Grams,250,30,720,18,0,0.400,1,3,0
+Carrot,गाजर (Gajar),Vegetable,Roots,30,100,Grams,250,30,720,18,0,0.500,1,3,0
+Ash Gourd,पेठा (Petha),Vegetable,Gourd,80,100,Grams,250,30,720,0,3,0.000,1,3,0
+Kathal (Jackfruit),कटहल (Kathal),Vegetable,Fruit Vegetable,50,100,Grams,250,30,0,0,0,0.000,5,0,0
+Pumpkin,कद्दू (Kaddu),Vegetable,Gourd,25,100,Grams,250,30,720,0,5,0.000,0,0,5
+Cucumber,खीरा (Kheera),Vegetable,Gourd,30,100,Grams,250,30,420,3,0,0.250,2,3,0
+Tomato,टमाटर (Tamatar),Vegetable,Fruit Vegetable,40,100,Grams,250,30,420,3,0,0.300,0,3,0
+Chillies Green,हरी मिर्च (Hari Mirch),Vegetable,Fruit Vegetable,80,100,Grams,50,30,420,0,3,0.000,2,0,2
+Lotus Stem,कमल ककड़ी (Kamal Kakdi),Exotic Vegetable,Roots,60,100,Grams,250,30,420,0,15,0.000,2,0,5
+Broccoli,ब्रोकली (Brokali),Exotic Vegetable,Fruit Vegetable,250,100,Grams,250,30,420,12,0,0.100,10,30,0
+Cauliflower,फूलगोभी (Phool Gobhi),Vegetable,Fruit Vegetable,50,100,Grams,450,30,420,12,0,0.056,10,30,0
+Brinjal Small,छोटा बैंगन (Chhota Baingan),Vegetable,Fruit Vegetable,30,100,Grams,250,30,360,6,0,1.000,0,3,0
+Brinjal Big,बड़ा बैंगन (Bada Baingan),Vegetable,Fruit Vegetable,35,100,Grams,350,30,360,12,0,0.071,0,3,0
+Zucchini,तोरई जुकिनी (Zucchini),Exotic Vegetable,Gourd,200,100,Grams,250,30,360,9,0,0.100,2,3,0
+Apple Gourd,टिंडा (Tinda),Vegetable,Gourd,60,100,Grams,250,30,360,6,0,0.700,0,3,0
+Bitter Gourd,करेला (Karela),Vegetable,Gourd,50,100,Grams,250,30,360,6,0,0.500,0,3,0
+Bottle Gourd,लौकी (Lauki),Vegetable,Gourd,30,100,Grams,350,30,360,6,0,0.071,0,3,0
+Ivy Gourd,कुंदरू (Kundru),Vegetable,Gourd,40,100,Grams,250,30,360,0,3,0.000,2,0,2
+Pointed Gourd,परवल (Parwal),Vegetable,Gourd,55,100,Grams,250,30,360,0,3,0.000,2,0,2
+Drumstick,सहजन (Sahjan),Vegetable,Fruit Vegetable,100,100,Grams,250,30,360,0,3,0.000,0,0,2
+Capsicum,शिमला मिर्च (Shimla Mirch),Vegetable,Fruit Vegetable,70,100,Grams,250,30,360,9,0,0.500,0,3,0
+Yellow Bell Pepper,पीली शिमला मिर्च (Peeli Shimla Mirch),Exotic Vegetable,Fruit Vegetable,180,100,Grams,250,30,360,9,0,0.500,0,3,0
+Red Bell Pepper,लाल शिमला मिर्च (Lal Shimla Mirch),Exotic Vegetable,Fruit Vegetable,180,100,Grams,250,30,360,9,0,0.500,0,3,0
+Raw Banana,कच्चा केला (Kaccha Kela),Vegetable,Fruit Vegetable,50,100,Grams,250,30,120,0,1,0.000,0,0,2
+Ridge Gourd,तोरी (Tori),Vegetable,Gourd,50,100,Grams,250,30,300,6,0,0.400,0,3,0
+Snake Gourd,चिचिंडा (Chichinda),Vegetable,Gourd,60,100,Grams,250,30,300,9,0,0.300,0,3,0
+Sponge Gourd,नेनुआ (Nenua),Vegetable,Gourd,50,100,Grams,250,30,300,6,0,0.700,0,3,0
+Corn,भुट्टा (Bhutta),Vegetable,Fruit Vegetable,70,100,Grams,250,30,300,12,0,0.100,1,3,0
+Okra / Lady Finger,भिंडी (Bhindi),Vegetable,Fruit Vegetable,50,100,Grams,250,30,300,0,3,0.000,2,0,2
+Spring Onion,हरा प्याज (Hara Pyaz),Exotic Vegetable,Leafy,60,100,Grams,250,30,300,0,30,0.000,5,0,15
+Spring Garlic,हरा लहसुन (Hara Lahsun),Exotic Vegetable,Leafy,65,100,Grams,250,30,300,0,30,0.000,5,0,15
+Cluster Beans,ग्वार फली (Gwar Phali),Vegetable,Beans/Pods,100,100,Grams,250,30,300,0,3,0.000,2,0,2
+Green Beans (Barbatti),बरबट्टी (Barbatti),Vegetable,Beans/Pods,50,100,Grams,250,30,300,0,3,0.000,2,0,2
+French Beans,फ्रेंच बीन्स (French Beans),Vegetable,Beans/Pods,100,100,Grams,250,30,300,0,3,0.000,2,0,2
+Green Peas,मटर (Matar),Vegetable,Beans/Pods,35,100,Grams,250,30,300,0,3,0.000,2,0,2
+Lima Beans,सेम (Sem),Vegetable,Beans/Pods,35,100,Grams,250,30,300,0,3,0.000,2,0,2
+Cabbage,पत्तागोभी (Patta Gobhi),Vegetable,Leafy,30,100,Grams,400,30,300,12,0,0.063,10,30,0
+Mint,पुदीना (Pudina),Vegetable,Leafy,100,100,Grams,25,30,120,0,30,0.000,5,0,60
+Parsley,अजमोद (Ajmod),Exotic Vegetable,Leafy,400,50,Grams,50,30,120,0,30,0.000,5,0,60
+Celery,सेलेरी (Celery),Exotic Vegetable,Leafy,250,50,Grams,25,30,120,0,30,0.000,5,0,60
+Thyme,थाइम (Thyme),Exotic Vegetable,Leafy,400,50,Grams,25,30,120,0,30,0.000,5,0,60
+Sweet Neem Leaves,करी पत्ता (Curry Patta),Vegetable,Leafy,250,100,Grams,50,30,120,0,30,0.000,5,0,60
+Raw Papaya,कच्चा पपीता (Kaccha Papita),Vegetable,Fruit Vegetable,60,100,Grams,400,30,120,6,0,0.100,0,2,0
+Fenugreek,मेथी (Methi),Vegetable,Leafy,40,100,Grams,400,30,60,0,60,0.000,5,0,60
+Red Leafy Vegetable (Lal Bhaji),लाल भाजी (Lal Bhaji),Vegetable,Leafy,30,100,Grams,400,30,120,0,60,0.000,5,0,60
+Coriander,धनिया पत्ता (Dhaniya Patta),Vegetable,Leafy,70,100,Grams,25,30,30,0,60,0.000,5,0,60
+Mustard Leaves,सरसों का साग (Sarson Ka Saag),Vegetable,Leafy,50,100,Grams,400,30,30,0,60,0.000,5,0,60
+Bathua Leaves,बथुआ (Bathua),Vegetable,Leafy,50,100,Grams,400,30,30,0,60,0.000,5,0,60
+Lettuce,सलाद पत्ता (Salad Patta),Exotic Vegetable,Leafy,350,50,Grams,100,30,30,0,60,0.000,5,0,60
+Spinach,पालक (Palak),Vegetable,Leafy,50,100,Grams,400,30,30,0,60,0.000,5,0,60
+Iceberg Lettuce,आइसबर्ग लेट्यूस (Iceberg Lettuce),Exotic Vegetable,Leafy,200,50,Grams,100,30,30,0,60,0.000,5,0,60
+Basil Herb,तुलसी (Tulsi),Exotic Vegetable,Leafy,400,50,Grams,50,30,30,0,60,1.000,5,0,60
+Mushroom,खुंब,Exotic Vegetable,Roots,40,100,BOX,1,30,0,0,0,0.000,0,0,0
+Colocasia Leaves,अरबी पत्ता,Vegetable,Leafy,50,100,Grams,250,30,0,0,10,0.000,0,0,10
+CHERRY TOMATO,चेरी टमाटर / छोटा टमाटर (Chhota Tamatar),Exotic Vegetable,Fruit Vegetable,40,100,BOX,1,30,420,0,3,0.000,0,0,5
+HYBRID TOMATO,हाइब्रिड टमाटर (Hybrid Tamatar) / संकर टमाटर (Sankar Tamatar),Vegetable,Fruit Vegetable,50,100,Grams,250,30,420,3,0,0.300,0,3,0
+PEELLED GARLIC,छीला हुआ लहसुन (Chheela Hua Lahsun),Vegetable,Roots,200,100,Grams,30,30,0,0,21,0.000,5,0,5
+BIG GARLIC,बड़ा लहसुन (Bada Lahsun),Vegetable,Roots,150,100,Grams,30,30,0,0,21,0.000,5,0,5
+RED CABBAGE,लाल पत्ता गोभी (Laal Patta Gobhi) / लाल बंदगोभी (Laal Bandgobhi),Exotic Vegetable,Leafy,200,50,Grams,400,30,0,0,0,0.000,10,30,0
+GAWAR PHALLI,ग्वार फली (Gwaar Phalli),Vegetable,Beans/Pods,100,100,Grams,250,30,300,0,3,0.000,2,0,2
+SHALLOT,सांभर प्याज़ (Sambar Pyaz) / छोटा प्याज़ (Chhota Pyaz),Vegetable,Roots,50,100,Grams,250,30,720,0,60,0.000,1,0,5
+Colocasia Leaves,अरबी पत्ता (ARABI PATTA),Vegetable,Leafy,50,100,Grams,250,30,30,0,10,0.000,0,30,0
+SMALL CORN,छोटा भुट्टा (Bhutta),Exotic Vegetable,Fruit Vegetable,80,100,BOX,1,30,420,0,3,0.000,0,5,0
