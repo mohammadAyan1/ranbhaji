@@ -301,7 +301,7 @@ const Address = sequelize.define('Address', {
 const PaymentTransaction = sequelize.define('PaymentTransaction', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   amount: { type: DataTypes.DECIMAL(10, 2) },
-  payment_method: { type: DataTypes.ENUM('wallet', 'razorpay', 'phonepe') },
+  payment_method: { type: DataTypes.ENUM('wallet', 'razorpay', 'phonepe', 'admin_assigned') },
   gateway_txn_id: { type: DataTypes.STRING(100), allowNull: true },
   status: { type: DataTypes.ENUM('success', 'failed', 'pending') },
   type: { type: DataTypes.ENUM('package_purchase', 'recharge', 'extra_item', 'yearly_booking') }

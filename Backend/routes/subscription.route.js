@@ -26,8 +26,8 @@ router.get("/subscriptions/:id/upcoming-selections", requireAuth, requireRole(["
 router.post("/subscriptions/:id/schedule-seasonal", requireAuth, requireRole(["user"]), saveScheduleSeasonal);
 
 // Admin routes
-router.post("/admin/assign", requireAuth, requireRole(["admin"]), assignPackageByAdmin);
-router.post("/admin/renew", requireAuth, requireRole(["admin"]), renewPackageByAdmin);
+router.post("/subscriptions/admin/assign", requireAuth, requireRole(["admin"]), assignPackageByAdmin);
+router.post("/subscriptions/admin/renew", requireAuth, requireRole(["admin"]), renewPackageByAdmin);
 router.patch("/admin/subscriptions/:id/batch", requireAuth, requireRole(["admin"]), updateSubscriptionBatch);
 
 export default router;
