@@ -9,7 +9,7 @@ import { startTaskStage, pauseTask, resumeTask, completeTask, acknowledgeAlarm, 
 
 const formatStageName = (stage) => {
     if (!stage) return "";
-    switch(stage.toUpperCase()) {
+    switch (stage.toUpperCase()) {
         case 'SOAKING': return 'SOAKING (भिगोना)';
         case 'WEIGHING': return 'WEIGHING (तोलना)';
         case 'CUTTING': return 'CUTTING (काटना)';
@@ -60,7 +60,7 @@ export default function TaskScreen() {
                 if (res.success && res.task) {
                     const alarm = res.task;
                     const cTask = currentTaskRef.current;
-                    
+
                     if (cTask && cTask.status === 'RUNNING' && cTask.id !== alarm.id) {
                         try {
                             const pauseRes = await pauseTask(cTask.id);
@@ -73,12 +73,12 @@ export default function TaskScreen() {
                         // Already handled by timer locally
                         return;
                     }
-                    
+
                     setAlarmTask(alarm);
                     setIsAlarmModalOpen(true);
                     playForegroundAlarm();
                 }
-            } catch (e) {}
+            } catch (e) { }
         };
         alarmCheckTimerRef.current = setInterval(fetchAlarms, 10000);
         return () => {
@@ -136,12 +136,12 @@ export default function TaskScreen() {
                             let soundIdx = numId % 5;
                             if (soundIdx === 0) soundIdx = 5;
                             const channelId = `worker-channel-${soundIdx}`;
-                            
+
                             await Notifications.scheduleNotificationAsync({
                                 identifier: `task-${currentTask.id}`,
                                 content: {
                                     title: '🚨 Stage Complete!',
-                                    body: `${currentTask.Product?.name} - ${currentTask.stage} stage is complete!`,
+                                    body: `${currentTask.Product?.name} ${currentTask.Product?.hindi_name ? `(${currentTask.Product?.hindi_name})` : ''} - ${currentTask.stage} stage is complete!`,
                                     sound: true
                                 },
                                 trigger: {
@@ -419,7 +419,7 @@ export default function TaskScreen() {
                                 SecureStore.setMemoryItem('current_task', JSON.stringify(assignRes.task));
                                 setCurrentTask(assignRes.task);
                                 setTimeLeft(assignRes.task.remaining_seconds || 0);
-                                Alert.alert('✅ Stage Complete!', `Next task: ${assignRes.task.stage} for ${assignRes.task.Product?.name}`);
+                                Alert.alert('✅ Stage Complete!', `Next task: ${assignRes.task.stage} for ${assignRes.task.Product?.name} ${assignRes.task.Product?.hindi_name ? `(${assignRes.task.Product?.hindi_name})` : ''}`);
                                 return;
                             }
                         } catch (assignErr) {
@@ -469,15 +469,15 @@ export default function TaskScreen() {
                                     SecureStore.setMemoryItem('current_task', JSON.stringify(assignRes.task));
                                     setCurrentTask(assignRes.task);
                                     setTimeLeft(assignRes.task.remaining_seconds || 0);
-                                    Alert.alert('✅ Alarm Acknowledged!', `Next task: ${assignRes.task.stage} for ${assignRes.task.Product?.name}`);
+                                    Alert.alert('✅ Alarm Acknowledged!', `Next task: ${assignRes.task.stage} for ${assignRes.task.Product?.name} ${assignRes.task.Product?.hindi_name ? `(${assignRes.task.Product?.hindi_name})` : ''}`);
                                     return;
                                 }
                             } catch (assignErr) {
                                 console.error("Assign next task after acknowledge error:", assignErr);
                             }
                         }
-                    Alert.alert('✅ Done!', 'Alarm acknowledged & stage complete!');
-                    router.back();
+                        Alert.alert('✅ Done!', 'Alarm acknowledged & stage complete!');
+                        router.back();
                     }
                 }
             }
@@ -536,7 +536,7 @@ export default function TaskScreen() {
                     <View style={styles.row}>
                         <View style={styles.col}>
                             <Text style={styles.label}>Product</Text>
-                            <Text style={styles.value}>{currentTask.Product?.name}</Text>
+                            <Text style={styles.value}>{currentTask.Product?.name} {currentTask.Product?.hindi_name ? `(${currentTask.Product?.hindi_name})` : ''}</Text>
                         </View>
                         <View style={styles.col}>
                             <Text style={styles.label}>Quantity</Text>
@@ -699,7 +699,7 @@ export default function TaskScreen() {
                         <Text style={styles.alarmEmoji}>🚨</Text>
                         <Text style={styles.modalTitle}>Timer Finished!</Text>
                         <Text style={styles.modalText}>
-                            The <Text style={styles.bold}>{alarmTask?.stage}</Text> stage for <Text style={styles.bold}>{alarmTask?.Product?.name}</Text> is complete.
+                            The <Text style={styles.bold}>{alarmTask?.stage}</Text> stage for <Text style={styles.bold}>{alarmTask?.Product?.name} {alarmTask?.Product?.hindi_name ? `(${alarmTask?.Product?.hindi_name})` : ''}</Text> is complete.
                         </Text>
                         <TouchableOpacity style={styles.dangerBtn} onPress={handleAcknowledgeAlarm} disabled={loading}>
                             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Acknowledge & Start Next Stage</Text>}

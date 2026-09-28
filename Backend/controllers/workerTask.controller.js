@@ -174,7 +174,7 @@ export const getBatchDemand = async (req, res) => {
 
         let demands = await BatchProductDemand.findAll({
             where: { batch_id: batchId },
-            include: [{ model: Product, attributes: ['id', 'name'] }]
+            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name'] }]
         });
 
         // Filter out 'Alkaline' products from worker dashboard
@@ -186,6 +186,7 @@ export const getBatchDemand = async (req, res) => {
                 aggregated[d.product_id] = {
                     productId: d.product_id,
                     productName: d.Product ? d.Product.name : 'Unknown',
+                    productHindiName: d.Product ? d.Product.hindi_name : '',
                     quantity: 0
                 };
             }
@@ -1011,6 +1012,7 @@ export const getMyTaskHistory = async (req, res) => {
                 productMap[pid] = {
                     product_id: pid,
                     productName: t.Product.name,
+                    productHindiName: t.Product.hindi_name,
                     stages: {}
                 };
             }

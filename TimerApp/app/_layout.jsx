@@ -25,7 +25,7 @@ export default function RootLayout() {
         console.log('Error requesting notification permissions:', e);
       }
     };
-    
+
     // Set up notification channels for Android
     if (Platform.OS === 'android') {
       const setupChannels = async () => {
@@ -72,7 +72,7 @@ export default function RootLayout() {
       };
       setupChannels();
     }
-    
+
     requestPermissions();
   }, []);
 

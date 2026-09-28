@@ -409,7 +409,7 @@ export default function DashboardScreen() {
                                         <View key={task.id.toString()} style={styles.stuckCard}>
                                             <View style={styles.stuckCardLeft}>
                                                 <Text style={styles.stuckCardStage}>{formatStageName(task.stage)}</Text>
-                                                <Text style={styles.stuckCardProduct}>{task.Product?.name}</Text>
+                                                <Text style={styles.stuckCardProduct}>{task.Product?.name} {task.Product?.hindi_name ? `(${task.Product?.hindi_name})` : ''}</Text>
                                                 <Text style={styles.stuckCardQty}>{task.quantity_grams}g</Text>
                                                 <Text style={styles.stuckCardRemaining}>⏱ ~{remainingMin} min bacha</Text>
                                                 <View style={[styles.stuckStatusBadge, task.status === 'PAUSED' ? styles.stuckStatusPaused : styles.stuckStatusNotStarted]}>
@@ -443,7 +443,7 @@ export default function DashboardScreen() {
                                         onPress={() => openTask(item)}
                                     >
                                         <View style={styles.taskCardLeft}>
-                                            <Text style={styles.taskCardTitle}>{formatStageName(item.stage)} - {item.Product?.name}</Text>
+                                            <Text style={styles.taskCardTitle}>{formatStageName(item.stage)} - {item.Product?.name} {item.Product?.hindi_name ? `(${item.Product?.hindi_name})` : ''}</Text>
                                             <Text style={styles.taskCardSub}>Qty: {item.quantity_grams}g</Text>
                                             <LiveCountdown task={item} />
                                         </View>
@@ -487,7 +487,7 @@ export default function DashboardScreen() {
                             <View style={styles.demandList}>
                                 {taskHistory.length > 0 ? taskHistory.map((item, idx) => (
                                     <View key={idx} style={styles.historyRow}>
-                                        <Text style={styles.demandName}>{item.productName}</Text>
+                                        <Text style={styles.demandName}>{item.productName} {item.productHindiName ? `(${item.productHindiName})` : ''}</Text>
                                         <View style={styles.stageBadges}>
                                             {Object.entries(item.stages).map(([stage, status]) => (
                                                 <View key={stage} style={[
@@ -529,7 +529,7 @@ export default function DashboardScreen() {
                         <Text style={styles.alarmEmoji}>🚨</Text>
                         <Text style={styles.alarmTitle}>ALARM!</Text>
                         <Text style={styles.alarmStage}>{formatStageName(alarmTask?.stage)} Stage Complete</Text>
-                        <Text style={styles.alarmProduct}>{alarmTask?.Product?.name}</Text>
+                        <Text style={styles.alarmProduct}>{alarmTask?.Product?.name} {alarmTask?.Product?.hindi_name ? `(${alarmTask?.Product?.hindi_name})` : ''}</Text>
                         <Text style={styles.alarmQty}>{alarmTask?.quantity_grams}g</Text>
 
                         <TouchableOpacity
