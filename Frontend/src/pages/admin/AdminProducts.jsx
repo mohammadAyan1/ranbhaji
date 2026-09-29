@@ -11,7 +11,7 @@ const emptyForm = {
   description: "", min_retail_qty: "", water_capacity_liters: "",
   weighing_time_seconds: 0, soaking_time_seconds: 0, cutting_mode: "PER_25G", 
   pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0, 
-  drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null
+  drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null, existing_image_url: "", is_qty_double: false, discount_percentage: ""
 };
 
 const showKgToggle = (category, unit) =>
@@ -243,8 +243,6 @@ export default function AdminProducts() {
           setPriceUnit("gm");
         }
         if (field === "category") {
-          updated.purchase_price_input = "";
-          updated.margin_percentage = "";
           updated.sub_category = "";
         }
       }
@@ -263,8 +261,8 @@ export default function AdminProducts() {
     const useKg = showKgToggle(form.category, form.unit) && priceUnit === "kg";
     const purchase_price_per_gm = useKg ? purchaseInput / 1000 : purchaseInput;
 
-    // Calculate selling price based on purchase price and margin percentage
-    const selling_price_per_gm = purchase_price_per_gm * (marginPercentage / 100);
+    // Calculate selling price based on purchase price and margin percentage (markup)
+    const selling_price_per_gm = purchase_price_per_gm * (1 + (marginPercentage / 100));
 
     const payload = new FormData();
     payload.append("name", form.name);
@@ -288,6 +286,8 @@ export default function AdminProducts() {
     payload.append("drying_time_per_piece_seconds", form.drying_time_per_piece_seconds || 0);
     payload.append("drying_time_per_25g_seconds", form.drying_time_per_25g_seconds || 0);
     payload.append("margin_percentage", marginPercentage);
+    payload.append("discount_percentage", form.discount_percentage || 0);
+    payload.append("is_qty_double", form.is_qty_double);
 
     if (form.image) {
       payload.append("image", form.image);
@@ -365,7 +365,7 @@ export default function AdminProducts() {
         : "",
       margin_percentage: (p.default_margin_percentage && parseFloat(p.default_margin_percentage) !== 0)
         ? parseFloat(p.default_margin_percentage).toString()
-        : (buyPrice > 0 ? ((sellPrice / buyPrice) * 100).toFixed(1) : ""),
+        : (buyPrice > 0 ? (((sellPrice - buyPrice) / buyPrice) * 100).toFixed(1) : ""),
       unit: unt || "",
       unit_id: uId || "",
       description: p.description || "",
@@ -380,7 +380,10 @@ export default function AdminProducts() {
       drying_time_seconds: p.drying_time_seconds || 0,
       drying_time_per_piece_seconds: p.drying_time_per_piece_seconds || 0,
       drying_time_per_25g_seconds: p.drying_time_per_25g_seconds || 0,
-      image: null
+      image: null,
+      existing_image_url: p.image_url || "",
+      is_qty_double: p.is_qty_double || false,
+      discount_percentage: p.discount_percentage || ""
     });
     topRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -405,7 +408,14 @@ export default function AdminProducts() {
     setSubmittingPurchase(true);
 
     try {
-      const qty = parseFloat(purchaseForm.quantity);
+      const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
+      const isGm = productObj?.unit === 'gm' || productObj?.unit === 'ml';
+      
+      let qty = parseFloat(purchaseForm.quantity);
+      if (isGm) {
+        qty = qty / 1000;
+      }
+      
       const total = parseFloat(purchaseForm.total_price);
       // Calculate per base unit price (per kg or per piece)
       let calculated_purchase_price = 0;
@@ -420,7 +430,6 @@ export default function AdminProducts() {
       });
       setMsg("✅ Purchase entry logged and stock updated!");
 
-      const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
 
       setCompletedDemands([...completedDemands, parseInt(purchaseForm.product_id)]);
       setPendingRetailPricing([...pendingRetailPricing, {
@@ -561,6 +570,16 @@ export default function AdminProducts() {
 
               <div>
                 <label className="label">Product Image (Optional)</label>
+                {editing && form.existing_image_url && (
+                  <div className="mb-2 flex items-center gap-3">
+                    <img
+                      src={`${import.meta.env.VITE_API_URL}${form.existing_image_url}`}
+                      alt="Current Product"
+                      className="h-12 w-12 object-cover rounded-lg border border-gray-200 shadow-sm"
+                    />
+                    <span className="text-xs text-gray-500 font-medium">Current Image</span>
+                  </div>
+                )}
                 <input
                   type="file"
                   accept="image/*"
@@ -666,6 +685,22 @@ export default function AdminProducts() {
                 />
               </div>
 
+              {/*
+              <div>
+                <label className="label">
+                  Discount Percentage (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="input"
+                  placeholder="e.g. 5 (for 5% discount)"
+                  value={form.discount_percentage}
+                  onChange={e => handleFormChange("discount_percentage", e.target.value)}
+                />
+              </div>
+              */}
+
               <div>
                 <label className="label">Unit</label>
                 <select className="input" value={form.unit_id || ""} onChange={e => {
@@ -693,6 +728,18 @@ export default function AdminProducts() {
                     value={form.min_retail_qty}
                     onChange={e => handleFormChange("min_retail_qty", e.target.value)}
                   />
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="is_qty_double"
+                      checked={form.is_qty_double}
+                      onChange={e => handleFormChange("is_qty_double", e.target.checked)}
+                      className="w-4 h-4 text-fresh-600 bg-gray-100 border-gray-300 rounded focus:ring-fresh-500 cursor-pointer"
+                    />
+                    <label htmlFor="is_qty_double" className="text-sm text-gray-700 font-medium cursor-pointer">
+                      Restrict to Multiples (e.g. 500g, 1kg)
+                    </label>
+                  </div>
                 </div>
               )}
 
@@ -871,6 +918,8 @@ export default function AdminProducts() {
                     <th className="text-right p-3">Avg Cost Price</th>
                     <th className="text-right p-3">Default Sell Price</th>
                     <th className="text-right p-3">Margin</th>
+                    {/* <th className="text-right p-3">Discount</th> */}
+                    <th className="text-center p-3">Qty Double</th>
                     <th className="text-right p-3">Base Unit</th>
                     <th className="text-center p-3">Status</th>
                     <th className="text-right p-3 rounded-tr-xl">Actions</th>
@@ -879,7 +928,7 @@ export default function AdminProducts() {
                 <tbody>
                   {filteredProducts.map(p => {
                     const margin = p.selling_price_per_gm && p.purchase_price_per_gm
-                      ? ((p.selling_price_per_gm / p.purchase_price_per_gm) * 100).toFixed(1)
+                      ? (((p.selling_price_per_gm - p.purchase_price_per_gm) / p.purchase_price_per_gm) * 100).toFixed(1)
                       : "—";
 
                     return (
@@ -889,7 +938,17 @@ export default function AdminProducts() {
                           onClick={() => handleOpenProductStats(p)}
                           title="Click to view purchase history graph"
                         >
-                          {p.name} {p.hindi_name ? <span className="text-gray-600 font-normal">({p.hindi_name})</span> : ""}
+                          <div className="flex items-center gap-3">
+                            {p.image_url ? (
+                              <img src={`${import.meta.env.VITE_API_URL}${p.image_url}`} alt={p.name} className="w-10 h-10 rounded-lg object-cover border border-gray-200 shadow-sm" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-lg shadow-sm">🥦</div>
+                            )}
+                            <div>
+                              <span>{p.name}</span>
+                              {p.hindi_name && <span className="text-gray-500 font-normal ml-1">({p.hindi_name})</span>}
+                            </div>
+                          </div>
                         </td>
                         <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
                         <td className="p-3 text-right">
@@ -927,6 +986,14 @@ export default function AdminProducts() {
                           <p className="text-gray-500 text-[10px]">₹{p.selling_price_per_gm} / {p.unit}</p>
                         </td>
                         <td className="p-3 text-right text-fresh-600">{margin}%</td>
+                        {/* <td className="p-3 text-right text-orange-500">{p.discount_percentage && parseFloat(p.discount_percentage) > 0 ? `${parseFloat(p.discount_percentage)}%` : '—'}</td> */}
+                        <td className="p-3 text-center">
+                          {p.is_qty_double ? (
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold">YES</span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px] font-bold">NO</span>
+                          )}
+                        </td>
                         <td className="p-3 text-right text-gray-500">{p.unit}</td>
                         <td className="p-3 text-center">
                           <button
@@ -1014,7 +1081,7 @@ export default function AdminProducts() {
                             const sellingPrice = matchingProduct ? (isGm ? matchingProduct.selling_price_per_gm * 1000 : matchingProduct.selling_price_per_gm) : "";
                             setPurchaseForm({
                               product_id: d.id,
-                              quantity: displayQty,
+                              quantity: isGm ? totalQty : displayQty,
                               total_price: "",
                               selling_price_per_kg: sellingPrice || ""
                             });
@@ -1052,13 +1119,13 @@ export default function AdminProducts() {
                       {/* Quantity */}
                       <div>
                         <label className="label">
-                          Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : 'kg/L') : 'kg'})
+                          Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'ml' ? 'mL' : 'g')) : 'g'})
                         </label>
                         <input
                           type="number"
                           step="any"
                           min="0.001"
-                          placeholder="e.g. 10"
+                          placeholder="e.g. 1000"
                           className="input"
                           value={purchaseForm.quantity}
                           onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
@@ -1090,7 +1157,12 @@ export default function AdminProducts() {
                       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-sm mt-4">
                         <span className="text-gray-600">Calculated Purchase Price:</span>
                         <span className="text-lg font-bold text-gradient">
-                          ₹{(parseFloat(purchaseForm.total_price) / parseFloat(purchaseForm.quantity)).toFixed(2)} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
+                          ₹{(() => {
+                            const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
+                            const isGm = productObj?.unit === 'gm' || productObj?.unit === 'ml';
+                            const q = isGm ? parseFloat(purchaseForm.quantity) / 1000 : parseFloat(purchaseForm.quantity);
+                            return (parseFloat(purchaseForm.total_price) / q).toFixed(2);
+                          })()} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
                         </span>
                       </div>
                     )}

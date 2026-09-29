@@ -6,20 +6,20 @@ import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, S
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, drying_time_per_piece_seconds, drying_time_per_25g_seconds, margin_percentage, water_capacity_liters } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, drying_time_per_piece_seconds, drying_time_per_25g_seconds, margin_percentage, water_capacity_liters, is_qty_double, discount_percentage } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
-        
+
         let image_url = null;
         if (req.file) {
             image_url = `/uploads/${req.file.filename}`;
         }
 
-        const product = await Product.create({ 
-            name, hindi_name, image_url, category, sub_category, 
-            purchase_price_per_gm: purchase_price_per_gm || 0, 
-            selling_price_per_gm: selling_price_per_gm || 0, 
+        const product = await Product.create({
+            name, hindi_name, image_url, category, sub_category,
+            purchase_price_per_gm: purchase_price_per_gm || 0,
+            selling_price_per_gm: selling_price_per_gm || 0,
             default_margin_percentage: margin_percentage || 0,
             unit, unit_id, description,
             water_capacity_liters: water_capacity_liters || 0,
@@ -32,7 +32,9 @@ export const createProduct = async (req, res) => {
             time_per_25g_seconds: time_per_25g_seconds || null,
             drying_time_seconds: drying_time_seconds || 0,
             drying_time_per_piece_seconds: drying_time_per_piece_seconds || 0,
-            drying_time_per_25g_seconds: drying_time_per_25g_seconds || 0
+            drying_time_per_25g_seconds: drying_time_per_25g_seconds || 0,
+            is_qty_double: is_qty_double === 'true' || is_qty_double === true,
+            discount_percentage: discount_percentage || 0
         });
 
 
@@ -54,7 +56,7 @@ export const getProducts = async (req, res) => {
         const isAdmin = req.user?.role === 'admin';
         if (!isAdmin) where.status = 'active';
 
-        const products = await Product.findAll({ 
+        const products = await Product.findAll({
             where,
             include: [{
                 model: PurchaseLog,
@@ -112,10 +114,18 @@ export const updateProduct = async (req, res) => {
             delete updateData.margin_percentage;
         }
 
+        if (updateData.is_qty_double !== undefined) {
+            updateData.is_qty_double = updateData.is_qty_double === 'true' || updateData.is_qty_double === true;
+        }
+
+        if (updateData.discount_percentage !== undefined) {
+            updateData.discount_percentage = parseFloat(updateData.discount_percentage) || 0;
+        }
+
         if (req.file) {
             // New image uploaded, set new image url
             updateData.image_url = `/uploads/${req.file.filename}`;
-            
+
             // Delete old image if it exists and starts with /uploads/
             if (product.image_url && product.image_url.startsWith("/uploads/")) {
                 const oldImagePath = path.join(process.cwd(), product.image_url);
@@ -126,7 +136,7 @@ export const updateProduct = async (req, res) => {
         }
 
         await product.update(updateData);
-        
+
 
 
         res.status(200).json({ success: true, product });
@@ -176,10 +186,10 @@ export const createPurchase = async (req, res) => {
 
         const totalAmount = qtyVal * purchasePricePerKg;
         const currentStock = parseFloat(product.current_stock || 0);
-        
+
         const updatedTotalPurchased = parseFloat(product.total_purchased_qty || 0) + baseQty;
         const updatedCurrentStock = currentStock + baseQty;
-        
+
         const updateData = {
             total_purchased_qty: updatedTotalPurchased,
             current_stock: updatedCurrentStock
@@ -210,7 +220,7 @@ export const createPurchase = async (req, res) => {
         }, { transaction: t });
 
         await t.commit();
-        
+
         // Notify socket clients about new production batch
         if (req.app.get('io')) {
             req.app.get('io').emit('production:update', { timestamp: new Date() });
@@ -251,7 +261,7 @@ export const getPurchases = async (req, res) => {
 export const getStockSummary = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
-        
+
         let products = await Product.findAll({
             attributes: ['id', 'name', 'category', 'unit', 'purchase_price_per_gm', 'selling_price_per_gm', 'total_purchased_qty', 'total_sold_qty', 'current_stock', 'status'],
             raw: true

@@ -193,7 +193,15 @@ export const getMe = async (req, res) => {
             attributes: { exclude: ['password_hash', 'otp', 'otp_expiry'] }
         });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
-        res.status(200).json({ success: true, user });
+
+        const subscriptions = await Subscription.findAll({ where: { user_id: req.user.id } });
+        let package_status = "inactive";
+        if (subscriptions.length > 0) {
+            const hasActive = subscriptions.some(sub => sub.status === "active");
+            package_status = hasActive ? "active" : "over";
+        }
+
+        res.status(200).json({ success: true, user, package_status });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

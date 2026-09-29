@@ -25,11 +25,16 @@ export const createRetailOrder = async (req, res) => {
             }
 
             const qtyVal = parseFloat(item.quantity);
-            const minQty = parseFloat(product.min_retail_qty || 0);
+            let minQty = parseFloat(product.min_retail_qty || 0);
+
+            // min_retail_qty is stored in gm for gm products, but qtyVal is received in kg
+            if (product.unit === 'gm' || product.unit === 'ml') {
+                minQty = minQty / 1000;
+            }
 
             if (qtyVal < minQty) {
                 await t.rollback();
-                return res.status(400).json({ success: false, message: `Minimum quantity for ${product.name} is ${minQty}` });
+                return res.status(400).json({ success: false, message: `Minimum quantity for ${product.name} is ${product.min_retail_qty} ${product.unit}` });
             }
 
             let baseQty = qtyVal;

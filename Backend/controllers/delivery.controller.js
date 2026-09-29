@@ -12,7 +12,22 @@ import path from "path";
 // GET /api/today-deliveries  (delivery role)
 export const getTodayDeliveries = async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        // const today = new Date().toISOString().split('T')[0];
+
+
+
+        //////
+
+        const date = new Date();
+        date.setDate(date.getDate() + 2);
+
+        const today = date.toISOString().split('T')[0];
+
+        console.log(today);
+
+        //////
+
+
         const deliveryBoyId = req.user.id;
 
         const schedules = await DeliverySchedule.findAll({
@@ -330,14 +345,17 @@ export const markDelivered = async (req, res) => {
                         qty_gm: sel.qty_gm
                     })));
 
-                    // 2. Add default fixed items that are not in selections
-                    const selectionProductIds = selections.map(sel => sel.product_id);
-                    const missingFixed = defaultFixedItems.filter(f => !selectionProductIds.includes(f.product_id));
-                    itemsToCreate.push(...missingFixed.map(item => ({
-                        schedule_id: schedule.id,
-                        product_id: item.product_id,
-                        qty_gm: item.qty_gm
-                    })));
+                    // 2. Add default fixed items that are not in selections, BUT only if selections were auto-generated
+                    const isManualSelection = selections.some(sel => sel.is_auto === false);
+                    if (!isManualSelection) {
+                        const selectionProductIds = selections.map(sel => sel.product_id);
+                        const missingFixed = defaultFixedItems.filter(f => !selectionProductIds.includes(f.product_id));
+                        itemsToCreate.push(...missingFixed.map(item => ({
+                            schedule_id: schedule.id,
+                            product_id: item.product_id,
+                            qty_gm: item.qty_gm
+                        })));
+                    }
                 } else {
                     // Use default fixed and seasonal
                     itemsToCreate.push(...defaultFixedItems.map(item => ({
@@ -398,9 +416,12 @@ export const markDelivered = async (req, res) => {
         // Refund unused budget if standard subscription
         if (schedule.Subscription) {
             let actual_cost = 0;
+            const packageMargin = parseFloat(sub.Package.margin_percent) || 0;
+            const marginMultiplier = 1 + (packageMargin / 100);
+
             for (const item of deliveryItems) {
                 if (item.Product) {
-                    actual_cost += parseFloat(item.qty_gm) * parseFloat(item.Product.purchase_price_per_gm);
+                    actual_cost += parseFloat(item.qty_gm) * parseFloat(item.Product.purchase_price_per_gm) * marginMultiplier;
                 }
             }
 
@@ -1189,11 +1210,14 @@ export const getProductDemands = async (req, res) => {
                             if (!sel.Product) continue;
                             addDemand(sel.Product, parseFloat(sel.qty_gm || 0), 'package', batchName, user);
                         }
-                        const selectionProductIds = selections.map(sel => sel.product_id);
-                        const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
-                        for (const item of missingFixed) {
-                            if (!item.Product) continue;
-                            addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
+                        const isManualSelection = selections.some(sel => sel.is_auto === false);
+                        if (!isManualSelection) {
+                            const selectionProductIds = selections.map(sel => sel.product_id);
+                            const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
+                            for (const item of missingFixed) {
+                                if (!item.Product) continue;
+                                addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
+                            }
                         }
                     } else {
                         for (const item of fixedItems) {
@@ -1588,12 +1612,15 @@ export const getAllOrdersForDate = async (req, res) => {
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: sel.product_id, qty_gm: sel.qty_gm });
                             }
                         }
-                        const selectionProductIds = selections.map(sel => sel.product_id);
-                        const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
-                        for (const item of missingFixed) {
-                            if (item.Product) {
-                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
-                                newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
+                        const isManualSelection = selections.some(sel => sel.is_auto === false);
+                        if (!isManualSelection) {
+                            const selectionProductIds = selections.map(sel => sel.product_id);
+                            const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
+                            for (const item of missingFixed) {
+                                if (item.Product) {
+                                    addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
+                                    newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
+                                }
                             }
                         }
                     } else {
@@ -1812,7 +1839,7 @@ export const packOrders = async (req, res) => {
                             const existingMissed = await MissedProductLog.findOne({
                                 where: { source_type: 'subscription', source_id: schedule.id, product_id: item.product_id }
                             });
-                            
+
                             if (existingMissed) {
                                 const scheduleDateObj = new Date(schedule.scheduled_date);
                                 scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
@@ -1820,11 +1847,11 @@ export const packOrders = async (req, res) => {
                                     scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
                                 }
                                 const tomorrowStr = scheduleDateObj.toISOString().split('T')[0];
-                                
+
                                 const nextSchedule = await DeliverySchedule.findOne({
                                     where: { subscription_id: schedule.subscription_id, scheduled_date: tomorrowStr }
                                 });
-                                
+
                                 if (nextSchedule) {
                                     const existingNextItem = await DeliveryItem.findOne({
                                         where: { schedule_id: nextSchedule.id, product_id: item.product_id }

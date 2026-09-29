@@ -1243,12 +1243,15 @@ export const saveScheduleSeasonal = async (req, res) => {
         );
 
         // Add custom fixed selections
-        rows.push(...inputFixedItems.map(i => ({
-            schedule_id,
-            product_id: i.product_id,
-            qty_gm: i.qty_gm,
-            is_auto: false
-        })));
+        rows.push(...inputFixedItems
+            .filter(i => parseFloat(i.qty_gm) > 0)
+            .map(i => ({
+                schedule_id,
+                product_id: i.product_id,
+                qty_gm: i.qty_gm,
+                is_auto: false
+            }))
+        );
 
         if (rows.length > 0) {
             await ScheduleSeasonalSelection.bulkCreate(rows, { transaction: t });

@@ -113,7 +113,9 @@ const Product = sequelize.define('Product', {
   time_per_25g_seconds: { type: DataTypes.INTEGER, allowNull: true },
   drying_time_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
   drying_time_per_piece_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
-  drying_time_per_25g_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 }
+  drying_time_per_25g_seconds: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+  is_qty_double: { type: DataTypes.BOOLEAN, defaultValue: false },
+  discount_percentage: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 }
 }, { tableName: 'products', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 3. PACKAGES

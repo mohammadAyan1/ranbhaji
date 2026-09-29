@@ -70,12 +70,15 @@ export default function RetailStore() {
   const addToCart = (product) => {
     setCart(prev => {
       const existing = prev[product.id];
-      const initialQty = product.unit === 'piece' ? 1 : 0.1; // default 100gm (0.1kg) or 1 piece
+      let step = product.unit === 'piece' ? 1 : 100; // default 100gm or 1 piece
+      if (product.is_qty_double && product.min_retail_qty) {
+        step = parseFloat(product.min_retail_qty);
+      }
       return {
         ...prev,
         [product.id]: {
           product,
-          quantity: existing ? parseFloat((existing.quantity + initialQty).toFixed(2)) : initialQty
+          quantity: existing ? parseFloat((existing.quantity + step).toFixed(2)) : step
         }
       };
     });
@@ -165,7 +168,7 @@ export default function RetailStore() {
 
     const itemsPayload = cartItems.map(item => ({
       product_id: item.product.id,
-      quantity: item.quantity
+      quantity: (item.product.unit === 'gm' || item.product.unit === 'ml') ? item.quantity / 1000 : item.quantity
     }));
 
     try {
@@ -215,7 +218,8 @@ export default function RetailStore() {
   const cartItems = Object.values(cart);
   const subtotal = cartItems.reduce((sum, item) => {
     const rate = getPricePerKg(item.product);
-    return sum + (item.quantity * rate);
+    const qtyInKg = (item.product.unit === 'gm' || item.product.unit === 'ml') ? item.quantity / 1000 : item.quantity;
+    return sum + (qtyInKg * rate);
   }, 0);
   const deliveryCharge = cartItems.length > 0 ? 30.00 : 0;
   const grandTotal = subtotal + deliveryCharge;
@@ -314,16 +318,26 @@ export default function RetailStore() {
                     {cartItem ? (
                       <div className="flex items-center gap-2 bg-gray-100 border border-gray-300 rounded-lg p-0.5">
                         <button
-                          onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity - (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
+                          onClick={() => {
+                            const step = p.is_qty_double && p.min_retail_qty 
+                              ? parseFloat(p.min_retail_qty)
+                              : (p.unit === 'piece' ? 1 : 100);
+                            updateCartQty(p.id, parseFloat((cartItem.quantity - step).toFixed(2)));
+                          }}
                           className="w-7 h-7 flex items-center justify-center font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-700 rounded-md transition-all"
                         >
                           -
                         </button>
                         <span className="text-gray-900 text-xs font-semibold px-1 min-w-[36px] text-center">
-                          {cartItem.quantity} {p.unit === 'piece' ? 'pcs' : 'kg'}
+                          {cartItem.quantity} {p.unit === 'piece' ? 'pcs' : (p.unit === 'gm' ? 'gm' : p.unit)}
                         </span>
                         <button
-                          onClick={() => updateCartQty(p.id, parseFloat((cartItem.quantity + (p.unit === 'piece' ? 1 : 0.1)).toFixed(2)))}
+                          onClick={() => {
+                            const step = p.is_qty_double && p.min_retail_qty 
+                              ? parseFloat(p.min_retail_qty)
+                              : (p.unit === 'piece' ? 1 : 100);
+                            updateCartQty(p.id, parseFloat((cartItem.quantity + step).toFixed(2)));
+                          }}
                           className="w-7 h-7 flex items-center justify-center font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-700 rounded-md transition-all"
                         >
                           +
@@ -375,7 +389,7 @@ export default function RetailStore() {
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-gray-900 truncate">{item.product.name}</p>
                         <p className="text-gray-500 text-xs">
-                          {item.quantity} {item.product.unit === 'piece' ? 'pcs' : 'kg'} @ ₹{rate.toFixed(2)}
+                          {item.quantity} {item.product.unit === 'piece' ? 'pcs' : (item.product.unit === 'gm' ? 'gm' : item.product.unit)} @ ₹{rate.toFixed(2)}
                         </p>
                       </div>
 
