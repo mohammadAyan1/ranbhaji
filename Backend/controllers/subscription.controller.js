@@ -911,13 +911,13 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: SubscriptionItem,
                     as: 'Items',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'min_retail_qty', 'is_qty_double'] }]
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status', 'min_retail_qty', 'is_qty_double'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status', 'min_retail_qty', 'is_qty_double'] }] }
                     ]
                 }
             ]
@@ -969,12 +969,12 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: ScheduleSeasonalSelection,
                     as: 'SeasonalSelections',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'hindi_name'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'min_retail_qty', 'is_qty_double'] }]
                 },
                 {
                     model: DeliveryItem,
                     as: 'DeliveryItems',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'hindi_name'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'min_retail_qty', 'is_qty_double'] }]
                 }
             ]
         });
