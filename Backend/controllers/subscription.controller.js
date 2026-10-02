@@ -265,13 +265,13 @@ export const confirmStartDate = async (req, res) => {
         minAllowedDate.setHours(0, 0, 0, 0);
         selectedDate.setHours(0, 0, 0, 0);
 
-        if (selectedDate < minAllowedDate) {
-            await t.rollback();
-            return res.status(400).json({
-                success: false,
-                message: `Start date must be at least ${minAllowedDate.toISOString().split('T')[0]} (after 8 PM cutoff rule).`
-            });
-        }
+        // if (selectedDate < minAllowedDate) {
+        //     await t.rollback();
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: `Start date must be at least ${minAllowedDate.toISOString().split('T')[0]} (after 8 PM cutoff rule).`
+        //     });
+        // }
 
         const pkg = subscription.Package;
         const daysInCycle = subscription.type === 'yearly' ? 360 : 30;
