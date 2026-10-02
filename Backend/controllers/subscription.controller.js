@@ -250,28 +250,28 @@ export const confirmStartDate = async (req, res) => {
         // Enforce Minimum Start Date Rule (Server Side)
         const [sYear, sMonth, sDay] = start_date.split('-').map(Number);
         const selectedDate = new Date(sYear, sMonth - 1, sDay);
-        
+
         const now = new Date();
         // Convert 'now' to IST time for comparison
         const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        
+
         const minAllowedDate = new Date(istTime);
         if (istTime.getHours() < 20) {
             minAllowedDate.setDate(minAllowedDate.getDate() + 1); // Tomorrow
         } else {
             minAllowedDate.setDate(minAllowedDate.getDate() + 2); // Day after tomorrow
         }
-        
+
         minAllowedDate.setHours(0, 0, 0, 0);
         selectedDate.setHours(0, 0, 0, 0);
 
-        if (selectedDate < minAllowedDate) {
-            await t.rollback();
-            return res.status(400).json({ 
-                success: false, 
-                message: `Start date must be at least ${minAllowedDate.toISOString().split('T')[0]} (after 8 PM cutoff rule).` 
-            });
-        }
+        // if (selectedDate < minAllowedDate) {
+        //     await t.rollback();
+        //     return res.status(400).json({ 
+        //         success: false, 
+        //         message: `Start date must be at least ${minAllowedDate.toISOString().split('T')[0]} (after 8 PM cutoff rule).` 
+        //     });
+        // }
 
         const pkg = subscription.Package;
         const daysInCycle = subscription.type === 'yearly' ? 360 : 30;
@@ -702,7 +702,7 @@ export const getSeasonalOptions = async (req, res) => {
         // Extract fixed items from subscription (if present) or fallback to package fixed items
         const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active');
         const activePkgFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active');
-        
+
         const fixed_items = subFixedItems.length > 0
             ? subFixedItems.map(i => ({
                 product_id: i.product_id,
