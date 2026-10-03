@@ -43,8 +43,10 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1) =
             interval_days = 3; // 2 days gap
             break;
         default:
-            // Fallback for other serving counts
-            interval_days = servicesPerMonth > 1 ? Math.floor(29 / (servicesPerMonth - 1)) : 0;
+            // For any other serving, calculate gap as (30 / services), then interval = gap + 1
+            // e.g. 10 servings: 30/10 = 3 days gap -> interval 4
+            let calculated_gap = Math.floor(30 / servicesPerMonth);
+            interval_days = calculated_gap + 1;
             break;
     }
 
