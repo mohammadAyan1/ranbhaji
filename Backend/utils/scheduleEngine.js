@@ -21,15 +21,42 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1) =
     // For 5 services: 29 / 4 = 7.25 (Difference of 7 days: 1, 8, 15, 22, 29) -> 6 empty days gap.
     // This perfectly matches the user's logic while remaining safe for other numbers of services (like 10 or 15)
     // without exceeding the 30 day limit.
-    const interval_days = servicesPerMonth > 1 
-        ? Math.floor(29 / (servicesPerMonth - 1)) 
-        : 0;
-    
+
+    let interval_days;
+
+    // Custom gap rules requested by user
+    // Gap means empty days between deliveries, so interval is gap + 1
+    switch (servicesPerMonth) {
+        case 5:
+            interval_days = 7; // 6 days gap
+            break;
+        case 6:
+            interval_days = 6; // 5 days gap (Assuming the second '5 serving' was a typo for 6)
+            break;
+        case 7:
+            interval_days = 5; // 4 days gap
+            break;
+        case 8:
+            interval_days = 4; // 3 days gap
+            break;
+        case 9:
+            interval_days = 3; // 2 days gap
+            break;
+        default:
+            // Fallback for other serving counts
+            interval_days = servicesPerMonth > 1 ? Math.floor(29 / (servicesPerMonth - 1)) : 0;
+            break;
+    }
+
     for (let i = 0; i < totalServices; i++) {
         const dateVal = new Date(baseTime + (i * interval_days) * 24 * 60 * 60 * 1000);
 
         if (dateVal.getUTCDay() === 0) { // Sunday
-            dateVal.setUTCDate(dateVal.getUTCDate() - 1); // Shift back to Saturday
+            if (servicesPerMonth === 9) {
+                dateVal.setUTCDate(dateVal.getUTCDate() + 1); // Shift forward to Monday for 9 services
+            } else {
+                dateVal.setUTCDate(dateVal.getUTCDate() - 1); // Shift back to Saturday for all others
+            }
         }
 
         dates.push(dateVal.toISOString().split('T')[0]);
