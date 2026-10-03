@@ -50,18 +50,30 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1) =
             break;
     }
 
-    for (let i = 0; i < totalServices; i++) {
-        const dateVal = new Date(baseTime + (i * interval_days) * 24 * 60 * 60 * 1000);
+    // Keep track of the 'current' date being scheduled
+    let currentDate = new Date(baseTime);
 
-        if (dateVal.getUTCDay() === 0) { // Sunday
-            if (servicesPerMonth === 9) {
-                dateVal.setUTCDate(dateVal.getUTCDate() + 1); // Shift forward to Monday for 9 services
-            } else {
-                dateVal.setUTCDate(dateVal.getUTCDate() - 1); // Shift back to Saturday for all others
-            }
+    for (let i = 0; i < totalServices; i++) {
+        // For the very first delivery, we just use the start date
+        // For subsequent deliveries, we add the interval to the PREVIOUS actual delivery date
+        if (i > 0) {
+            currentDate.setUTCDate(currentDate.getUTCDate() + interval_days);
         }
 
-        dates.push(dateVal.toISOString().split('T')[0]);
+        // We create a copy to potentially shift for Sunday
+        let scheduledDate = new Date(currentDate);
+
+        if (scheduledDate.getUTCDay() === 0) { // Sunday
+            if (servicesPerMonth === 9) {
+                scheduledDate.setUTCDate(scheduledDate.getUTCDate() + 1); // Shift forward to Monday
+            } else {
+                scheduledDate.setUTCDate(scheduledDate.getUTCDate() - 1); // Shift back to Saturday
+            }
+            // Update the currentDate so the next interval is calculated from this shifted date
+            currentDate = new Date(scheduledDate);
+        }
+
+        dates.push(scheduledDate.toISOString().split('T')[0]);
     }
 
     return dates;
