@@ -17,8 +17,16 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1) =
     const startParts = startDate.split('-').map(Number);
     const baseTime = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
 
+    // Calculate the interval between deliveries so they fit perfectly within a 30-day window.
+    // For 5 services: 29 / 4 = 7.25 (Difference of 7 days: 1, 8, 15, 22, 29) -> 6 empty days gap.
+    // This perfectly matches the user's logic while remaining safe for other numbers of services (like 10 or 15)
+    // without exceeding the 30 day limit.
+    const interval_days = servicesPerMonth > 1 
+        ? Math.floor(29 / (servicesPerMonth - 1)) 
+        : 0;
+    
     for (let i = 0; i < totalServices; i++) {
-        const dateVal = new Date(baseTime + Math.round(i * gap_days) * 24 * 60 * 60 * 1000);
+        const dateVal = new Date(baseTime + (i * interval_days) * 24 * 60 * 60 * 1000);
 
         if (dateVal.getUTCDay() === 0) { // Sunday
             dateVal.setUTCDate(dateVal.getUTCDate() - 1); // Shift back to Saturday
