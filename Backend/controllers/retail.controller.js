@@ -1,5 +1,5 @@
 import {
-    sequelize, RetailOrder, RetailOrderItem, Product, User, Address, WalletTransaction
+    sequelize, RetailOrder, RetailOrderItem, Product, User, Address, WalletTransaction, DeliverySchedule, Subscription, WaterSubscription, Package
 } from "../models/index.js";
 
 // POST /api/retail/orders (COD Order Creation)
@@ -75,11 +75,40 @@ export const createRetailOrder = async (req, res) => {
                 await t.rollback();
                 return res.status(404).json({ success: false, message: "User not found" });
             }
-            if (parseFloat(user.wallet_balance || 0) < totalAmount) {
-                await t.rollback();
-                return res.status(400).json({ success: false, message: `Insufficient wallet balance. Total amount needed: ₹${totalAmount.toFixed(2)}. Your balance: ₹${parseFloat(user.wallet_balance || 0).toFixed(2)}` });
+            const todayStr = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Kolkata" }).split(" ")[0]; // YYYY-MM-DD in IST
+
+            // Calculate today's locked amount for pending deliveries
+            const pendingDeliveries = await DeliverySchedule.findAll({
+                where: { status: 'pending', scheduled_date: todayStr },
+                include: [
+                    { model: Subscription, as: 'Subscription', where: { user_id }, required: false, include: [Package] },
+                    { model: WaterSubscription, as: 'WaterSubscription', where: { user_id }, required: false }
+                ],
+                transaction: t
+            });
+
+            let lockedAmount = 0;
+            for (const sched of pendingDeliveries) {
+                if (sched.Subscription && sched.Subscription.Package) {
+                    const price = parseFloat(sched.Subscription.locked_price || sched.Subscription.Package.price);
+                    lockedAmount += price / sched.Subscription.Package.services_per_month;
+                } else if (sched.WaterSubscription) {
+                    lockedAmount += parseFloat(sched.WaterSubscription.price_per_bottle);
+                }
             }
-            const newBalance = parseFloat(user.wallet_balance || 0) - totalAmount;
+
+            const currentBalance = parseFloat(user.wallet_balance || 0);
+            const availableForRetail = currentBalance - lockedAmount;
+
+            if (availableForRetail < totalAmount) {
+                await t.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: `Aapka bacha hua wallet balance (₹${currentBalance.toFixed(2)}) me se ₹${lockedAmount.toFixed(2)} aaj ki aane wali package servings ke liye reserve hai. Is order ke liye ₹${totalAmount.toFixed(2)} aur chahiye, kripya recharge karein.`
+                });
+            }
+
+            const newBalance = currentBalance - totalAmount;
             await user.update({ wallet_balance: newBalance }, { transaction: t });
 
             await WalletTransaction.create({

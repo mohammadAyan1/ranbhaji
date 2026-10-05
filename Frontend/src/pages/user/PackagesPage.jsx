@@ -151,6 +151,48 @@ export default function PackagesPage() {
     }
   };
 
+  const handleWalletCheckout = async () => {
+    if (!selectedAddressId) {
+      setMsg("❌ Please add or select a delivery address first.");
+      return;
+    }
+    if (!selectedBatchId) {
+      setMsg("❌ Please select a delivery batch.");
+      return;
+    }
+    setInitiatingPayment(true);
+    setMsg("");
+    try {
+      const res = await api.post("/subscribe", {
+        package_id: checkoutPkg.id,
+        type: selectedType,
+        payment_method: "wallet",
+        address_id: parseInt(selectedAddressId),
+        batch_id: parseInt(selectedBatchId)
+      });
+      const sub_id = res.data.subscription_id;
+      setCurrentSub({ subscription_id: sub_id, package_id: checkoutPkg.id, package_name: checkoutPkg.name });
+
+      const datesRes = await api.get(`/available-dates?package_id=${checkoutPkg.id}`);
+      setAvailableDates(datesRes.data.available_dates || []);
+      setSelectedDate("");
+      setStep("confirm_date");
+      setMsg(`✅ Wallet Payment successful! Subscribed to ${checkoutPkg.name}. Please select your delivery start date.`);
+      setShowCheckoutModal(false);
+    } catch (err) {
+      const errMsg = err.response?.data?.message || "Subscription failed";
+      setMsg(`❌ ${errMsg}`);
+      if (err.response?.status === 409) {
+        api.get("/my-subscriptions").then(r => {
+          const subs = r.data.subscriptions || [];
+          setMySubscriptions(subs.filter(s => s.status === 'active' || s.status === 'paused'));
+        }).catch(() => { });
+      }
+    } finally {
+      setInitiatingPayment(false);
+    }
+  };
+
   const handlePhonePeCheckout = async () => {
     if (!selectedAddressId) {
       setMsg("❌ Please add or select a delivery address first.");
@@ -933,6 +975,14 @@ export default function PackagesPage() {
                   className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-gray-900 font-bold rounded-xl transition-all shadow-lg shadow-purple-950 flex items-center justify-center gap-2 text-sm"
                 >
                   {initiatingPayment ? "Initiating Gateway..." : `🔒 Pay ₹${selectedType === "yearly" ? calcYearly(checkoutPkg.price) : checkoutPkg.price} via PhonePe`}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleWalletCheckout}
+                  disabled={initiatingPayment || !selectedAddressId}
+                  className="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-green-900/50 flex items-center justify-center gap-2 text-sm"
+                >
+                  {initiatingPayment ? "Processing..." : `💳 Pay ₹${selectedType === "yearly" ? calcYearly(checkoutPkg.price) : checkoutPkg.price} via Wallet`}
                 </button>
                 <button
                   type="button"

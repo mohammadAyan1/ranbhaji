@@ -7,7 +7,7 @@ export const subscribeWater = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { water_type, container, frequency, type, payment_method, address_id, batch_id, capacity_liters } = req.body;
-        
+
         if (!water_type || !container || !frequency || !batch_id) {
             await t.rollback();
             return res.status(400).json({ success: false, message: "water_type, container, frequency, and batch_id are required" });
@@ -16,8 +16,8 @@ export const subscribeWater = async (req, res) => {
         const subType = type || 'monthly'; // 'monthly' or 'yearly'
 
         // Check if user already has an active water subscription
-        const existing = await WaterSubscription.findOne({ 
-            where: { user_id: req.user.id, status: { [Op.in]: ['active', 'paused'] } } 
+        const existing = await WaterSubscription.findOne({
+            where: { user_id: req.user.id, status: { [Op.in]: ['active', 'paused'] } }
         });
         if (existing) {
             await t.rollback();
@@ -31,7 +31,8 @@ export const subscribeWater = async (req, res) => {
 
         const matchedProduct = products.find(p => {
             const nameLower = p.name.toLowerCase();
-            return nameLower.includes(water_type.toLowerCase()) && nameLower.includes(container.toLowerCase());
+            const subCategoryLower = (p.sub_category || '').toLowerCase();
+            return nameLower.includes(water_type.trim().toLowerCase()) && subCategoryLower.trim() === container.trim().toLowerCase();
         });
 
         if (!matchedProduct) {
@@ -94,10 +95,12 @@ export const subscribeWater = async (req, res) => {
         }
 
         // Create the WaterSubscription (no start_date yet)
+        const parsedContainer = container.toLowerCase().includes('plastic') ? 'plastic' : 'glass';
+
         const water = await WaterSubscription.create({
             user_id: req.user.id,
             water_type,
-            container,
+            container: parsedContainer,
             frequency,
             price_per_bottle,
             status: 'active',
@@ -111,9 +114,9 @@ export const subscribeWater = async (req, res) => {
         }, { transaction: t });
 
         await t.commit();
-        res.status(201).json({ 
-            success: true, 
-            message: "Water subscription purchased! Please select a start date.", 
+        res.status(201).json({
+            success: true,
+            message: "Water subscription purchased! Please select a start date.",
             water_subscription_id: water.id,
             amount_charged: amount,
             wallet_balance: newBalance
@@ -127,7 +130,7 @@ export const subscribeWater = async (req, res) => {
 // GET /api/water/subscriptions
 export const getWaterSubscriptions = async (req, res) => {
     try {
-        const waters = await WaterSubscription.findAll({ 
+        const waters = await WaterSubscription.findAll({
             where: { user_id: req.user.id },
             include: [{ model: DeliverySchedule, as: 'Schedules' }]
         });
@@ -230,8 +233,8 @@ export const confirmWaterStartDate = async (req, res) => {
         await sub.update({ start_date, end_date }, { transaction: t });
 
         await t.commit();
-        res.status(200).json({ 
-            success: true, 
+        res.status(200).json({
+            success: true,
             message: "Start date confirmed and delivery schedules generated",
             start_date,
             end_date,
@@ -298,17 +301,17 @@ const pauseStandardSubscription = async (subscription, pause_days, pause_type, t
     }
 
     await subscription.update({ status: 'paused' }, { transaction: t });
-    
+
     // Cancel pending deliveries from today onwards
     await DeliverySchedule.update(
         { status: 'skipped' },
-        { 
-            where: { 
-                subscription_id: subscription.id, 
-                status: 'pending', 
-                scheduled_date: { [Op.gte]: todayStr } 
-            }, 
-            transaction: t 
+        {
+            where: {
+                subscription_id: subscription.id,
+                status: 'pending',
+                scheduled_date: { [Op.gte]: todayStr }
+            },
+            transaction: t
         }
     );
 };
@@ -372,13 +375,13 @@ const pauseWaterSubscriptionInternal = async (sub, pause_days, pause_type, today
     // Cancel pending deliveries from today onwards
     await DeliverySchedule.update(
         { status: 'skipped' },
-        { 
-            where: { 
-                water_subscription_id: sub.id, 
-                status: 'pending', 
-                scheduled_date: { [Op.gte]: todayStr } 
-            }, 
-            transaction: t 
+        {
+            where: {
+                water_subscription_id: sub.id,
+                status: 'pending',
+                scheduled_date: { [Op.gte]: todayStr }
+            },
+            transaction: t
         }
     );
 };
@@ -390,7 +393,7 @@ export const pauseWaterSubscription = async (req, res) => {
         const { pause_days, pause_type, pause_scope } = req.body;
         const subId = req.params.id;
         const user_id = req.user.id;
-        
+
         const days = parseInt(pause_days);
         const type = pause_type || 'monthly'; // 'monthly' or 'yearly'
         const scope = pause_scope || 'single'; // 'single' or 'all'
@@ -404,14 +407,14 @@ export const pauseWaterSubscription = async (req, res) => {
         today.setHours(0, 0, 0, 0);
 
         if (scope === 'all') {
-            const standardSubs = await Subscription.findAll({ 
-                where: { user_id, status: 'active' }, 
+            const standardSubs = await Subscription.findAll({
+                where: { user_id, status: 'active' },
                 include: [{ model: Package }],
-                transaction: t 
+                transaction: t
             });
-            const waterSubs = await WaterSubscription.findAll({ 
-                where: { user_id, status: 'active' }, 
-                transaction: t 
+            const waterSubs = await WaterSubscription.findAll({
+                where: { user_id, status: 'active' },
+                transaction: t
             });
 
             if (standardSubs.length === 0 && waterSubs.length === 0) {
@@ -446,9 +449,9 @@ export const pauseWaterSubscription = async (req, res) => {
             }
 
             await t.commit();
-            return res.status(200).json({ 
-                success: true, 
-                message: `Successfully paused ${pausedCount} package(s).${errors.length > 0 ? ' Skipped: ' + errors.join(', ') : ''}` 
+            return res.status(200).json({
+                success: true,
+                message: `Successfully paused ${pausedCount} package(s).${errors.length > 0 ? ' Skipped: ' + errors.join(', ') : ''}`
             });
 
         } else {
@@ -493,7 +496,7 @@ export const restartWaterSubscription = async (req, res) => {
         const now = new Date();
         const currentHour = now.getHours();
         const daysToAdd = currentHour >= 20 ? 2 : 1;
-        
+
         const minDate = new Date(now);
         minDate.setDate(minDate.getDate() + daysToAdd);
         const minDateStr = minDate.toISOString().split('T')[0];
@@ -548,12 +551,12 @@ export const restartWaterSubscription = async (req, res) => {
         await sub.update({ status: 'active', end_date: new_end_date }, { transaction: t });
 
         await t.commit();
-        res.status(200).json({ 
-            success: true, 
-            message: "Water subscription restarted successfully", 
-            restart_date, 
-            end_date: new_end_date, 
-            new_delivery_dates: newDates 
+        res.status(200).json({
+            success: true,
+            message: "Water subscription restarted successfully",
+            restart_date,
+            end_date: new_end_date,
+            new_delivery_dates: newDates
         });
     } catch (error) {
         await t.rollback();

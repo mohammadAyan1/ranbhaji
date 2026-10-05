@@ -177,6 +177,22 @@ const runNightlyJob = async () => {
                     continue;
                 }
 
+                // Insufficient Balance Auto-Pause
+                const price_per_service = parseFloat(sub.locked_price || sub.Package.price) / sub.Package.services_per_month;
+                if (parseFloat(sub.User.wallet_balance || 0) < price_per_service) {
+                    console.log(`[CRON] Pausing delivery for subscription ${sub.id} (user ${sub.user_id}) due to low wallet balance.`);
+                    await schedule.update({ status: 'insufficient_balance' }, { transaction: t });
+                    await Notification.create({
+                        user_id: sub.user_id,
+                        title: 'Insufficient Wallet Balance',
+                        message: `Aapke wallet me kal ki package delivery ke liye balance kam hai. Kripya ₹${price_per_service.toFixed(2)} recharge karein taaki aapka ${sub.Package.name} kal skip na ho.`,
+                        type: 'alert',
+                        scheduled_at: new Date(),
+                        sent_at: new Date()
+                    }, { transaction: t });
+                    continue; // Skip processing items for this schedule
+                }
+
                 const items = sub.Items.filter(i => i.is_active);
 
                 // Step 0: Auto-fill seasonal selections if the package has SeasonalConfig
@@ -433,6 +449,22 @@ const runNightlyJob = async () => {
                         sent_at: new Date()
                     }, { transaction: t });
                     continue;
+                }
+
+                // Insufficient Balance Auto-Pause for Water
+                const water_price_per_service = parseFloat(sub.price_per_bottle);
+                if (parseFloat(sub.User.wallet_balance || 0) < water_price_per_service) {
+                    console.log(`[CRON] Pausing water delivery for subscription ${sub.id} (user ${sub.user_id}) due to low wallet balance.`);
+                    await schedule.update({ status: 'insufficient_balance' }, { transaction: t });
+                    await Notification.create({
+                        user_id: sub.user_id,
+                        title: 'Insufficient Wallet Balance',
+                        message: `Aapke wallet me kal ki paani ki bottle ke liye balance kam hai. Kripya ₹${water_price_per_service.toFixed(2)} recharge karein warna kal delivery nahi aayegi.`,
+                        type: 'alert',
+                        scheduled_at: new Date(),
+                        sent_at: new Date()
+                    }, { transaction: t });
+                    continue; // Skip scheduling delivery items
                 }
 
                 // Find matched water product from active catalog

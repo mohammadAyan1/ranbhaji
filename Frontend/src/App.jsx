@@ -63,7 +63,8 @@ import Landing from "./pages/Landing/Landing";
 import AdminCategories from "./pages/admin/Master/AdminCategories";
 import AdminSubCategories from "./pages/admin/Master/AdminSubCategories";
 import AdminZones from "./pages/admin/Master/AdminZones";
-import AdminWaste from "./pages/admin/AdminWaste";
+// import AdminWaste from "./pages/admin/AdminWaste";
+import AdminClosingStock from "./pages/admin/AdminClosingStock";
 
 // Calculators
 import PackageCalculator from "./pages/admin/Calculators/PackageCalculator";
@@ -167,7 +168,8 @@ function App() {
           <Route path="/admin/working-logs" element={<WorkingLogs />} />
           <Route path="/admin/master/sub-categories" element={<AdminSubCategories />} />
           <Route path="/admin/master/zones" element={<AdminZones />} />
-          <Route path="/admin/waste" element={<AdminWaste />} />
+          {/* <Route path="/admin/waste" element={<AdminWaste />} /> */}
+          <Route path="/admin/closing-stock" element={<AdminClosingStock />} />
           <Route path="/admin/attendance" element={<Attendance />} />
 
           {/* Master */}

@@ -27,6 +27,33 @@ export const addFunds = async (req, res) => {
         await user.update({ wallet_balance: newBalance }, { transaction: t });
         await WalletTransaction.create({ user_id: user.id, amount, type: 'credit', reason: `Manual recharge via ${payment_method || 'wallet'}` }, { transaction: t });
 
+        // Resume any auto-paused deliveries due to low balance
+        const todayStr = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Kolkata" }).split(" ")[0];
+        const pausedDeliveries = await DeliverySchedule.findAll({
+            where: { status: 'insufficient_balance', scheduled_date: { [Op.gte]: todayStr } },
+            include: [
+                { model: Subscription, as: 'Subscription', where: { user_id: req.user.id }, required: false, include: [Package] },
+                { model: WaterSubscription, as: 'WaterSubscription', where: { user_id: req.user.id }, required: false }
+            ],
+            order: [['scheduled_date', 'ASC']],
+            transaction: t
+        });
+
+        let availableToResume = newBalance;
+        for (const sched of pausedDeliveries) {
+            let cost = 0;
+            if (sched.Subscription && sched.Subscription.Package) {
+                cost = parseFloat(sched.Subscription.locked_price || sched.Subscription.Package.price) / sched.Subscription.Package.services_per_month;
+            } else if (sched.WaterSubscription) {
+                cost = parseFloat(sched.WaterSubscription.price_per_bottle);
+            }
+
+            if (cost > 0 && availableToResume >= cost) {
+                await sched.update({ status: 'pending' }, { transaction: t });
+                availableToResume -= cost;
+            }
+        }
+
         await t.commit();
         res.status(200).json({ success: true, message: "Funds added", wallet_balance: newBalance });
     } catch (error) {

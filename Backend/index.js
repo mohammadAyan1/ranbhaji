@@ -40,6 +40,7 @@ import franchiseRoutes from "./routes/franchise.route.js";
 import attendanceRoutes from "./routes/attendance.route.js";
 import productionRoutes from "./routes/production.route.js";
 import referralRoutes from "./routes/referral.route.js";
+import closingStockRoutes from "./routes/closingStock.route.js";
 import workerTaskRoutes from "./routes/workerTask.routes.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
@@ -120,6 +121,7 @@ app.use("/api/franchises", franchiseRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/production", productionRoutes);
 app.use("/api/referral", referralRoutes);
+app.use("/api/admin/closing-stock", closingStockRoutes);
 app.use("/api/worker-tasks", workerTaskRoutes);
 
 // 404 fallback

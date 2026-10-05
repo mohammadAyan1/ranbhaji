@@ -544,6 +544,20 @@ const WasteLog = sequelize.define('WasteLog', {
 WasteLog.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(WasteLog, { foreignKey: 'product_id' });
 
+// 26.1 DAILY_STOCK_LOG (Closing Stock & Waste calculation)
+const DailyStockLog = sequelize.define('DailyStockLog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  date: { type: DataTypes.DATEONLY, allowNull: false },
+  opening_stock: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  purchase_qty: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  demand_qty: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  closing_stock: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  waste_qty: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+}, { tableName: 'daily_stock_logs', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+
+DailyStockLog.belongsTo(Product, { foreignKey: 'product_id' });
+Product.hasMany(DailyStockLog, { foreignKey: 'product_id' });
+
 
 // 26. BATCH_PROCESSING_LOG
 const BatchProcessingLog = sequelize.define('BatchProcessingLog', {
@@ -740,6 +754,7 @@ export {
   Zone,
   LossLog,
   WasteLog,
+  DailyStockLog,
   Franchise,
   AttendanceLog,
   ProductionBatch,

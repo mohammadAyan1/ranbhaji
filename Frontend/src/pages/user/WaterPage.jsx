@@ -199,6 +199,32 @@ export default function WaterPage() {
     setAddressChoiceMode("existing");
   };
 
+  const handleWalletPayment = async () => {
+    setSubscribing(true); setMsg("");
+    try {
+      const res = await api.post("/water/subscribe", {
+        water_type: form.water_type,
+        container: form.container,
+        frequency: form.frequency,
+        type: selectedType,
+        payment_method: "wallet",
+        address_id: parseInt(selectedAddressId),
+        batch_id: parseInt(selectedBatchId)
+      });
+      setCurrentSubId(res.data.water_subscription_id);
+      
+      // Fetch available start dates
+      const datesRes = await api.get("/water/available-dates");
+      setAvailableDates(datesRes.data.available_dates || []);
+      setSelectedDate(""); 
+      setStep("confirm_date");
+      setShowRazorpay(false);
+      setMsg("✅ Wallet payment successful and water subscription purchased! Please select your delivery start date.");
+      fetchWater();
+    } catch (err) { setMsg(`❌ ${err.response?.data?.message || "Purchase failed"}`); }
+    finally { setSubscribing(false); }
+  };
+
   const handleSimulatedPayment = async () => {
     setPaymentStatus("processing");
     const msgs = [
@@ -1057,6 +1083,14 @@ export default function WaterPage() {
                     className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-gray-900 font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
                   >
                     🔒 Pay ₹{totalPrice.toFixed(2)} Securely
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleWalletPayment} 
+                    disabled={subscribing}
+                    className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-green-900/50 flex items-center justify-center gap-2"
+                  >
+                    {subscribing ? "Processing..." : `💳 Pay ₹${totalPrice.toFixed(2)} via Wallet`}
                   </button>
                   <button 
                     type="button"
