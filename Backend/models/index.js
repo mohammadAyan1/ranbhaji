@@ -454,7 +454,7 @@ const RetailOrder = sequelize.define('RetailOrder', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   total_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   delivery_charge: { type: DataTypes.DECIMAL(10, 2), defaultValue: 30.00 },
-  payment_method: { type: DataTypes.ENUM('cod', 'phonepe'), allowNull: false },
+  payment_method: { type: DataTypes.ENUM('cod', 'phonepe', 'wallet'), allowNull: false },
   payment_status: { type: DataTypes.ENUM('pending', 'success', 'failed'), defaultValue: 'pending' },
   delivery_date: { type: DataTypes.DATEONLY, allowNull: false },
   delivery_status: { type: DataTypes.ENUM('pending', 'ready_for_delivery', 'delivered', 'cancelled'), defaultValue: 'pending' },
