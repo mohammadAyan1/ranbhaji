@@ -382,7 +382,8 @@ export default function RetailStore() {
               <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                 {cartItems.map(item => {
                   const rate = getPricePerKg(item.product);
-                  const cost = item.quantity * rate;
+                  const qtyInKg = (item.product.unit === 'gm' || item.product.unit === 'ml') ? item.quantity / 1000 : item.quantity;
+                  const cost = qtyInKg * rate;
 
                   return (
                     <div key={item.product.id} className="flex items-center justify-between gap-4 py-2 border-b border-gray-850 last:border-b-0 text-sm">
