@@ -1199,28 +1199,28 @@ export const saveScheduleSeasonal = async (req, res) => {
             total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
         }
 
-        let overage = total_cost - per_service_amount;
-        if (overage > 0) {
-            const { payment_method } = req.body;
-            if (payment_method === 'razorpay') {
-                // User paid the overage amount! Record transaction
-                await PaymentTransaction.create({
-                    user_id: req.user.id,
-                    amount: overage,
-                    payment_method: 'razorpay',
-                    status: 'success',
-                    type: 'extra_overage_charge'
-                }, { transaction: t });
-            } else {
-                await t.rollback();
-                return res.status(400).json({
-                    success: false,
-                    message: "Selected items exceed your seasonal budget for this delivery. Please adjust quantities or pay the overage amount.",
-                    overage: overage.toFixed(2),
-                    needs_payment: true
-                });
-            }
-        }
+        // let overage = total_cost - per_service_amount;
+        // if (overage > 0) {
+        //     const { payment_method } = req.body;
+        //     if (payment_method === 'razorpay') {
+        //         // User paid the overage amount! Record transaction
+        //         await PaymentTransaction.create({
+        //             user_id: req.user.id,
+        //             amount: overage,
+        //             payment_method: 'razorpay',
+        //             status: 'success',
+        //             type: 'extra_overage_charge'
+        //         }, { transaction: t });
+        //     } else {
+        //         await t.rollback();
+        //         return res.status(400).json({
+        //             success: false,
+        //             message: "Selected items exceed your seasonal budget for this delivery. Please adjust quantities or pay the overage amount.",
+        //             overage: overage.toFixed(2),
+        //             needs_payment: true
+        //         });
+        //     }
+        // }
 
         // Delete existing selections for this schedule
         await ScheduleSeasonalSelection.destroy({
