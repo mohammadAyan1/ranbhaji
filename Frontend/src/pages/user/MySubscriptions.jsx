@@ -177,10 +177,10 @@ export default function MySubscriptions() {
   };
 
   const handleSaveSeasonal = async () => {
-    if (isOverBudget) {
-      alert("Budget exceeded! Please reduce product quantities.");
-      return;
-    }
+    // if (isOverBudget) {
+    //   alert("Budget exceeded! Please reduce product quantities.");
+    //   return;
+    // }
     setSavingSeasonal(true);
     setSeasonalMsg("");
     const items = Object.entries(selectedItems)
@@ -252,10 +252,10 @@ export default function MySubscriptions() {
   };
 
   const handleSaveScheduleSelection = async (scheduleId) => {
-    if (isActiveOverBudget) {
-      alert("Budget exceeded! Please reduce product quantities.");
-      return;
-    }
+    // if (isActiveOverBudget) {
+    //   alert("Budget exceeded! Please reduce product quantities.");
+    //   return;
+    // }
     setSavingScheduleSelection(true);
     setScheduleSelectionMsg("");
     const items = Object.entries(selectedScheduleItems)
@@ -695,11 +695,11 @@ export default function MySubscriptions() {
         <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-gray-300 rounded-2xl p-6 w-full max-w-md animate-slide-up space-y-4">
             <div className="flex items-center justify-between mb-2">
-               <h3 className="font-bold text-gray-900 text-lg font-gradient">Select Start Date 📅</h3>
-               <button onClick={() => setConfirmingStartSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
+              <h3 className="font-bold text-gray-900 text-lg font-gradient">Select Start Date 📅</h3>
+              <button onClick={() => setConfirmingStartSub(null)} className="text-gray-600 hover:text-gray-900 text-2xl leading-none">&times;</button>
             </div>
             <p className="text-gray-600 text-xs">
-              Please choose a start date for your package. 
+              Please choose a start date for your package.
               {new Date().getHours() >= 20 ? " Since it's past 8 PM, the earliest available date is the day after tomorrow." : " Order before 8 PM to start tomorrow."}
             </p>
             {confirmStartMsg && (
@@ -709,13 +709,13 @@ export default function MySubscriptions() {
             )}
             <div>
               <label className="label">Start Date</label>
-              <input 
-                type="date" 
-                className="input" 
-                min={getMinStartDate()} 
-                value={startDateVal} 
-                onChange={e => setStartDateVal(e.target.value)} 
-                required 
+              <input
+                type="date"
+                className="input"
+                min={getMinStartDate()}
+                value={startDateVal}
+                onChange={e => setStartDateVal(e.target.value)}
+                required
               />
             </div>
             <div className="flex gap-3 pt-2">
@@ -797,7 +797,7 @@ export default function MySubscriptions() {
                                     const carriedQty = parseFloat(sel.carried_over_qty || 0);
                                     const returnedQty = parseFloat(sel.returned_qty || 0);
                                     const baseQty = parseFloat(sel.qty_gm) - carriedQty - returnedQty;
-                                    
+
                                     let breakdown = [];
                                     if (baseQty > 0) breakdown.push(`${baseQty.toFixed(0)}`);
                                     if (carriedQty > 0) breakdown.push(`${carriedQty.toFixed(0)} carry`);
@@ -805,7 +805,7 @@ export default function MySubscriptions() {
 
                                     return (
                                       <span key={sel.id} className="bg-fresh-950/40 border border-fresh-800/50 text-fresh-600 text-xs px-2 py-0.5 rounded-lg flex items-center gap-1">
-                                        {sel.Product?.name} 
+                                        {sel.Product?.name}
                                         <span className="font-semibold ml-1">
                                           {parseFloat(sel.qty_gm)}{sel.Product?.unit}
                                         </span>
@@ -1030,7 +1030,7 @@ export default function MySubscriptions() {
                     ) : (
                       <div className="flex items-center gap-3 mt-1.5">
                         <p className="text-yellow-400 text-xs font-semibold">⚠️ Start date not confirmed</p>
-                        <button 
+                        <button
                           onClick={() => { setConfirmingStartSub(sub); setStartDateVal(""); setConfirmStartMsg(""); }}
                           className="btn-primary text-[10px] py-1 px-3"
                         >
