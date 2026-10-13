@@ -177,10 +177,10 @@ export default function MySubscriptions() {
   };
 
   const handleSaveSeasonal = async () => {
-    // if (isOverBudget) {
-    //   alert("Budget exceeded! Please reduce product quantities.");
-    //   return;
-    // }
+    if (isOverBudget) {
+      alert("Budget exceeded! Please reduce product quantities.");
+      return;
+    }
     setSavingSeasonal(true);
     setSeasonalMsg("");
     const items = Object.entries(selectedItems)
@@ -252,10 +252,10 @@ export default function MySubscriptions() {
   };
 
   const handleSaveScheduleSelection = async (scheduleId) => {
-    // if (isActiveOverBudget) {
-    //   alert("Budget exceeded! Please reduce product quantities.");
-    //   return;
-    // }
+    if (isActiveOverBudget) {
+      alert("Budget exceeded! Please reduce product quantities.");
+      return;
+    }
     setSavingScheduleSelection(true);
     setScheduleSelectionMsg("");
     const items = Object.entries(selectedScheduleItems)
