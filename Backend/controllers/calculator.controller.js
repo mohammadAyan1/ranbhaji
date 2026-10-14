@@ -29,12 +29,24 @@ export const createDraft = async (req, res) => {
         }, { transaction: t });
 
         if (items && items.length > 0) {
-            const itemRows = items.map(item => ({
-                draft_id: draft.id,
-                product_id: parseInt(item.product_id),
-                qty_gm: parseFloat(item.qty_gm || 0),
-                is_fixed: !!item.is_fixed,
-                is_seasonal: !!item.is_seasonal
+            const itemRows = await Promise.all(items.map(async item => {
+                let pricePerGm = item.purchase_price_per_gm != null ? parseFloat(item.purchase_price_per_gm) : null;
+                if (pricePerGm == null) {
+                    if (item.is_seasonal && (calculation_mode || 'highest') === 'custom' && custom_price) {
+                        pricePerGm = parseFloat(custom_price) / 1000;
+                    } else {
+                        const prod = await Product.findByPk(item.product_id);
+                        pricePerGm = prod ? parseFloat(prod.purchase_price_per_gm || 0) : null;
+                    }
+                }
+                return {
+                    draft_id: draft.id,
+                    product_id: parseInt(item.product_id),
+                    qty_gm: parseFloat(item.qty_gm || 0),
+                    is_fixed: !!item.is_fixed,
+                    is_seasonal: !!item.is_seasonal,
+                    purchase_price_per_gm: pricePerGm
+                };
             }));
             await CalculatorDraftItem.bulkCreate(itemRows, { transaction: t });
         }
@@ -86,12 +98,24 @@ export const updateDraft = async (req, res) => {
 
         // Insert new items
         if (items && items.length > 0) {
-            const itemRows = items.map(item => ({
-                draft_id: draft.id,
-                product_id: parseInt(item.product_id),
-                qty_gm: parseFloat(item.qty_gm || 0),
-                is_fixed: !!item.is_fixed,
-                is_seasonal: !!item.is_seasonal
+            const itemRows = await Promise.all(items.map(async item => {
+                let pricePerGm = item.purchase_price_per_gm != null ? parseFloat(item.purchase_price_per_gm) : null;
+                if (pricePerGm == null) {
+                    if (item.is_seasonal && (calculation_mode || draft.calculation_mode) === 'custom' && (custom_price || draft.custom_price)) {
+                        pricePerGm = parseFloat(custom_price || draft.custom_price) / 1000;
+                    } else {
+                        const prod = await Product.findByPk(item.product_id);
+                        pricePerGm = prod ? parseFloat(prod.purchase_price_per_gm || 0) : null;
+                    }
+                }
+                return {
+                    draft_id: draft.id,
+                    product_id: parseInt(item.product_id),
+                    qty_gm: parseFloat(item.qty_gm || 0),
+                    is_fixed: !!item.is_fixed,
+                    is_seasonal: !!item.is_seasonal,
+                    purchase_price_per_gm: pricePerGm
+                };
             }));
             await CalculatorDraftItem.bulkCreate(itemRows, { transaction: t });
         }

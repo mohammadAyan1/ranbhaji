@@ -51,12 +51,38 @@ export const createPackage = async (req, res) => {
 
 
         if (fixed_items && fixed_items.length > 0) {
-            const fixedRows = fixed_items.map(item => ({ package_id: pkg.id, product_id: item.product_id, default_qty_gm: item.default_qty_gm }));
+            const fixedRows = [];
+            for (const item of fixed_items) {
+                const product = await Product.findByPk(item.product_id);
+                const frozenPrice = item.purchase_price_per_gm != null
+                    ? parseFloat(item.purchase_price_per_gm)
+                    : (product ? parseFloat(product.purchase_price_per_gm || 0) : 0);
+                fixedRows.push({
+                    package_id: pkg.id,
+                    product_id: item.product_id,
+                    default_qty_gm: item.default_qty_gm,
+                    purchase_price_per_gm: frozenPrice
+                });
+            }
             await PackageFixedItem.bulkCreate(fixedRows, { transaction: t });
         }
 
         if (seasonal_pool && seasonal_pool.length > 0) {
-            const poolRows = seasonal_pool.map(product_id => ({ package_id: pkg.id, product_id }));
+            const poolRows = [];
+            for (const spItem of seasonal_pool) {
+                const prodId = typeof spItem === 'object' && spItem !== null ? spItem.product_id : spItem;
+                const incomingPrice = typeof spItem === 'object' && spItem !== null ? spItem.purchase_price_per_gm : null;
+                let frozenPrice = incomingPrice;
+                if (frozenPrice == null) {
+                    const prod = await Product.findByPk(prodId);
+                    frozenPrice = prod ? parseFloat(prod.purchase_price_per_gm || 0) : 0;
+                }
+                poolRows.push({
+                    package_id: pkg.id,
+                    product_id: prodId,
+                    purchase_price_per_gm: parseFloat(frozenPrice || 0)
+                });
+            }
             await PackageSeasonalPool.bulkCreate(poolRows, { transaction: t });
         }
 
@@ -240,22 +266,41 @@ export const updatePackage = async (req, res) => {
 
         if (fixed_items) {
             let fixed_cost_per_service = 0;
+            const fixedRows = [];
             for (const item of fixed_items) {
                 const product = await Product.findByPk(item.product_id);
                 if (!product) { await t.rollback(); return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` }); }
-                fixed_cost_per_service += parseFloat(item.default_qty_gm) * parseFloat(product.purchase_price_per_gm);
+                const freshPrice = parseFloat(product.purchase_price_per_gm || 0);
+                fixed_cost_per_service += parseFloat(item.default_qty_gm) * freshPrice;
+                fixedRows.push({
+                    package_id: pkg.id,
+                    product_id: item.product_id,
+                    default_qty_gm: item.default_qty_gm,
+                    purchase_price_per_gm: freshPrice
+                });
             }
             if (fixed_cost_per_service >= per_service_amount) {
                 await t.rollback();
                 return res.status(400).json({ success: false, message: `Fixed item cost (₹${fixed_cost_per_service.toFixed(2)}) must be < per-service amount (₹${per_service_amount.toFixed(2)})` });
             }
             await PackageFixedItem.destroy({ where: { package_id: pkg.id }, transaction: t });
-            await PackageFixedItem.bulkCreate(fixed_items.map(i => ({ package_id: pkg.id, product_id: i.product_id, default_qty_gm: i.default_qty_gm })), { transaction: t });
+            await PackageFixedItem.bulkCreate(fixedRows, { transaction: t });
         }
 
         if (seasonal_pool) {
+            const poolRows = [];
+            for (const spItem of seasonal_pool) {
+                const prodId = typeof spItem === 'object' && spItem !== null ? spItem.product_id : spItem;
+                const product = await Product.findByPk(prodId);
+                const freshPrice = product ? parseFloat(product.purchase_price_per_gm || 0) : 0;
+                poolRows.push({
+                    package_id: pkg.id,
+                    product_id: prodId,
+                    purchase_price_per_gm: freshPrice
+                });
+            }
             await PackageSeasonalPool.destroy({ where: { package_id: pkg.id }, transaction: t });
-            await PackageSeasonalPool.bulkCreate(seasonal_pool.map(product_id => ({ package_id: pkg.id, product_id })), { transaction: t });
+            await PackageSeasonalPool.bulkCreate(poolRows, { transaction: t });
         }
 
         if (max_select_count !== undefined || default_seasonal_qty_gm !== undefined || seasonal_quantities !== undefined) {

@@ -293,16 +293,18 @@ export default function MySubscriptions() {
 
   const activeFixedCost = Object.entries(editingScheduleFixedItems).reduce((sum, [pid, qty]) => {
     const fi = schedulesFixedItems.find(item => item.product_id === parseInt(pid));
-    if (fi && fi.Product) {
-      return sum + (parseFloat(qty || 0) * parseFloat(fi.Product.purchase_price_per_gm || 0));
+    if (fi) {
+      const price = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0);
+      return sum + (parseFloat(qty || 0) * price);
     }
     return sum;
   }, 0);
 
   const activeSeasonalCost = Object.entries(selectedScheduleItems).reduce((sum, [pid, qty]) => {
     const sp = schedulesPool.find(item => item.product_id === parseInt(pid));
-    if (sp && sp.Product) {
-      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.purchase_price_per_gm || 0));
+    if (sp) {
+      const price = sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0);
+      return sum + (parseFloat(qty || 0) * price);
     }
     return sum;
   }, 0);
@@ -321,13 +323,15 @@ export default function MySubscriptions() {
 
   const fixedCost = fixedItems.reduce((sum, item) => {
     const qty = parseFloat(item.qty_gm || 0);
-    return sum + (qty * parseFloat(item.Product?.purchase_price_per_gm || 0));
+    const price = item.purchase_price_per_gm != null ? parseFloat(item.purchase_price_per_gm) : parseFloat(item.Product?.purchase_price_per_gm || 0);
+    return sum + (qty * price);
   }, 0);
 
   const seasonalCost = Object.entries(selectedItems).reduce((sum, [pid, qty]) => {
     const sp = seasonalPool.find(item => item.product_id === parseInt(pid));
-    if (sp && sp.Product) {
-      return sum + (parseFloat(qty || 0) * parseFloat(sp.Product.purchase_price_per_gm || 0));
+    if (sp) {
+      const price = sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0);
+      return sum + (parseFloat(qty || 0) * price);
     }
     return sum;
   }, 0);
@@ -434,7 +438,8 @@ export default function MySubscriptions() {
                             <span className="text-gray-500 text-xs">{fi.Product?.unit || "gm"}</span>
                           </div>
                           {(() => {
-                            const maxAddable = remainingBudget > 0 && fi.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(fi.Product.purchase_price_per_gm) * 50)) * 50 : 0;
+                            const pricePerGm = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0);
+                            const maxAddable = remainingBudget > 0 && pricePerGm ? Math.floor(remainingBudget / (pricePerGm * 50)) * 50 : 0;
                             return maxAddable >= 50 ? (
                               <button
                                 type="button"
@@ -870,7 +875,8 @@ export default function MySubscriptions() {
                                               <span className="text-gray-500 text-xs">{fi.Product?.unit || "gm"}</span>
                                             </div>
                                             {(() => {
-                                              const maxAddable = activeRemainingBudget > 0 && fi.Product?.purchase_price_per_gm ? Math.floor(activeRemainingBudget / (parseFloat(fi.Product.purchase_price_per_gm) * 50)) * 50 : 0;
+                                              const pricePerGm = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0);
+                                              const maxAddable = activeRemainingBudget > 0 && pricePerGm ? Math.floor(activeRemainingBudget / (pricePerGm * 50)) * 50 : 0;
                                               return maxAddable >= 50 ? (
                                                 <button
                                                   type="button"
@@ -948,7 +954,8 @@ export default function MySubscriptions() {
                                                 <span className="text-[10px] text-gray-600">{sp.Product?.unit}</span>
                                               </div>
                                               {(() => {
-                                                const maxAddable = activeRemainingBudget > 0 && sp.Product?.purchase_price_per_gm ? Math.floor(activeRemainingBudget / (parseFloat(sp.Product.purchase_price_per_gm) * 50)) * 50 : 0;
+                                                const pricePerGm = sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0);
+                                                const maxAddable = activeRemainingBudget > 0 && pricePerGm ? Math.floor(activeRemainingBudget / (pricePerGm * 50)) * 50 : 0;
                                                 return maxAddable >= 50 ? (
                                                   <button
                                                     type="button"

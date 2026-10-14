@@ -1,170 +1,259 @@
-# 📋 Complete Implementation Plan: Package Price Snapshot, Seasonal Option Pricing & Subscription Serving Budget Fix
+# 📋 Implementation Plan: Package Price Freeze, Calculator Seasonal Options & Fallback System
 
-Ye updated document **Rambhaji (FreshBox)** ke complete architecture aur naye changes ko cover karta hai, jisme:
-1. **Master Tab -> Package Tab:** Creation-time Avg Cost Price lock, Update-time refresh, aur Fallback system.
-2. **Calculator Tab -> Package Calculator:** Draft Price lock, Seasonal 3 Options (Highest, Average, Custom Price) formula.
-3. **User Subscription & Serving Selection (`MySubscriptions.jsx` & `subscription.controller.js`):**
-   - User ne jo code uncomment kiya hai (Frontend Budget Alert & Backend Overage Check).
-   - "Serving amount se zyada hai" wala issue kyu aa raha tha aur uska root cause.
-   - User ko milne wala **"💡 Xg add kar sakte ho"** suggestion bilkul accurate kaise banega.
-   - User apne pure **Per-Service Amount** tak order laga sake aur usse zyada hone par hi alert/overage mile.
+> **Document Type:** Implementation Architecture & Execution Plan  
+> **Language:** Hinglish (Hindi + English)  
+> **Status:** Ready for Review & Implementation  
 
 ---
 
-## 🧐 1. Problem Ka Root Cause Analysis (Aapka Issue Kyu Aaya Tha?)
+## 📌 1. Maine Kya Samjha? (Requirements Understanding)
 
-Aapne bataya:
-> *"jab maine apne package calculate price se package banaya aur uske baad apply kiya toh maine price banaya apne avg cost price se tha, but jab mera user us package ka product ki quantity daal raha tha toh notification mil raha tha ki serving amount se zyada hai... is wajah se maine comment kiya tha, ab uncomment kiya hai."*
+Aapne teen (3) primary requirements aur do (2) critical protection rules bataye hain:
 
-### Ye Issue Kyu Aa Raha Tha? (The 3 Core Reasons)
-1. **Catalog vs Snapshotted Price Mismatch:**
-   - Calculator me package calculate karte waqt aapne seasonal item ka rate Custom Price (e.g. ₹200/kg) ya avg cost price se calculate kiya.
-   - Lekin jab subscriber user seasonal selection karta tha (`MySubscriptions.jsx` aur `subscription.controller.js`), backend aur frontend product catalog ki live `Product.purchase_price_per_gm` utha rahe the!
-   - Agar catalog me product ka rate alag tha, toh serving cost calculation instantly `per_service_amount` ko cross kar jaati thi aur alert aa jata tha.
-2. **Wallet Balance Cap Issue in Frontend (`MySubscriptions.jsx`):**
-   - Frontend me code likha tha:  
-     `const activeActualLimit = Math.min(schedulesPerServiceAmount, walletBalance);`
-   - Agar user ka wallet balance ₹0 tha (kyunki user ne online payment se subscription liya tha ya wallet khali tha), toh actual serving budget ₹0 ho jata tha! Fir user 50g bhi daalta tha toh bolta tha "Limit exceeded"!
-   - **Fix:** Subscription deliveries ke liye serving limit hamesha `per_service_amount` hona chahiye, na ki wallet balance se cap hona chahiye.
-3. **Suggestion Calculation Mismatch:**
-   - Button `"💡 {maxAddable}g add kar sakte ho"` product catalog ke live price se divide kar raha tha.
-   - Is wajah se suggestion galat calculate hota tha, aur button dabate hi budget exceed ho jata tha.
+### Requirement A: Master Tab -> Package Tab (`/admin/packages`)
+1. **Creation Time Price Freeze (Cost Lock):**
+   - Jab admin naya package banata hai, us samay fixed items aur seasonal pool ke selected products ki jo us waqt ki **Average Cost Price (`purchase_price_per_gm`)** hogi, wo us package ke sath hamesha ke liye lock/freeze ho jayegi.
+   - Package create hone ke baad agar admin Product Master me jaakar kisi bhi product ki avg cost price change/update karta hai, toh bhi purane banaye gaye package ke andar jo locked cost price hai, uspe **koi farak nahi padega** (wo wahi locked price hi rahegi).
+
+2. **Update Time Refresh Rule:**
+   - Agar admin kisi package ko **Edit / Update** karta hai:
+     - Us update karte waqt products ki database me jo **current (latest) price** hogi, package update hone par wahi nayi price package me refresh hokar set ho jayegi.
 
 ---
 
-## 🎯 2. Hamne Kya Samjha (Requirements Overview)
-
-### A. Master Tab -> Package Management (`/admin/packages`)
-1. **Creation Time Price Freeze:**
-   - Package create karte samay selected fixed aur seasonal products ki us samay ki **Average Cost Price (`purchase_price_per_gm`)** freeze ho jayegi.
-   - Baad me Product Master me price change hone par bhi is package me locked price nahi badlegi.
-2. **Package Update Rule:**
-   - Agar Admin kisi package ko Update karta hai, toh us update ke samay product ki jo latest price database me hogi, wo nayi snapshotted price ban jayegi.
-3. **Fallback System:**
-   - Purane packages me agar snapshot price NULL ho, toh `item.purchase_price_per_gm || item.Product?.purchase_price_per_gm || 0` se bina kisi bug ke chalega.
-
----
-
-### B. Calculator Tab -> Package Calculator (`/admin/calculators/package`)
-1. **Drafts Price Lock:**
-   - Calculator me draft save karte waqt items ka rate freeze hoga.
-2. **Seasonal Products ke 3 Options (Highest, Average, Custom):**
-   - **Option 1 (Custom Price):** Agar user Custom Price select karta hai (e.g. ₹200/kg), toh seasonal pool ke **saare selected products ka rate wahi custom price ban jayega** (`customPrice / 1000` per gm). Calculator ka budget aur draft items isi custom rate ke according chalenge.
-   - **Option 2 (Highest Price):** Selected seasonal items me se highest product ka purchase rate seasonal base rate banega.
-   - **Option 3 (Average Price):** Selected seasonal items ka average purchase rate seasonal base rate banega.
-3. **Apply Draft to Package:**
-   - Calculator draft jab Package Form me import hoga (`Apply Draft`), toh yahi locked rates package creation me transfer honge.
+### Requirement B: Calculator Tab -> Package Calculator (`/admin/calculators/package`)
+1. **Cost Lock in Drafts:**
+   - Package Calculator me simulation draft save karte samay items ka purchase rate freeze hoga.
+2. **Seasonal Products ke 3 Pricing Options (Highest, Average, Custom Price):**
+   - **Option 1 (Highest Price):** Selected seasonal products me se jo sabse highest rate hoga, wahi seasonal rate banega.
+   - **Option 2 (Average Price):** Selected seasonal products ka average rate seasonal base banega.
+   - **Option 3 (Custom Price - Special Rule):** Agar admin **Custom Price** select karta hai (jaise ₹200/kg):
+     - Seasonal pool me jitne bhi selected products hain, **un sabhi products ka rate wahi Custom Price ban jayega** (`customPrice / 1000` per gm).
+     - Calculator ka seasonal price calculation, draft items, aur draft save hone ke baad package creation me har seasonal item usi custom price ke according chalega.
+3. **Apply Draft Flow:**
+   - Jab calculator se draft ko Package Form me import kiya jayega (`Apply Draft`), toh yahi snapshotted fixed aur seasonal prices package form me aayenge aur package creation me lock honge.
 
 ---
 
-### C. User Subscription & Seasonal Serving Selection
-1. **Accurate Budget Calculation:**
-   - User ke selection form me product ki cost package ke **snapshotted / seasonal option price** se calculate hogi.
-2. **Exact Per-Serving Budget Utilization:**
-   - User apne pooray `per_service_amount` tak ka sabji select kar sakega bina kisi false alert ke.
-3. **Smart Suggestions ("💡 Xg add kar sakte ho"):**
-   - Suggestion formula item ke snapshotted rate aur bache huye `remainingBudget` ke hisaab se perfect quantity suggest karega.
-4. **Alert & Overage Enforcement:**
-   - User ne jo code uncomment kiya hai:
-     - Frontend me: `if (isActiveOverBudget) { alert("Budget exceeded! Please reduce product quantities."); return; }`
-     - Backend me: `if (overage > 0) { ... overage charge or reject ... }`
-   - Ye tabhi fire hoga jab user sach me serving budget se zyada items daalega.
+### Requirement C: Fallback System (Zero Bug / Zero Crash Guarantee)
+- Aapne pehle se kai packages database me bana rakhe hain.
+- Un purane packages me naya column (`purchase_price_per_gm`) initially `NULL` hoga.
+- **Fallback Rule:**
+  ```javascript
+  const effectivePrice = item.purchase_price_per_gm != null
+    ? parseFloat(item.purchase_price_per_gm)
+    : parseFloat(item.Product?.purchase_price_per_gm || 0);
+  ```
+  - Har jagah (Admin Packages, Package Calculator, User Subscriptions, Scheduling) yeh fallback check lagega.
+  - Isse purane packages me **1% bhi error ya bug create nahi hoga**, aur naye packages locked rate par chalenge!
 
 ---
 
-## 🛠️ 3. Database Schema & Migration Changes
-
-### Tables & New Columns
-1. **`package_fixed_items`**
-   - Column: `purchase_price_per_gm DECIMAL(10, 4) NULL`
-2. **`package_seasonal_pool`**
-   - Column: `purchase_price_per_gm DECIMAL(10, 4) NULL`
-3. **`calculator_draft_items`**
-   - Column: `purchase_price_per_gm DECIMAL(10, 4) NULL`
-
-### Migration Script: `Backend/add_package_price_columns.js`
-Safe script execute karenge jo check karke `ALTER TABLE` query run karegi bina kisi existing data ko nuksaan pahunchaye.
+### Requirement D: User Subscription & Serving Selection Alignment
+- Jab subscriber user delivery ke liye seasonal items choose karega (`MySubscriptions.jsx` & `subscription.controller.js`), backend aur frontend product catalog ke live price ke bajaye package ke locked / snapshotted price se calculate karenge.
+- Isse user ko jo calculator se package banaya gaya tha, exact wahi budget utilization milega aur false "Budget Exceeded" alerts nahi aayenge.
 
 ---
 
-## 📦 4. Detailed File-Wise Implementation Plan
+## 🗄️ 2. Database Schema & Migration Changes
+
+Hamare database me teen tables me ek naya column `purchase_price_per_gm DECIMAL(10, 4) NULL` add kiya jayega:
+
+| Table Name | Column To Add | Data Type | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **`package_fixed_items`** | `purchase_price_per_gm` | `DECIMAL(10, 4)` | `NULL` | Fixed product ka package creation time ka frozen rate per gram |
+| **`package_seasonal_pool`** | `purchase_price_per_gm` | `DECIMAL(10, 4)` | `NULL` | Seasonal product ka frozen rate per gram (Custom/Option rate) |
+| **`calculator_draft_items`** | `purchase_price_per_gm` | `DECIMAL(10, 4)` | `NULL` | Draft calculator simulation ka frozen rate per gram |
+
+### Safe Migration Script: `Backend/scripts/add_package_price_columns.js`
+- Script pehle check karegi `SHOW COLUMNS LIKE 'purchase_price_per_gm'`.
+- Agar column present nahi hai, tabhi `ALTER TABLE ... ADD COLUMN ...` execute karegi.
+- Existing data safely preserve rahega (sab me `NULL` rahega jo hamare fallback se handle hoga).
+
+---
+
+## 🛠️ 3. Detailed File-Wise Implementation Plan
 
 ### 1. `Backend/models/index.js`
-- `PackageFixedItem`, `PackageSeasonalPool`, aur `CalculatorDraftItem` models me `purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4), allowNull: true }` add karenge.
+**Changes:**
+- `PackageFixedItem` me `purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4), allowNull: true }` add karenge.
+- `PackageSeasonalPool` me `purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4), allowNull: true }` add karenge.
+- `CalculatorDraftItem` me `purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4), allowNull: true }` add karenge.
+
+---
 
 ### 2. `Backend/controllers/package.controller.js`
-- **`createPackage`:**
-  - Fixed items me product ki current cost price freeze karenge:
-    `pricePerGm = item.purchase_price_per_gm || product.purchase_price_per_gm`.
-  - Seasonal pool me seasonal product ki snapshotted price (custom price agar draft se aaya hai ya product price) store karenge.
-- **`updatePackage`:**
-  - Jab admin package update karega, fresh current product prices DB se query karke package item rows me naya snapshot save karenge.
-- **`getPackages` & `getPackageById`:**
-  - Admin ke liye items me `purchase_price_per_gm` return karenge.
+**A. `createPackage`:**
+- Fixed items insert karte waqt:
+  - Agar frontend draft se `item.purchase_price_per_gm` bhej raha hai, toh wahi lenge.
+  - Agar normal manual create hai, toh `product.purchase_price_per_gm` ko DB se fetch karke snapshot column me save karenge.
+- Seasonal pool insert karte waqt:
+  - `seasonal_pool` payload me product ID ke sath `purchase_price_per_gm` (agar draft/custom price se aaya hai) ya product catalog ka `purchase_price_per_gm` freeze karenge:
+    ```javascript
+    const poolRows = await Promise.all(seasonal_pool.map(async (spItem) => {
+        const prodId = typeof spItem === 'object' ? spItem.product_id : spItem;
+        const incomingPrice = typeof spItem === 'object' ? spItem.purchase_price_per_gm : null;
+        let finalPrice = incomingPrice;
+        if (finalPrice == null) {
+            const prod = await Product.findByPk(prodId);
+            finalPrice = prod ? prod.purchase_price_per_gm : 0;
+        }
+        return {
+            package_id: pkg.id,
+            product_id: prodId,
+            purchase_price_per_gm: finalPrice
+        };
+    }));
+    await PackageSeasonalPool.bulkCreate(poolRows, { transaction: t });
+    ```
+
+**B. `updatePackage` (Aapka Specific Rule):**
+- *"agar mera admin kissi package ko update karta hai toh us samay un product ka jo price hoga wahi chalega"*
+- Package update karte waqt DB se un selected fixed aur seasonal products ki **latest current `purchase_price_per_gm`** query karenge:
+  ```javascript
+  // Update time: Fresh product catalog prices become new frozen snapshot
+  const fixedRows = [];
+  for (const item of fixed_items) {
+      const product = await Product.findByPk(item.product_id);
+      fixedRows.push({
+          package_id: pkg.id,
+          product_id: item.product_id,
+          default_qty_gm: item.default_qty_gm,
+          purchase_price_per_gm: product.purchase_price_per_gm // Fresh latest price!
+      });
+  }
+  await PackageFixedItem.destroy({ where: { package_id: pkg.id }, transaction: t });
+  await PackageFixedItem.bulkCreate(fixedRows, { transaction: t });
+
+  const poolRows = [];
+  for (const spId of seasonal_pool) {
+      const prodId = typeof spId === 'object' ? spId.product_id : spId;
+      const product = await Product.findByPk(prodId);
+      poolRows.push({
+          package_id: pkg.id,
+          product_id: prodId,
+          purchase_price_per_gm: product.purchase_price_per_gm // Fresh latest price!
+      });
+  }
+  await PackageSeasonalPool.destroy({ where: { package_id: pkg.id }, transaction: t });
+  await PackageSeasonalPool.bulkCreate(poolRows, { transaction: t });
+  ```
+
+**C. `getPackages` & `getPackageById`:**
+- Admin ke liye `FixedItems` aur `SeasonalPool` me `purchase_price_per_gm` return karenge.
+- Non-admin ke liye internal purchase rates hide rahenge jaise pehle the.
+
+---
 
 ### 3. `Backend/controllers/calculator.controller.js`
-- **`createDraft` & `updateDraft`:**
-  - Fixed items ke liye: unka `purchase_price_per_gm` store karenge.
-  - Seasonal items ke liye:
-    - Agar `calculation_mode === 'custom'` aur `custom_price` hai: toh saare seasonal items me `custom_price / 1000` store karenge!
-    - Agar `highest` ya `average` hai: calculate kiya gaya base seasonal rate store karenge.
+**A. `createDraft` & `updateDraft`:**
+- `items` payload me aane wale `purchase_price_per_gm` ko `CalculatorDraftItem` me store karenge.
+- Seasonal items ke liye:
+  - Agar `calculation_mode === 'custom'` aur `custom_price` provided hai:
+    - Sabhi seasonal items me `purchase_price_per_gm = custom_price / 1000` store hoga.
+  - Agar `highest` ya `average` mode hai:
+    - Calculated mode ka `purchase_price_per_gm` store hoga.
+
+**B. `getDrafts`:**
+- Draft items me `purchase_price_per_gm` include karke bhejenge, aur fallback me `Product.purchase_price_per_gm` provide karenge.
+
+---
 
 ### 4. `Frontend/src/pages/admin/Calculators/PackageCalculator.jsx`
-- Custom Price mode me UI par har seasonal product card me `Custom: ₹${customPrice}/kg` display karenge.
-- Seasonal budget calculation `customPrice / 1000` ke hisaab se chalega.
-- Draft save karte waqt items payload me item-wise freeze rate attach hoga.
-- Draft load karte samay saved freeze rate priority lega.
+**A. Seasonal 3 Options UI & Calculations:**
+- **Custom Price Mode:**
+  - Jab admin `calculationMode === 'custom'` chunta hai aur `customPrice` input karta hai (e.g. ₹200/kg):
+  - Har selected seasonal product card par display hoga:
+    `Custom: ₹${customPrice}/kg` (na ki product ka original catalog price).
+  - Seasonal price calculation me har product ka rate `(customPrice / 1000)` gm banega.
+- **Highest Price Mode:**
+  - Selected seasonal products me se max rate display aur calculate hoga.
+- **Average Price Mode:**
+  - Selected seasonal products ka avg rate display aur calculate hoga.
+
+**B. Save Draft:**
+- `saveDraftData` me items payload create karte waqt har item ke sath us mode ka calculated `purchase_price_per_gm` attach hoga.
+  - Fixed items: unka catalog cost `prod.purchase_price_per_gm`.
+  - Seasonal items: agar custom price mode hai toh `customPrice / 1000`, highest hai toh highest rate, average hai toh average rate.
+
+---
 
 ### 5. `Frontend/src/pages/admin/AdminPackages.jsx`
-- Fixed items list me locked rate display karenge.
-- Draft import (`handleApplyDraft`) karte waqt locked fixed aur seasonal prices package form state me pass karenge.
-- Live validation preview me locked prices consider hongi.
+**A. `handleApplyDraft`:**
+- Draft import karte waqt items se snapshotted `purchase_price_per_gm` receive karenge.
+- Fixed items aur Seasonal pool me locked price set hogi.
 
-### 6. `Backend/controllers/subscription.controller.js`
-- **`getSeasonalOptions` & `getUpcomingSelections`:**
-  - Response me har fixed item aur seasonal item ka snapshotted `purchase_price_per_gm` return karenge:
-    `effectivePrice = item.purchase_price_per_gm || item.Product?.purchase_price_per_gm`.
-  - Fixed cost aur seasonal budget snapshotted price ke hisaab se calculate honge.
-- **`selectSeasonalItems` & `saveScheduleSeasonal`:**
-  - Validation karte waqt item cost product catalog ke price ke bajaye **package ke snapshotted price** se calculate hoga:
-    ```javascript
-    const pricePerGm = pkgItem?.purchase_price_per_gm || product.purchase_price_per_gm;
-    total_cost += parseFloat(item.qty_gm) * parseFloat(pricePerGm);
-    ```
-  - Isse exact match banega aur genuine budget tak false alert nahi aayega!
+**B. UI Display & Validation:**
+- Fixed items table me display:
+  - Agar locked rate available hai (draft ya existing package): locked rate dikhayega.
+  - Agar naya select kiya hai: current product price dikhayega.
+- Live validation `validationResult`:
+  `fixed_cost += parseFloat(fi.default_qty_gm) * parseFloat(fi.purchase_price_per_gm || product.purchase_price_per_gm || 0);`
 
-### 7. `Frontend/src/pages/user/MySubscriptions.jsx`
-- **Budget Limit Fix:**
-  - `activeActualLimit = schedulesPerServiceAmount` (Wallet balance se cap nahi karenge kyunki delivery subscription ka part hai).
-  - `actualLimit = perServiceAmount`.
-- **Cost Calculation:**
-  - `itemCost = qty * (item.purchase_price_per_gm || item.Product?.purchase_price_per_gm)`.
-- **Suggestion Button ("💡 Xg add kar sakte ho"):**
-  - Formula:  
-    `const pricePerGm = sp.purchase_price_per_gm || sp.Product?.purchase_price_per_gm;`  
-    `const maxAddable = activeRemainingBudget > 0 && pricePerGm ? Math.floor(activeRemainingBudget / (pricePerGm * 50)) * 50 : 0;`
-  - Ab suggestion par click karne se total cost exact budget ke andar rahegi, kabhi bhi overage alert trigger nahi karegi.
-- **Uncommented Alert:**
-  - `if (isActiveOverBudget) alert(...)` aur `if (isOverBudget) alert(...)` active rahenge aur sirf tab alert denge jab user limit cross karega.
+**C. Form Submit (`handleSubmit`):**
+- Payload me fixed items: `[{ product_id, default_qty_gm, purchase_price_per_gm }]`.
+- Payload me seasonal pool: `[{ product_id, purchase_price_per_gm }]`.
 
 ---
 
-## 🛡️ 5. Bug Prevention Matrix
-
-| Potential Issue | Hamara Solution |
-| :--- | :--- |
-| **Purane Packages Crash Hone Ka Khatra** | Fallback operator `item.purchase_price_per_gm || item.Product?.purchase_price_per_gm || 0` har jagah apply hoga. |
-| **Calculator vs Subscription Price Mismatch** | Package create hone par calculator ka custom/option price package items me freeze hoga aur wahi user subscription me read hoga. |
-| **User Ko False "Budget Exceeded" Alert** | `walletBalance` ka galat cap hatayenge aur snapshotted price match karenge. |
-| **Admin Changes Product Price Later** | Packages apne locked column se price padhenge, Product table me badlav hone par unpar koi asar nahi padega. |
-| **Admin Updates a Package** | Update route latest catalog prices se package items ke rate refresh karega. |
+### 6. `Backend/controllers/subscription.controller.js` & `MySubscriptions.jsx`
+**A. Seasonal Options & Upcomings:**
+- `getSeasonalOptions` aur `getUpcomingSelections` me:
+  - Fixed cost calculation:
+    `const pricePerGm = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0);`
+  - Seasonal pool response:
+    Har pool product me `effective_price_per_gm = sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0);`
+- `saveScheduleSeasonal`:
+  - Validation karte waqt overage calculation me package ki snapshotted price prefer hogi, fallback catalog price par jayega.
+  - Isse exact budget match hoga aur koi false overage trigger nahi hoga!
 
 ---
 
-## 🚀 6. Next Steps
+## 🛡️ 4. Fallback Architecture (Purane Packages Kaise Safe Rahenge?)
 
-Aap is updated plan ko dekh lijiye. Jaise hi aapka **GO-AHEAD / APPROVAL** milega:
-1. Migration script run karke MySQL columns add karenge.
-2. Backend Models & Controllers update karenge.
-3. Frontend Calculators, Admin Packages & User Subscription pages update karenge.
-4. Complete end-to-end verification karenge.
+Aapne specifically pucha ki purane packages me bug ya error na aaye:
+
+```
+                  ┌────────────────────────────────────────┐
+                  │ Product Rate Calculation Request       │
+                  └───────────────────┬────────────────────┘
+                                      │
+                                      ▼
+                  ┌────────────────────────────────────────┐
+                  │ Does item have locked                  │
+                  │ `purchase_price_per_gm` != null ?      │
+                  └──────┬──────────────────────────┬──────┘
+                         │ YES                      │ NO (Old Package)
+                         ▼                          ▼
+            ┌─────────────────────────┐    ┌─────────────────────────┐
+            │ Use Locked / Snapshot   │    │ Fallback to Active      │
+            │ Price:                  │    │ Product Master Rate:    │
+            │ item.purchase_price_    │    │ item.Product.purchase_  │
+            │ per_gm                  │    │ price_per_gm            │
+            └─────────────────────────┘    └─────────────────────────┘
+                         │                          │
+                         └───────────┬──────────────┘
+                                     ▼
+                   ┌───────────────────────────────────┐
+                   │ Final Effective Price:            │
+                   │ Guaranteed Valid Number (> 0)     │
+                   └───────────────────────────────────┘
+```
+
+1. **Database Level:** Columns `ALLOW NULL = TRUE` rahenge. Purani kisi bhi row me koi constraint error nahi aayega.
+2. **Backend Controller Level:** Har jagah `item.purchase_price_per_gm != null ? parseFloat(item.purchase_price_per_gm) : parseFloat(product.purchase_price_per_gm || 0)` check rahega.
+3. **Frontend Level:** Har jagah `fi.purchase_price_per_gm || product?.purchase_price_per_gm || 0` check rahega.
+4. **Result:** Purane packages waise hi chalenge jaise pehle chal rahe the, aur naye packages freeze rule ke sath secure ho jayenge.
+
+---
+
+## 🚀 5. Execution Steps
+
+1. **Step 1:** Migration script execute karenge (`Backend/scripts/add_package_price_columns.js`) to add columns in MySQL.
+2. **Step 2:** `Backend/models/index.js` me models update karenge.
+3. **Step 3:** `Backend/controllers/package.controller.js` me `createPackage` (freeze), `updatePackage` (fresh refresh), aur `getPackages` update karenge.
+4. **Step 4:** `Backend/controllers/calculator.controller.js` me draft seasonal 3-option price storage implement karenge.
+5. **Step 5:** `Frontend/src/pages/admin/Calculators/PackageCalculator.jsx` me seasonal custom price and options flow update karenge.
+6. **Step 6:** `Frontend/src/pages/admin/AdminPackages.jsx` me draft import & price freeze payload update karenge.
+7. **Step 7:** `Backend/controllers/subscription.controller.js` & `Frontend/src/pages/user/MySubscriptions.jsx` me snapshot price fallback integration ensure karenge.
+8. **Step 8:** End-to-end verification karenge (Package creation, price edit in master, package check, draft calculator, update package).

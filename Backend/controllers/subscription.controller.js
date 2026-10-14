@@ -692,7 +692,17 @@ export const getSeasonalOptions = async (req, res) => {
         if (!subscription) return res.status(404).json({ success: false, message: "Subscription not found" });
 
         const pkg = subscription.Package;
-        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active');
+        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active').map(sp => {
+            const spData = sp.toJSON ? sp.toJSON() : { ...sp };
+            const effectivePrice = sp.purchase_price_per_gm != null
+                ? parseFloat(sp.purchase_price_per_gm)
+                : parseFloat(sp.Product?.purchase_price_per_gm || 0);
+            if (spData.Product) {
+                spData.Product.purchase_price_per_gm = effectivePrice;
+            }
+            spData.purchase_price_per_gm = effectivePrice;
+            return spData;
+        });
         const maxCount = pkg.SeasonalConfig?.max_select_count;
 
         // Calculate package price details
@@ -704,21 +714,27 @@ export const getSeasonalOptions = async (req, res) => {
         const activePkgFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active');
 
         const fixed_items = subFixedItems.length > 0
-            ? subFixedItems.map(i => ({
-                product_id: i.product_id,
-                qty_gm: i.qty_gm,
-                Product: i.Product
-            }))
+            ? subFixedItems.map(i => {
+                const pkgFi = pkg.FixedItems.find(pfi => pfi.product_id === i.product_id);
+                return {
+                    product_id: i.product_id,
+                    qty_gm: i.qty_gm,
+                    Product: i.Product,
+                    purchase_price_per_gm: pkgFi?.purchase_price_per_gm != null ? pkgFi.purchase_price_per_gm : i.Product.purchase_price_per_gm
+                };
+            })
             : activePkgFixedItems.map(fi => ({
                 product_id: fi.product_id,
                 qty_gm: fi.default_qty_gm,
-                Product: fi.Product
+                Product: fi.Product,
+                purchase_price_per_gm: fi.purchase_price_per_gm != null ? fi.purchase_price_per_gm : fi.Product.purchase_price_per_gm
             }));
 
         // Calculate default fixed cost
         let fixed_cost = 0;
         for (const fi of fixed_items) {
-            fixed_cost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.purchase_price_per_gm);
+            const price = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product.purchase_price_per_gm || 0);
+            fixed_cost += parseFloat(fi.qty_gm) * price;
         }
         const seasonal_budget = per_service_amount - fixed_cost;
 
@@ -756,7 +772,8 @@ export const selectSeasonalItems = async (req, res) => {
             include: [{
                 model: Package, include: [
                     { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                    { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] }
+                    { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] },
+                    { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }
                 ]
             }]
         });
@@ -787,14 +804,18 @@ export const selectSeasonalItems = async (req, res) => {
         for (const item of inputFixedItems) {
             const product = await Product.findByPk(item.product_id);
             if (!product) { await t.rollback(); return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` }); }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
+            const pkgFi = pkg.FixedItems?.find(fi => fi.product_id === parseInt(item.product_id));
+            const price = pkgFi?.purchase_price_per_gm != null ? parseFloat(pkgFi.purchase_price_per_gm) : parseFloat(product.purchase_price_per_gm || 0);
+            total_cost += parseFloat(item.qty_gm) * price;
         }
 
         const inputSeasonalItems = items || [];
         for (const item of inputSeasonalItems) {
             const product = await Product.findByPk(item.product_id);
             if (!product) { await t.rollback(); return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` }); }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
+            const pkgSp = pkg.SeasonalPool?.find(sp => sp.product_id === parseInt(item.product_id));
+            const price = pkgSp?.purchase_price_per_gm != null ? parseFloat(pkgSp.purchase_price_per_gm) : parseFloat(product.purchase_price_per_gm || 0);
+            total_cost += parseFloat(item.qty_gm) * price;
         }
 
         let overage = total_cost - per_service_amount;
@@ -932,7 +953,17 @@ export const getUpcomingSelections = async (req, res) => {
             return res.status(400).json({ success: false, message: "This package does not support seasonal selections" });
         }
 
-        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active');
+        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active').map(sp => {
+            const spData = sp.toJSON ? sp.toJSON() : { ...sp };
+            const effectivePrice = sp.purchase_price_per_gm != null
+                ? parseFloat(sp.purchase_price_per_gm)
+                : parseFloat(sp.Product?.purchase_price_per_gm || 0);
+            if (spData.Product) {
+                spData.Product.purchase_price_per_gm = effectivePrice;
+            }
+            spData.purchase_price_per_gm = effectivePrice;
+            return spData;
+        });
         const maxCount = pkg.SeasonalConfig?.max_select_count;
         // Formula consistent with package.controller.js: divide by (1 + margin/100)
         const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) / (1 + parseFloat(pkg.margin_percent || 0) / 100);
@@ -940,20 +971,26 @@ export const getUpcomingSelections = async (req, res) => {
         // Extract fixed items from subscription (if present) or fallback to package fixed items
         const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active');
         const fixed_items = subFixedItems.length > 0
-            ? subFixedItems.map(i => ({
-                product_id: i.product_id,
-                qty_gm: i.qty_gm,
-                Product: i.Product
-            }))
+            ? subFixedItems.map(i => {
+                const pkgFi = pkg.FixedItems.find(pfi => pfi.product_id === i.product_id);
+                return {
+                    product_id: i.product_id,
+                    qty_gm: i.qty_gm,
+                    Product: i.Product,
+                    purchase_price_per_gm: pkgFi?.purchase_price_per_gm != null ? pkgFi.purchase_price_per_gm : i.Product.purchase_price_per_gm
+                };
+            })
             : pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => ({
                 product_id: fi.product_id,
                 qty_gm: fi.default_qty_gm,
-                Product: fi.Product
+                Product: fi.Product,
+                purchase_price_per_gm: fi.purchase_price_per_gm != null ? fi.purchase_price_per_gm : fi.Product.purchase_price_per_gm
             }));
 
         let fixed_cost = 0;
         for (const fi of fixed_items) {
-            fixed_cost += parseFloat(fi.qty_gm) * parseFloat(fi.Product.purchase_price_per_gm);
+            const price = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product.purchase_price_per_gm || 0);
+            fixed_cost += parseFloat(fi.qty_gm) * price;
         }
         const seasonal_budget = per_service_amount - fixed_cost;
 
@@ -1103,7 +1140,8 @@ export const saveScheduleSeasonal = async (req, res) => {
             include: [{
                 model: Package, include: [
                     { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                    { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] }
+                    { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] },
+                    { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }
                 ]
             }, {
                 model: SubscriptionItem,
@@ -1174,7 +1212,9 @@ export const saveScheduleSeasonal = async (req, res) => {
                 await t.rollback();
                 return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
             }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
+            const pkgFi = pkg.FixedItems?.find(fi => fi.product_id === parseInt(item.product_id));
+            const price = pkgFi?.purchase_price_per_gm != null ? parseFloat(pkgFi.purchase_price_per_gm) : parseFloat(product.purchase_price_per_gm || 0);
+            total_cost += parseFloat(item.qty_gm) * price;
         }
 
         const inputSeasonalItems = items || [];
@@ -1196,7 +1236,9 @@ export const saveScheduleSeasonal = async (req, res) => {
                 await t.rollback();
                 return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
             }
-            total_cost += parseFloat(item.qty_gm) * parseFloat(product.purchase_price_per_gm);
+            const pkgSp = pkg.SeasonalPool?.find(sp => sp.product_id === parseInt(item.product_id));
+            const price = pkgSp?.purchase_price_per_gm != null ? parseFloat(pkgSp.purchase_price_per_gm) : parseFloat(product.purchase_price_per_gm || 0);
+            total_cost += parseFloat(item.qty_gm) * price;
         }
 
         let overage = total_cost - per_service_amount;

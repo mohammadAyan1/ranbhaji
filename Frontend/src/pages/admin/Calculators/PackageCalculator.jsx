@@ -137,7 +137,9 @@ export default function PackageCalculator() {
     const product = products.find((p) => p.id === parseInt(item.product_id));
     const qty = parseFloat(item.qty || 0);
     let unitLabel = product ? product.unit : "";
-    let purchasePrice = product ? parseFloat(product.purchase_price_per_gm || 0) : 0;
+    let purchasePrice = item.purchase_price_per_gm != null
+      ? parseFloat(item.purchase_price_per_gm)
+      : (product ? parseFloat(product.purchase_price_per_gm || 0) : 0);
     const purchaseCost = qty * purchasePrice;
     return { ...item, product, unitLabel, purchasePrice, purchaseCost };
   });
@@ -219,7 +221,8 @@ export default function PackageCalculator() {
           id: i + 1,
           product_id: draftFixed[i].product_id,
           qty: draftFixed[i].qty_gm,
-          search: prod ? `${prod.name} (${prod.category})` : ""
+          search: prod ? `${prod.name} (${prod.category})` : "",
+          purchase_price_per_gm: draftFixed[i].purchase_price_per_gm != null ? draftFixed[i].purchase_price_per_gm : prod?.purchase_price_per_gm
         });
       } else {
         newFixedItems.push({ id: i + 1, product_id: "", qty: "", search: "" });
@@ -243,11 +246,16 @@ export default function PackageCalculator() {
     const itemsPayload = [];
     fixedItems.forEach(item => {
       if (item.product_id && item.qty) {
+        const prod = products.find(p => p.id === parseInt(item.product_id));
+        const pricePerGm = item.purchase_price_per_gm != null
+          ? parseFloat(item.purchase_price_per_gm)
+          : (prod ? parseFloat(prod.purchase_price_per_gm || 0) : 0);
         itemsPayload.push({
           product_id: parseInt(item.product_id),
           qty_gm: parseFloat(item.qty),
           is_fixed: true,
-          is_seasonal: false
+          is_seasonal: false,
+          purchase_price_per_gm: pricePerGm
         });
       }
     });
@@ -257,7 +265,8 @@ export default function PackageCalculator() {
         product_id: id,
         qty_gm: 0,
         is_fixed: false,
-        is_seasonal: true
+        is_seasonal: true,
+        purchase_price_per_gm: parseFloat(baseSeasonalPricePerGm || 0)
       });
     });
 
@@ -725,7 +734,16 @@ export default function PackageCalculator() {
                     }`}
                 >
                   <p className="font-medium truncate">{p.name}</p>
-                  <p className="text-gray-500 text-[10px] mt-0.5">₹{parseFloat(p.purchase_price_per_gm * 1000).toFixed(0)}/kg</p>
+                  <p className="text-gray-500 text-[10px] mt-0.5">
+                    {calculationMode === "custom" && customPrice
+                      ? `₹${parseFloat(customPrice).toFixed(0)}/kg (Custom)`
+                      : calculationMode === "highest" && inPool
+                        ? `₹${(baseSeasonalPricePerGm * 1000).toFixed(0)}/kg (Highest)`
+                        : calculationMode === "average" && inPool
+                          ? `₹${(baseSeasonalPricePerGm * 1000).toFixed(0)}/kg (Avg)`
+                          : `₹${parseFloat((p.purchase_price_per_gm || 0) * 1000).toFixed(0)}/kg`
+                    }
+                  </p>
                   {inFixed && <p className="text-yellow-600 text-[10px] mt-0.5">In fixed items</p>}
                 </button>
               );

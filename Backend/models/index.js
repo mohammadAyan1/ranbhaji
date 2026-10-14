@@ -139,12 +139,14 @@ const Package = sequelize.define('Package', {
 // 4. PACKAGE_FIXED_ITEMS
 const PackageFixedItem = sequelize.define('PackageFixedItem', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  default_qty_gm: { type: DataTypes.DECIMAL(10, 2) }
+  default_qty_gm: { type: DataTypes.DECIMAL(10, 2) },
+  purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4), allowNull: true }
 }, { tableName: 'package_fixed_items', timestamps: false });
 
 // 5. PACKAGE_SEASONAL_POOL
 const PackageSeasonalPool = sequelize.define('PackageSeasonalPool', {
-  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true }
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4), allowNull: true }
 }, { tableName: 'package_seasonal_pool', timestamps: false });
 
 // 6. PACKAGE_SEASONAL_CONFIG
@@ -429,7 +431,8 @@ const CalculatorDraftItem = sequelize.define('CalculatorDraftItem', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   qty_gm: { type: DataTypes.DECIMAL(10, 2) },
   is_fixed: { type: DataTypes.BOOLEAN, defaultValue: true },
-  is_seasonal: { type: DataTypes.BOOLEAN, defaultValue: false }
+  is_seasonal: { type: DataTypes.BOOLEAN, defaultValue: false },
+  purchase_price_per_gm: { type: DataTypes.DECIMAL(10, 4), allowNull: true }
 }, { tableName: 'calculator_draft_items', timestamps: false });
 
 CalculatorDraftItem.belongsTo(CalculatorDraft, { foreignKey: 'draft_id', onDelete: 'CASCADE' });

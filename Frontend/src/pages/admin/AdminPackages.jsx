@@ -105,12 +105,16 @@ export default function AdminPackages() {
       .filter(item => item.is_fixed)
       .map(item => ({
         product_id: item.product_id.toString(),
-        default_qty_gm: item.qty_gm.toString()
+        default_qty_gm: item.qty_gm.toString(),
+        purchase_price_per_gm: item.purchase_price_per_gm
       }));
     setFixedItems(fixed);
 
     const seasonalItemsList = draft.Items.filter(item => item.is_seasonal);
-    const seasonal = seasonalItemsList.map(item => item.product_id);
+    const seasonal = seasonalItemsList.map(item => ({
+      product_id: item.product_id,
+      purchase_price_per_gm: item.purchase_price_per_gm
+    }));
     setSeasonalPool(seasonal);
 
     if (draft.seasonal_quantities && draft.seasonal_quantities.length > 0) {
@@ -133,8 +137,11 @@ export default function AdminPackages() {
     let fixed_cost = 0;
     fixedItems.forEach(fi => {
       const product = products.find(p => p.id === parseInt(fi.product_id));
-      if (product && fi.default_qty_gm) {
-        fixed_cost += parseFloat(fi.default_qty_gm) * parseFloat(product.purchase_price_per_gm);
+      const pricePerGm = fi.purchase_price_per_gm != null
+        ? parseFloat(fi.purchase_price_per_gm)
+        : (product ? parseFloat(product.purchase_price_per_gm || 0) : 0);
+      if (fi.default_qty_gm) {
+        fixed_cost += parseFloat(fi.default_qty_gm) * pricePerGm;
       }
     });
     const seasonal_budget = per_service - fixed_cost;
@@ -158,8 +165,15 @@ export default function AdminPackages() {
     setEditing(pkg.id);
     setForm({ name: pkg.name, num_persons: pkg.num_persons, num_persons_max: pkg.num_persons_max || "", services_per_month: pkg.services_per_month, price: pkg.price, type: pkg.type, target_user_id: pkg.target_user_id || "", target_mobile_number: pkg.target_mobile_number || "", margin_percent: pkg.margin_percent !== undefined ? pkg.margin_percent : 0, image: null, image_url: pkg.image_url || "", creation_source: pkg.creation_source || "manual" });
     setPersonRangeMode(!!pkg.num_persons_max); // enable range mode if max was set
-    setFixedItems(pkg.FixedItems?.map(fi => ({ product_id: fi.product_id, default_qty_gm: fi.default_qty_gm })) || []);
-    setSeasonalPool(pkg.SeasonalPool?.map(sp => sp.product_id) || []);
+    setFixedItems(pkg.FixedItems?.map(fi => ({
+      product_id: fi.product_id,
+      default_qty_gm: fi.default_qty_gm,
+      purchase_price_per_gm: fi.purchase_price_per_gm
+    })) || []);
+    setSeasonalPool(pkg.SeasonalPool?.map(sp => ({
+      product_id: sp.product_id,
+      purchase_price_per_gm: sp.purchase_price_per_gm
+    })) || []);
     setMaxSelectCount(pkg.SeasonalConfig?.max_select_count || 3);
     if (pkg.SeasonalConfig?.seasonal_quantities) {
       setSeasonalQuantities(pkg.SeasonalConfig.seasonal_quantities);
@@ -194,10 +208,19 @@ export default function AdminPackages() {
     const validFixedItems = fixedItems.filter(fi => fi.product_id && fi.default_qty_gm).map(fi => ({
       product_id: parseInt(fi.product_id),
       default_qty_gm: parseFloat(fi.default_qty_gm),
+      purchase_price_per_gm: fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : undefined
     }));
     fd.append("fixed_items", JSON.stringify(validFixedItems));
 
-    const validSeasonalPool = seasonalPool.filter(Boolean).map(id => parseInt(id));
+    const validSeasonalPool = seasonalPool.filter(Boolean).map(sp => {
+      if (typeof sp === 'object' && sp !== null) {
+        return {
+          product_id: parseInt(sp.product_id),
+          purchase_price_per_gm: sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : undefined
+        };
+      }
+      return parseInt(sp);
+    });
     fd.append("seasonal_pool", JSON.stringify(validSeasonalPool));
 
     fd.append("max_select_count", parseInt(maxSelectCount));
@@ -231,8 +254,9 @@ export default function AdminPackages() {
   // Seasonal pool management
   const toggleSeasonalProduct = (product_id) => {
     const id = parseInt(product_id);
-    if (seasonalPool.includes(id)) {
-      setSeasonalPool(seasonalPool.filter(p => p !== id));
+    const exists = seasonalPool.some(sp => (typeof sp === 'object' ? sp.product_id : sp) === id);
+    if (exists) {
+      setSeasonalPool(seasonalPool.filter(p => (typeof p === 'object' ? p.product_id : p) !== id));
     } else {
       setSeasonalPool([...seasonalPool, id]);
     }
@@ -502,8 +526,8 @@ export default function AdminPackages() {
                         required
                       />
                       <span className="text-gray-500 text-xs">
-                        {fi.product_id && fi.default_qty_gm && products.find(p => p.id === parseInt(fi.product_id))
-                          ? `₹${(parseFloat(fi.default_qty_gm) * parseFloat(products.find(p => p.id === parseInt(fi.product_id))?.purchase_price_per_gm || 0)).toFixed(2)}`
+                        {fi.product_id && fi.default_qty_gm
+                          ? `₹${(parseFloat(fi.default_qty_gm) * (fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : (products.find(p => p.id === parseInt(fi.product_id))?.purchase_price_per_gm || 0))).toFixed(2)}`
                           : ""}
                       </span>
                       {!isDraftApplied && <button type="button" onClick={() => removeFixedItem(idx)} className="text-red-600 hover:text-red-300 text-xl leading-none">×</button>}
@@ -574,7 +598,7 @@ export default function AdminPackages() {
               {products
                 .filter(p => p.category !== "water" && (seasonalFilter === "all" || (p.category && p.category.toLowerCase().includes(seasonalFilter.toLowerCase()))))
                 .map(p => {
-                  const inPool = seasonalPool.includes(p.id);
+                  const inPool = seasonalPool.some(sp => (typeof sp === 'object' ? sp.product_id : sp) === p.id);
                   const inFixed = fixedItems.some(fi => parseInt(fi.product_id) === p.id);
                   return (
                     <button
