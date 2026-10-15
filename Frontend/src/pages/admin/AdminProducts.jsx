@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { Download } from "lucide-react";
+import * as XLSX from "xlsx";
 
 const UNITS = ["gm", "ml", "piece"];
 
@@ -9,8 +11,8 @@ const emptyForm = {
   name: "", hindi_name: "", category: "vegetable", sub_category: "",
   purchase_price_input: "", margin_percentage: "", unit: "gm", unit_id: "",
   description: "", min_retail_qty: "", water_capacity_liters: "",
-  weighing_time_seconds: 0, soaking_time_seconds: 0, cutting_mode: "PER_25G", 
-  pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0, 
+  weighing_time_seconds: 0, soaking_time_seconds: 0, cutting_mode: "PER_25G",
+  pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0,
   drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null, existing_image_url: "", is_qty_double: false, discount_percentage: ""
 };
 
@@ -410,12 +412,12 @@ export default function AdminProducts() {
     try {
       const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
       const isGm = productObj?.unit === 'gm' || productObj?.unit === 'ml';
-      
+
       let qty = parseFloat(purchaseForm.quantity);
       if (isGm) {
         qty = qty / 1000;
       }
-      
+
       const total = parseFloat(purchaseForm.total_price);
       // Calculate per base unit price (per kg or per piece)
       let calculated_purchase_price = 0;
@@ -498,6 +500,147 @@ export default function AdminProducts() {
       return `₹${(prc * 1000).toFixed(2)} / ${unit === 'gm' ? 'kg' : 'L'}`;
     }
     return `₹${prc.toFixed(2)} / pc`;
+  };
+
+  // Export Stock Demands to Excel
+  const handleExportDemandsToExcel = () => {
+    const pendingList = demands.filter(d => !completedDemands.includes(d.id));
+    const itemsToExport = pendingList.length > 0 ? pendingList : demands;
+
+    if (!itemsToExport || itemsToExport.length === 0) {
+      alert(`No demand data found to export for ${demandDate || "the selected date"}.`);
+      return;
+    }
+
+    const data = itemsToExport.map((d, index) => {
+      const pkgQty = d.total_package_qty || 0;
+      const rtlQty = d.total_retail_qty || 0;
+      const totalQty = pkgQty + rtlQty;
+      const isGm = d.unit === 'gm' || d.unit === 'ml';
+
+      const displayQty = isGm ? parseFloat((totalQty / 1000).toFixed(3)) : totalQty;
+      const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : (d.unit || 'pcs');
+
+      const pkgDisplay = isGm ? parseFloat((pkgQty / 1000).toFixed(3)) : pkgQty;
+      const rtlDisplay = isGm ? parseFloat((rtlQty / 1000).toFixed(3)) : rtlQty;
+
+      const matchingProduct = products.find(p => p.id === d.id);
+      const isCompleted = completedDemands.includes(d.id);
+
+      return {
+        "S.No.": index + 1,
+        "Product Name": d.name || "—",
+        "Hindi Name": matchingProduct?.hindi_name || d.hindi_name || "—",
+        "Total Quantity": `${displayQty} ${displayUnit}`,
+        "Quantity": displayQty,
+        "Unit": displayUnit,
+        "Package Demand": `${pkgDisplay} ${displayUnit}`,
+        "Retail Demand": `${rtlDisplay} ${displayUnit}`,
+        "Category": d.category || matchingProduct?.category || "—",
+        "Status": isCompleted ? "Purchased" : "Pending",
+        "Date": demandDate
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet["!cols"] = [
+      { wch: 8 },   // S.No.
+      { wch: 24 },  // Product Name
+      { wch: 20 },  // Hindi Name
+      { wch: 16 },  // Total Quantity
+      { wch: 12 },  // Quantity
+      { wch: 10 },  // Unit
+      { wch: 16 },  // Package Demand
+      { wch: 16 },  // Retail Demand
+      { wch: 16 },  // Category
+      { wch: 14 },  // Status
+      { wch: 14 }   // Date
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Demand");
+    XLSX.writeFile(workbook, `Stock_Demand_${demandDate || "report"}.xlsx`);
+  };
+
+  // Export Stock Inventory Summary to Excel
+  const handleExportStockSummaryToExcel = () => {
+    const nonWater = stockSummary.filter(p => p.category !== 'water');
+    if (nonWater.length === 0) {
+      alert("No stock inventory data found to export.");
+      return;
+    }
+
+    const data = nonWater.map((p, idx) => ({
+      "S.No.": idx + 1,
+      "Product ID": p.id,
+      "Product Name": p.name,
+      "Category": p.category || "—",
+      "Previous Day Qty": formatQuantity(p.yesterday_purchased_qty, p.unit),
+      "Total Purchased Qty": formatQuantity(p.total_purchased_qty, p.unit),
+      "Total Sold Qty": formatQuantity(p.total_sold_qty, p.unit),
+      "Current Remaining Stock": formatQuantity(p.current_stock, p.unit),
+      "Avg Buy Rate": getPricePerKgDisplay(p.purchase_price_per_gm, p.unit),
+      "Avg Sell Rate": getPricePerKgDisplay(p.selling_price_per_gm, p.unit),
+      "Status": parseFloat(p.current_stock || 0) > 0 ? "In Stock" : "Out of Stock"
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 12 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 16 },
+      { wch: 24 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 14 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Inventory");
+    XLSX.writeFile(workbook, `Stock_Inventory_${stockStartDate}_to_${stockEndDate}.xlsx`);
+  };
+
+  // Export Purchase Logs to Excel
+  const handleExportPurchaseLogsToExcel = () => {
+    const filtered = purchaseLogs.filter(log => (logCategory === 'water' ? log.Product?.category === 'water' : log.Product?.category !== 'water'));
+    if (filtered.length === 0) {
+      alert("No purchase logs found to export.");
+      return;
+    }
+
+    const data = filtered.map((log, idx) => {
+      const dateStr = new Date(log.purchase_date).toLocaleString("en-IN", {
+        day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+      });
+      return {
+        "S.No.": idx + 1,
+        "Purchase Date": dateStr,
+        "Product Name": log.Product?.name || "Unknown Product",
+        "Category": log.Product?.category || "—",
+        "Quantity Purchased": formatQuantity(log.quantity, log.Product?.unit),
+        "Purchase Price / Unit": `₹${parseFloat(log.purchase_price_per_kg).toFixed(2)} / ${log.Product?.unit === 'piece' ? 'pc' : 'kg/L'}`,
+        "Total Paid Amount": `₹${parseFloat(log.total_amount).toFixed(2)}`
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 22 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 20 },
+      { wch: 22 },
+      { wch: 18 }
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Purchase Logs");
+    XLSX.writeFile(workbook, `Purchase_Logs_${logStartDate}_to_${logEndDate}.xlsx`);
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
@@ -775,7 +918,7 @@ export default function AdminProducts() {
                   <div className="col-span-2 md:col-span-4 lg:col-span-7 mb-2">
                     <h4 className="text-sm font-bold text-gray-800">Batch Processing Time Config</h4>
                   </div>
-                  
+
                   <div>
                     <label className="label text-[11px] mb-1">Weighing (sec)</label>
                     <input type="number" step="any" min="0" className="input text-sm p-1.5" placeholder="e.g. 60"
@@ -933,7 +1076,7 @@ export default function AdminProducts() {
 
                     return (
                       <tr key={p.id} className="table-row">
-                        <td 
+                        <td
                           className="p-3 text-gray-900 font-medium cursor-pointer hover:bg-gray-50 transition-colors"
                           onClick={() => handleOpenProductStats(p)}
                           title="Click to view purchase history graph"
@@ -953,7 +1096,7 @@ export default function AdminProducts() {
                         <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
                         <td className="p-3 text-right">
                           <p className="text-gray-700 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</p>
-                          
+
                           {p.PurchaseLogs && p.PurchaseLogs.length >= 2 && (() => {
                             const latestPrice = parseFloat(p.PurchaseLogs[0].purchase_price_per_kg);
                             const prevPrice = parseFloat(p.PurchaseLogs[1].purchase_price_per_kg);
@@ -1036,14 +1179,25 @@ export default function AdminProducts() {
                 System automatically per-kg/per-piece rate calculate kar lega.
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-2">Filter Date:</label>
-              <input 
-                type="date" 
-                value={demandDate} 
-                onChange={(e) => setDemandDate(e.target.value)} 
-                className="input py-1 px-2 text-sm bg-white"
-              />
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-2">Filter Date:</label>
+                <input
+                  type="date"
+                  value={demandDate}
+                  onChange={(e) => setDemandDate(e.target.value)}
+                  className="input py-1 px-2 text-sm bg-white"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleExportDemandsToExcel}
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium px-3.5 py-2 rounded-xl text-sm transition-all shadow-sm shadow-emerald-600/20 cursor-pointer"
+                title="Download Stock Demand Excel Sheet"
+              >
+                <Download size={16} />
+                <span>Export to Excel</span>
+              </button>
             </div>
           </div>
 
@@ -1269,7 +1423,7 @@ export default function AdminProducts() {
         <div className="card">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
             <h3 className="font-semibold text-gray-900">Current Stock Levels</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
                 className="input py-1 text-sm"
@@ -1288,6 +1442,15 @@ export default function AdminProducts() {
                 className="btn-primary py-1 px-3 text-sm ml-2"
               >
                 Filter
+              </button>
+              <button
+                type="button"
+                onClick={handleExportStockSummaryToExcel}
+                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium px-3 py-1.5 text-sm rounded-xl transition-all shadow-sm cursor-pointer ml-1"
+                title="Export Stock Levels to Excel"
+              >
+                <Download size={15} />
+                <span>Export</span>
               </button>
             </div>
           </div>
@@ -1351,7 +1514,7 @@ export default function AdminProducts() {
         <div className="card">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
             <h3 className="font-semibold text-gray-900">Stock Purchase Transactions Logs</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
                 className="input py-1 text-sm"
@@ -1365,11 +1528,20 @@ export default function AdminProducts() {
                 value={logEndDate}
                 onChange={e => setLogEndDate(e.target.value)}
               />
-              <button 
+              <button
                 onClick={fetchPurchaseLogs}
                 className="btn-primary py-1 px-3 text-sm ml-2"
               >
                 Filter
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPurchaseLogsToExcel}
+                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium px-3 py-1.5 text-sm rounded-xl transition-all shadow-sm cursor-pointer ml-1"
+                title="Export Purchase Logs to Excel"
+              >
+                <Download size={15} />
+                <span>Export</span>
               </button>
             </div>
           </div>
@@ -1558,17 +1730,17 @@ export default function AdminProducts() {
                         <LineChart data={productStatsData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                           <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
                           <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                          <Tooltip 
+                          <Tooltip
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             formatter={(value) => [`₹${value}`, 'Price']}
                           />
-                          <Line 
-                            type="monotone" 
-                            dataKey="price" 
-                            stroke="#0ea5e9" 
-                            strokeWidth={3} 
-                            dot={{ r: 4, strokeWidth: 2 }} 
-                            activeDot={{ r: 6 }} 
+                          <Line
+                            type="monotone"
+                            dataKey="price"
+                            stroke="#0ea5e9"
+                            strokeWidth={3}
+                            dot={{ r: 4, strokeWidth: 2 }}
+                            activeDot={{ r: 6 }}
                           />
                         </LineChart>
                       </ResponsiveContainer>

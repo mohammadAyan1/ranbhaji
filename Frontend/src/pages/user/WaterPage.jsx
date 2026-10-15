@@ -34,7 +34,7 @@ export default function WaterPage() {
 
   // Form states
   const [selectedType, setSelectedType] = useState("monthly"); // monthly or yearly
-  const [form, setForm] = useState({ product_id: "", water_type: "health", container: "glass", frequency: "daily" });
+  const [form, setForm] = useState({ product_id: "", water_type: "health", container: "glass", frequency: "daily", bottles_per_day: 1 });
 
   // Flow step state: "list" | "confirm_date"
   const [step, setStep] = useState("list");
@@ -143,11 +143,14 @@ export default function WaterPage() {
 
   const matchedProduct = getMatchedProduct();
   const pricePerBottle = matchedProduct ? parseFloat(matchedProduct.selling_price_per_gm) : 0;
+  const bottleCapacity = matchedProduct ? (parseFloat(matchedProduct.water_capacity_liters) || 1) : 1;
+  const bottlesCount = parseInt(form.bottles_per_day || 1);
   
   // Daily: 30 deliveries per month. Alternate: 15 deliveries per month.
   const servicesPerMonth = form.frequency === "daily" ? 30 : 15;
   const totalServices = selectedType === "yearly" ? servicesPerMonth * 12 : servicesPerMonth;
-  const rawTotal = pricePerBottle * totalServices;
+  const totalBottlesInPlan = totalServices * bottlesCount;
+  const rawTotal = pricePerBottle * totalBottlesInPlan;
   const totalPrice = selectedType === "yearly" ? rawTotal * 0.75 : rawTotal;
 
   const handleSaveInlineAddress = async (e) => {
@@ -203,13 +206,16 @@ export default function WaterPage() {
     setSubscribing(true); setMsg("");
     try {
       const res = await api.post("/water/subscribe", {
+        product_id: form.product_id,
         water_type: form.water_type,
         container: form.container,
         frequency: form.frequency,
         type: selectedType,
         payment_method: "wallet",
         address_id: parseInt(selectedAddressId),
-        batch_id: parseInt(selectedBatchId)
+        batch_id: parseInt(selectedBatchId),
+        capacity_liters: bottleCapacity,
+        bottles_per_delivery: bottlesCount
       });
       setCurrentSubId(res.data.water_subscription_id);
       
@@ -246,13 +252,16 @@ export default function WaterPage() {
     setSubscribing(true); setMsg("");
     try {
       const res = await api.post("/water/subscribe", {
+        product_id: form.product_id,
         water_type: form.water_type,
         container: form.container,
         frequency: form.frequency,
         type: selectedType,
         payment_method: "razorpay",
         address_id: parseInt(selectedAddressId),
-        batch_id: parseInt(selectedBatchId)
+        batch_id: parseInt(selectedBatchId),
+        capacity_liters: bottleCapacity,
+        bottles_per_delivery: bottlesCount
       });
       setCurrentSubId(res.data.water_subscription_id);
       
@@ -630,11 +639,25 @@ export default function WaterPage() {
                     <option value="">Choose water plan...</option>
                     {products.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name} {p.hindi_name ? `(${p.hindi_name})` : ""} (₹{parseFloat(p.selling_price_per_gm || 0).toFixed(2)} / bottle)
+                        {p.name} {p.hindi_name ? `(${p.hindi_name})` : ""} - ₹{parseFloat(p.selling_price_per_gm || 0).toFixed(2)} / bottle ({parseFloat(p.water_capacity_liters || 1)}L)
                       </option>
                     ))}
                   </select>
                 </div>
+
+                {matchedProduct && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs space-y-1.5 animate-fade-in">
+                    <div className="flex justify-between items-center text-gray-700">
+                      <span className="font-medium">Bottle Capacity:</span>
+                      <span className="font-bold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">{bottleCapacity} Liter ({bottleCapacity}L)</span>
+                    </div>
+                    <div className="flex justify-between items-center text-gray-700">
+                      <span className="font-medium">Container Material:</span>
+                      <span className="font-semibold text-gray-900 capitalize">{form.container} Bottle</span>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="label">Frequency</label>
                   <select className="input" value={form.frequency} onChange={e => setForm({...form, frequency: e.target.value})}>
@@ -642,6 +665,36 @@ export default function WaterPage() {
                     <option value="alternate">Alternate Days (Mon-Wed-Fri...)</option>
                   </select>
                 </div>
+
+                {/* Bottles per delivery / day selector */}
+                <div>
+                  <label className="label flex justify-between items-center">
+                    <span>Bottles per Delivery ({form.frequency === 'daily' ? 'Per Day' : 'Per Service'})</span>
+                    <span className="text-xs text-fresh-600 font-bold">{bottlesCount * bottleCapacity} Litres per delivery</span>
+                  </label>
+                  <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-xl border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, bottles_per_day: Math.max(1, bottlesCount - 1) }))}
+                      disabled={bottlesCount <= 1}
+                      className="w-9 h-9 rounded-lg bg-white border border-gray-300 font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40 transition-all flex items-center justify-center text-lg shadow-sm"
+                    >
+                      -
+                    </button>
+                    <div className="flex-1 text-center">
+                      <span className="text-sm font-bold text-gray-900">{bottlesCount} Bottle{bottlesCount > 1 ? "s" : ""}</span>
+                      <p className="text-[11px] text-gray-500">({bottlesCount * bottleCapacity} Litres / delivery)</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, bottles_per_day: bottlesCount + 1 }))}
+                      className="w-9 h-9 rounded-lg bg-white border border-gray-300 font-bold text-gray-700 hover:bg-gray-100 transition-all flex items-center justify-center text-lg shadow-sm"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="label">Delivery Address</label>
                   {addresses.length === 0 ? (
@@ -688,11 +741,19 @@ export default function WaterPage() {
                 <div className="bg-white rounded-xl p-4 border border-gray-300 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Price per Bottle:</span>
-                    <span className="text-gray-900 font-semibold">₹{pricePerBottle.toFixed(2)}</span>
+                    <span className="text-gray-900 font-semibold">₹{pricePerBottle.toFixed(2)} ({bottleCapacity}L)</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Daily Bottles:</span>
+                    <span className="text-gray-900 font-semibold">{bottlesCount} bottle{bottlesCount > 1 ? "s" : ""} ({bottlesCount * bottleCapacity}L)</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Total Deliveries:</span>
-                    <span className="text-gray-900 font-semibold">{totalServices}</span>
+                    <span className="text-gray-900 font-semibold">{totalServices} days</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Total Bottles in Plan:</span>
+                    <span className="text-blue-600 font-bold">{totalBottlesInPlan} bottles ({totalBottlesInPlan * bottleCapacity}L)</span>
                   </div>
                   {selectedType === "yearly" && (
                     <div className="flex justify-between text-xs text-fresh-600">
@@ -731,7 +792,7 @@ export default function WaterPage() {
                     <span className={`badge ${statusBadge(w.status)}`}>{w.status}</span>
                     <span className="badge badge-gray capitalize">{w.type}</span>
                   </div>
-                   <p className="text-gray-600 text-sm capitalize">{w.container} bottle · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
+                   <p className="text-gray-600 text-sm capitalize">{w.bottles_per_delivery || 1} × {w.container} bottle ({parseFloat(w.capacity_liters || 1)}L) · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
                   
                   {w.start_date ? (
                     <p className="text-gray-500 text-xs mt-1.5">

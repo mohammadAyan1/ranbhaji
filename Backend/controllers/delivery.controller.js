@@ -166,7 +166,9 @@ export const getTodayDeliveries = async (req, res) => {
                     });
                     if (matchedProduct) {
                         const capacity = parseFloat(sub.capacity_liters) || 1;
-                        const qty = matchedProduct.unit === 'ml' ? capacity * 1000 : capacity;
+                        const bottles = parseInt(sub.bottles_per_delivery) || 1;
+                        const totalVolume = capacity * bottles;
+                        const qty = matchedProduct.unit === 'ml' ? totalVolume * 1000 : totalVolume;
                         await DeliveryItem.create({
                             schedule_id: sched.id,
                             product_id: matchedProduct.id,
@@ -1086,7 +1088,7 @@ export const getProductDemands = async (req, res) => {
                     include: [
                         { model: User, attributes: ['id', 'name', 'phone'] }
                     ],
-                    attributes: ['id', 'water_type', 'container', 'capacity_liters']
+                    attributes: ['id', 'water_type', 'container', 'capacity_liters', 'bottles_per_delivery']
                 },
                 { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
                 { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] },
@@ -1110,19 +1112,22 @@ export const getProductDemands = async (req, res) => {
         const waterDemandsMap = {};
 
         const addWaterDemand = (sub, batchName, user) => {
-            const cap = parseFloat(sub.capacity_liters || 2);
+            const cap = parseFloat(sub.capacity_liters || 1);
+            const bottles = parseInt(sub.bottles_per_delivery || 1);
             if (!waterDemandsMap[cap]) {
                 waterDemandsMap[cap] = { capacity: cap, total: 0, glass: 0, plastic: 0, orders: [] };
             }
-            waterDemandsMap[cap].total += 1;
-            if (sub.container === 'glass') waterDemandsMap[cap].glass += 1;
-            else if (sub.container === 'plastic') waterDemandsMap[cap].plastic += 1;
+            waterDemandsMap[cap].total += bottles;
+            if (sub.container === 'glass') waterDemandsMap[cap].glass += bottles;
+            else if (sub.container === 'plastic') waterDemandsMap[cap].plastic += bottles;
 
             waterDemandsMap[cap].orders.push({
                 userName: user ? user.name : 'Unknown',
                 phone: user ? user.phone : 'Unknown',
                 water_type: sub.water_type,
                 container: sub.container,
+                bottles: bottles,
+                capacity: cap,
                 batch: batchName || 'Unassigned'
             });
         };

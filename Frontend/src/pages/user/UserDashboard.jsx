@@ -67,7 +67,7 @@ export default function UserDashboard() {
               const items = schedule.DeliveryItems || [];
               const isWater = !!schedule.WaterSubscription;
               const subName = isWater 
-                ? `Water: ${schedule.WaterSubscription.water_type} (${schedule.WaterSubscription.container})`
+                ? `Water: ${schedule.WaterSubscription.water_type} (${schedule.WaterSubscription.container}) - ${schedule.WaterSubscription.bottles_per_delivery || 1} bottle(s) [${parseFloat(schedule.WaterSubscription.capacity_liters || 1)}L]`
                 : (schedule.Subscription?.Package?.name || "Regular Package");
                 
               return (

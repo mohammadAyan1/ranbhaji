@@ -6,7 +6,7 @@ import { Op } from "sequelize";
 export const subscribeWater = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { water_type, container, frequency, type, payment_method, address_id, batch_id, capacity_liters } = req.body;
+        const { water_type, container, frequency, type, payment_method, address_id, batch_id, capacity_liters, bottles_per_delivery, product_id } = req.body;
 
         if (!water_type || !container || !frequency || !batch_id) {
             await t.rollback();
@@ -29,11 +29,17 @@ export const subscribeWater = async (req, res) => {
             where: { category: 'water', status: 'active' }
         });
 
-        const matchedProduct = products.find(p => {
-            const nameLower = p.name.toLowerCase();
-            const subCategoryLower = (p.sub_category || '').toLowerCase();
-            return nameLower.includes(water_type.trim().toLowerCase()) && subCategoryLower.trim() === container.trim().toLowerCase();
-        });
+        let matchedProduct = null;
+        if (product_id) {
+            matchedProduct = products.find(p => p.id === parseInt(product_id));
+        }
+        if (!matchedProduct) {
+            matchedProduct = products.find(p => {
+                const nameLower = p.name.toLowerCase();
+                const subCategoryLower = (p.sub_category || '').toLowerCase();
+                return nameLower.includes(water_type.trim().toLowerCase()) && subCategoryLower.trim() === container.trim().toLowerCase();
+            });
+        }
 
         if (!matchedProduct) {
             await t.rollback();
@@ -41,17 +47,21 @@ export const subscribeWater = async (req, res) => {
         }
 
         const price_per_bottle = parseFloat(matchedProduct.selling_price_per_gm); // price per bottle
+        const product_capacity = parseFloat(matchedProduct.water_capacity_liters) || parseFloat(capacity_liters) || 1;
+        const bottles_count = parseInt(bottles_per_delivery) > 0 ? parseInt(bottles_per_delivery) : 1;
 
         // Calculate total services and total amount
         // Daily: 30 services per month. Alternate: 15 services per month.
         const services_per_month = frequency === 'daily' ? 30 : 15;
         let total_services = services_per_month;
-        let amount = price_per_bottle * total_services;
+        let total_bottles = total_services * bottles_count;
+        let amount = price_per_bottle * total_bottles;
         let yearly_amount_paid = null;
 
         if (subType === 'yearly') {
             total_services = services_per_month * 12; // 360 or 180
-            const annual_total = price_per_bottle * total_services;
+            total_bottles = total_services * bottles_count;
+            const annual_total = price_per_bottle * total_bottles;
             amount = annual_total * 0.75; // 25% discount for yearly booking
             yearly_amount_paid = amount;
         }
@@ -110,7 +120,8 @@ export const subscribeWater = async (req, res) => {
             services_completed: 0,
             address_id: finalAddressId,
             batch_id,
-            capacity_liters: capacity_liters || 2
+            capacity_liters: product_capacity,
+            bottles_per_delivery: bottles_count
         }, { transaction: t });
 
         await t.commit();

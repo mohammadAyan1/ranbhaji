@@ -100,7 +100,7 @@ export const getOrdersForBatch = async (req, res) => {
                     batch: s.Batch,
                     batch_id: s.batch_id,
                     status: s.status,
-                    description: `Water: ${s.WaterSubscription.water_type} (${s.WaterSubscription.container}) - ${parseFloat(s.WaterSubscription.capacity_liters || 2)}L`,
+                    description: `Water: ${s.WaterSubscription.water_type} (${s.WaterSubscription.container}) - ${parseInt(s.WaterSubscription.bottles_per_delivery || 1)} bottle(s) (${(parseFloat(s.WaterSubscription.capacity_liters || 1) * parseInt(s.WaterSubscription.bottles_per_delivery || 1)).toFixed(1)}L)`,
                     date: s.scheduled_date
                 });
             }

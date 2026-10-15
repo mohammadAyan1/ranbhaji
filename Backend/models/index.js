@@ -245,6 +245,7 @@ const WaterSubscription = sequelize.define('WaterSubscription', {
   water_type: { type: DataTypes.ENUM('health', 'miracle') },
   container: { type: DataTypes.ENUM('glass', 'plastic') },
   capacity_liters: { type: DataTypes.DECIMAL(10, 2), defaultValue: 2 },
+  bottles_per_delivery: { type: DataTypes.INTEGER, defaultValue: 1 },
   frequency: { type: DataTypes.ENUM('daily', 'alternate') },
   price_per_bottle: { type: DataTypes.DECIMAL(10, 2) },
   status: { type: DataTypes.ENUM('active', 'paused', 'completed', 'cancelled'), defaultValue: 'active' },
