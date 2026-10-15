@@ -156,6 +156,8 @@ export const getWaterSubscriptions = async (req, res) => {
 // GET /api/water/available-dates
 export const getWaterAvailableDates = async (req, res) => {
     try {
+        const minAllowedDate = getEarliestCutoffDate(); // Enforce 8 PM cutoff rule
+
         // Find active water subscriptions to suggest matching delivery dates
         const activeWaters = await WaterSubscription.findAll({
             where: { status: 'active', start_date: { [Op.ne]: null } },
@@ -168,26 +170,33 @@ export const getWaterAvailableDates = async (req, res) => {
             const schedules = await DeliverySchedule.findAll({
                 where: {
                     water_subscription_id: { [Op.in]: waterIds },
-                    scheduled_date: { [Op.gte]: new Date().toISOString().split('T')[0] },
+                    scheduled_date: { [Op.gte]: minAllowedDate },
                     status: 'pending'
                 },
                 attributes: ['scheduled_date'],
                 order: [['scheduled_date', 'ASC']]
             });
-            dates = [...new Set(schedules.map(s => s.scheduled_date))].slice(0, 14);
+            // Filter non-Sundays and ensure strictly >= minAllowedDate
+            dates = [...new Set(schedules.map(s => s.scheduled_date))]
+                .filter(d => d >= minAllowedDate && new Date(d).getUTCDay() !== 0)
+                .slice(0, 14);
         }
 
-        // Fallback to next 7 non-Sunday days
-        if (dates.length === 0) {
-            const today = new Date();
-            for (let i = 1; i <= 10; i++) {
-                const d = new Date(today);
-                d.setDate(d.getDate() + i);
-                if (d.getDay() !== 0) { // Skip Sundays
-                    dates.push(d.toISOString().split('T')[0]);
+        // Fallback to next non-Sunday days starting from minAllowedDate
+        if (dates.length < 7) {
+            const parts = minAllowedDate.split('-').map(Number);
+            const baseTime = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+            for (let i = 0; i < 20; i++) {
+                const d = new Date(baseTime + i * 24 * 60 * 60 * 1000);
+                if (d.getUTCDay() !== 0) { // Skip Sundays
+                    const dStr = d.toISOString().split('T')[0];
+                    if (!dates.includes(dStr)) {
+                        dates.push(dStr);
+                    }
                 }
-                if (dates.length >= 7) break;
+                if (dates.length >= 10) break;
             }
+            dates.sort();
         }
 
         res.status(200).json({ success: true, available_dates: dates });
@@ -201,6 +210,36 @@ export const confirmWaterStartDate = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { water_subscription_id, start_date } = req.body;
+
+        if (!start_date) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "start_date is required" });
+        }
+
+        const normalizedStartDate = normalizeDateString(start_date);
+        if (!normalizedStartDate) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Invalid date format. Please provide YYYY-MM-DD." });
+        }
+
+        const minAllowedDate = getEarliestCutoffDate();
+        if (normalizedStartDate < minAllowedDate) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                message: `Invalid start date. Based on the 8 PM cutoff rule, the earliest possible start date is ${minAllowedDate}`
+            });
+        }
+
+        // Sunday check
+        const dateObj = new Date(normalizedStartDate);
+        if (dateObj.getUTCDay() === 0) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Deliveries cannot start on a Sunday. Please select Monday to Saturday."
+            });
+        }
 
         const sub = await WaterSubscription.findOne({
             where: { id: water_subscription_id, user_id: req.user.id }
@@ -216,7 +255,7 @@ export const confirmWaterStartDate = async (req, res) => {
         }
 
         // Generate delivery dates based on Daily/Alternate days (Sunday skipped, dates extended)
-        const dates = generateWaterDeliveryDates(start_date, sub.total_services, sub.frequency);
+        const dates = generateWaterDeliveryDates(normalizedStartDate, sub.total_services, sub.frequency);
         const end_date = dates[dates.length - 1];
 
         // Create schedules
@@ -228,13 +267,13 @@ export const confirmWaterStartDate = async (req, res) => {
         }));
 
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
-        await sub.update({ start_date, end_date }, { transaction: t });
+        await sub.update({ start_date: normalizedStartDate, end_date }, { transaction: t });
 
         await t.commit();
         res.status(200).json({
             success: true,
             message: "Start date confirmed and delivery schedules generated",
-            start_date,
+            start_date: normalizedStartDate,
             end_date,
             delivery_dates: dates
         });

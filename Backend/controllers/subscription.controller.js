@@ -194,8 +194,9 @@ export const getAvailableDates = async (req, res) => {
         const { package_id } = req.query;
         if (!package_id) return res.status(400).json({ success: false, message: "package_id is required" });
 
+        const minAllowedDate = getEarliestCutoffDate(); // Enforce 8 PM cutoff rule
+
         // Find upcoming scheduled dates used by active subscriptions for same package
-        // Use raw approach to avoid GROUP BY issues with Sequelize
         const activeSubIds = await Subscription.findAll({
             where: { package_id, status: 'active' },
             attributes: ['id']
@@ -207,26 +208,32 @@ export const getAvailableDates = async (req, res) => {
             const schedules = await DeliverySchedule.findAll({
                 where: {
                     subscription_id: { [Op.in]: subIds },
-                    scheduled_date: { [Op.gt]: new Date().toISOString().split('T')[0] },
+                    scheduled_date: { [Op.gte]: minAllowedDate },
                     status: 'pending'
                 },
                 attributes: ['scheduled_date'],
                 order: [['scheduled_date', 'ASC']]
             });
-            dates = [...new Set(schedules.map(s => s.scheduled_date))].slice(0, 14);
+            dates = [...new Set(schedules.map(s => s.scheduled_date))]
+                .filter(d => d >= minAllowedDate && new Date(d).getUTCDay() !== 0)
+                .slice(0, 14);
         }
 
-        // If no existing dates, suggest next 7 non-Sunday days from today
-        if (dates.length === 0) {
-            const today = new Date();
-            for (let i = 1; i <= 10; i++) {
-                const d = new Date(today);
-                d.setDate(d.getDate() + i);
-                if (d.getDay() !== 0) { // Skip Sundays
-                    dates.push(d.toISOString().split('T')[0]);
+        // If no existing dates, suggest next non-Sunday days starting from minAllowedDate
+        if (dates.length < 7) {
+            const parts = minAllowedDate.split('-').map(Number);
+            const baseTime = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+            for (let i = 0; i < 20; i++) {
+                const d = new Date(baseTime + i * 24 * 60 * 60 * 1000);
+                if (d.getUTCDay() !== 0) { // Skip Sundays
+                    const dStr = d.toISOString().split('T')[0];
+                    if (!dates.includes(dStr)) {
+                        dates.push(dStr);
+                    }
                 }
-                if (dates.length >= 7) break;
+                if (dates.length >= 10) break;
             }
+            dates.sort();
         }
 
         res.status(200).json({ success: true, available_dates: dates });
@@ -248,31 +255,35 @@ export const confirmStartDate = async (req, res) => {
         if (!subscription) { await t.rollback(); return res.status(404).json({ success: false, message: "Subscription not found" }); }
         if (subscription.start_date) { await t.rollback(); return res.status(400).json({ success: false, message: "Start date already confirmed" }); }
 
-        // Enforce Minimum Start Date Rule (Server Side)
-        const [sYear, sMonth, sDay] = start_date.split('-').map(Number);
-        const selectedDate = new Date(sYear, sMonth - 1, sDay);
-
-        const now = new Date();
-        // Convert 'now' to IST time for comparison
-        const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-
-        const minAllowedDate = new Date(istTime);
-        if (istTime.getHours() < 20) {
-            minAllowedDate.setDate(minAllowedDate.getDate() + 1); // Tomorrow
-        } else {
-            minAllowedDate.setDate(minAllowedDate.getDate() + 2); // Day after tomorrow
+        if (!start_date) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "start_date is required" });
         }
 
-        minAllowedDate.setHours(0, 0, 0, 0);
-        selectedDate.setHours(0, 0, 0, 0);
+        const normalizedStartDate = normalizeDateString(start_date);
+        if (!normalizedStartDate) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Invalid date format. Please provide YYYY-MM-DD." });
+        }
 
-        // if (selectedDate < minAllowedDate) {
-        //     await t.rollback();
-        //     return res.status(400).json({
-        //         success: false,
-        //         message: `Start date must be at least ${minAllowedDate.toISOString().split('T')[0]} (after 8 PM cutoff rule).`
-        //     });
-        // }
+        const minAllowedDate = getEarliestCutoffDate();
+        if (normalizedStartDate < minAllowedDate) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                message: `Invalid start date. Based on the 8 PM cutoff rule, the earliest possible start date is ${minAllowedDate}`
+            });
+        }
+
+        // Sunday check
+        const dateObj = new Date(normalizedStartDate);
+        if (dateObj.getUTCDay() === 0) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Deliveries cannot start on a Sunday. Please select Monday to Saturday."
+            });
+        }
 
         const pkg = subscription.Package;
         const daysInCycle = subscription.type === 'yearly' ? 360 : 30;

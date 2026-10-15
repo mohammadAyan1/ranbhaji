@@ -263,7 +263,9 @@ export default function WaterPage() {
 
       // Fetch available start dates
       const datesRes = await api.get("/water/available-dates");
-      setAvailableDates(datesRes.data.available_dates || []);
+      const minDate = getMinStartDate();
+      const validDates = (datesRes.data.available_dates || []).filter(d => d >= minDate);
+      setAvailableDates(validDates);
       setSelectedDate("");
       setStep("confirm_date");
       setShowRazorpay(false);
@@ -309,7 +311,9 @@ export default function WaterPage() {
 
       // Fetch available start dates
       const datesRes = await api.get("/water/available-dates");
-      setAvailableDates(datesRes.data.available_dates || []);
+      const minDate = getMinStartDate();
+      const validDates = (datesRes.data.available_dates || []).filter(d => d >= minDate);
+      setAvailableDates(validDates);
       setSelectedDate(""); // Compulsory date selection!
       setStep("confirm_date");
       setMsg("✅ Payment successful and water subscription purchased! Please select your delivery start date.");
@@ -950,7 +954,9 @@ export default function WaterPage() {
                     onClick={() => {
                       setCurrentSubId(w.id);
                       api.get("/water/available-dates").then(res => {
-                        setAvailableDates(res.data.available_dates || []);
+                        const minDate = getMinStartDate();
+                        const validDates = (res.data.available_dates || []).filter(d => d >= minDate);
+                        setAvailableDates(validDates);
                         setSelectedDate("");
                         setStep("confirm_date");
                       });
