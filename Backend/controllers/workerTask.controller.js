@@ -8,7 +8,7 @@ import {
     calculateTotalProductTime, calculateWeighingDuration, calculateSoakingDuration,
     calculateCuttingDuration, calculateDryingDuration, recalculateDryingDuration, recalculateRemainingTime, calculateElapsedRealSeconds
 } from '../utils/taskMath.js';
-import { computeBatchDemandHelper } from './batch.controller.js';
+import { computeBatchDemandHelper, invalidateBatchDemandCache } from './batch.controller.js';
 
 // Get available batches for today
 export const getTodayBatches = async (req, res) => {
@@ -109,22 +109,19 @@ class Mutex {
 }
 const syncMutex = new Mutex();
 
-const syncBatchDemand = async (batchId) => {
+export const syncBatchDemand = async (batchId, options = {}) => {
     await syncMutex.lock();
     try {
         const now = new Date();
         now.setMinutes(now.getMinutes() + 330); // IST Offset
         const today = now.toISOString().split('T')[0];
 
-        // Compute demandMap using the exact same logic as Admin Dashboard
-        const demandMapObj = await computeBatchDemandHelper(batchId, today);
+        // Compute demandMap using the exact same logic as Admin Dashboard (with cache support)
+        const demandMapObj = await computeBatchDemandHelper(batchId, today, { bypassCache: options.force || false });
         const demandMap = {};
         Object.keys(demandMapObj).forEach(k => {
             demandMap[k] = demandMapObj[k].total_quantity;
         });
-
-        // Clear old demands for this batch to remove products that no longer have demand today
-        await BatchProductDemand.destroy({ where: { batch_id: batchId } });
 
         // Fetch Purchase Logs for today to only show products actually purchased
         const startOfToday = new Date();
@@ -144,20 +141,32 @@ const syncBatchDemand = async (batchId) => {
         const purchasedProductIds = new Set(purchases.map(p => parseInt(p.product_id)));
 
         // Fetch product categories to always allow water
-        const products = await Product.findAll({
-            where: { id: Object.keys(demandMap) },
+        const productIds = Object.keys(demandMap);
+        const products = productIds.length > 0 ? await Product.findAll({
+            where: { id: productIds },
             attributes: ['id', 'category']
-        });
+        }) : [];
         const productCategories = {};
         products.forEach(p => productCategories[p.id] = p.category);
 
+        const demandsToCreate = [];
         for (const [productId, qty] of Object.entries(demandMap)) {
             const pId = parseInt(productId);
             const isWater = productCategories[pId] === 'water';
 
             if (qty > 0 && (isWater || purchasedProductIds.has(pId))) {
-                await BatchProductDemand.create({ batch_id: batchId, product_id: pId, quantity_grams: qty });
+                demandsToCreate.push({
+                    batch_id: batchId,
+                    product_id: pId,
+                    quantity_grams: qty
+                });
             }
+        }
+
+        // Fast atomic bulk replace in 1 DB operation instead of 25 sequential creates
+        await BatchProductDemand.destroy({ where: { batch_id: batchId } });
+        if (demandsToCreate.length > 0) {
+            await BatchProductDemand.bulkCreate(demandsToCreate);
         }
     } finally {
         syncMutex.unlock();
@@ -368,7 +377,8 @@ export const assignNextTask = async (req, res) => {
                     include: [{ model: RetailOrderItem, as: 'Items' }]
                 });
 
-                // Generate BUCKET_ARRANGE task for each demanded product
+                // Generate BUCKET_ARRANGE task for each demanded product in bulk
+                const tasksToCreate = [];
                 for (const d of demands) {
                     // Count how many users ordered this product
                     let userCount = 0;
@@ -381,7 +391,7 @@ export const assignNextTask = async (req, res) => {
                     const baseTime = d.Product ? (d.Product.weighing_time_seconds || 30) : 30;
                     const totalDuration = baseTime * userCount;
 
-                    const newTask = await BatchProductTask.create({
+                    tasksToCreate.push({
                         batch_id: batchId,
                         product_id: d.product_id,
                         stage: 'BUCKET_ARRANGE',
@@ -390,13 +400,18 @@ export const assignNextTask = async (req, res) => {
                         duration_seconds: totalDuration,
                         remaining_seconds: totalDuration
                     });
-                    const loadedTask = await BatchProductTask.findByPk(newTask.id, { 
+                }
+
+                if (tasksToCreate.length > 0) {
+                    const createdBucketTasks = await BatchProductTask.bulkCreate(tasksToCreate);
+                    const loadedTasks = await BatchProductTask.findAll({
+                        where: { id: createdBucketTasks.map(t => t.id) },
                         include: [
                             { model: Product },
                             { model: TaskWorkerAssignment, as: 'worker_assignments', required: false }
-                        ] 
+                        ]
                     });
-                    tasks.push(loadedTask);
+                    tasks.push(...loadedTasks);
                 }
             }
         }
@@ -881,11 +896,14 @@ export const getTaskBuckets = async (req, res) => {
         });
         if (!task) return res.status(404).json({ success: false, message: "Task not found" });
 
-        // Use today's date to match syncBatchDemand logic
-        const date = new Date().toISOString().split('T')[0];
+        // Use today's date in IST to match cache key exactly
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 330);
+        const date = now.toISOString().split('T')[0];
 
+        // Fetch from memory cache in < 1ms
         const demandMap = await computeBatchDemandHelper(task.batch_id, date);
-        const productDemand = demandMap[task.product_id];
+        const productDemand = demandMap ? demandMap[task.product_id] : null;
 
         let buckets = [];
         if (productDemand && productDemand.usersMap) {

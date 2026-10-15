@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
 import { Op } from "sequelize";
-import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, Subscription, SubscriptionItem, WaterSubscription, DeliveryItem, ScheduleSeasonalSelection, sequelize, ProductionBatch } from '../models/index.js';
+import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, Subscription, SubscriptionItem, WaterSubscription, DeliveryItem, ScheduleSeasonalSelection, sequelize, ProductionBatch, Batch } from '../models/index.js';
+import { invalidateBatchDemandCache } from './batch.controller.js';
+import { syncBatchDemand } from './workerTask.controller.js';
 
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
@@ -221,9 +223,24 @@ export const createPurchase = async (req, res) => {
 
         await t.commit();
 
-        // Notify socket clients about new production batch
+        // Invalidate demand cache & immediately sync demand for active batches
+        try {
+            invalidateBatchDemandCache();
+            const activeBatches = await Batch.findAll({
+                where: { status: 'active', is_deleted: false },
+                attributes: ['id']
+            });
+            for (const b of activeBatches) {
+                syncBatchDemand(b.id, { force: true }).catch(err => console.error("Auto syncBatchDemand error:", err));
+            }
+        } catch (syncErr) {
+            console.error("Demand cache/sync error on recordPurchase:", syncErr);
+        }
+
+        // Notify socket clients about new production batch & demand update
         if (req.app.get('io')) {
             req.app.get('io').emit('production:update', { timestamp: new Date() });
+            req.app.get('io').emit('demand:update', { timestamp: new Date() });
         }
         res.status(201).json({ success: true, message: "Purchase recorded successfully", log, product });
     } catch (error) {

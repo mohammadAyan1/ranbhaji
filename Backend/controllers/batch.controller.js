@@ -79,8 +79,33 @@ export const deleteBatch = async (req, res) => {
     }
 };
 
+// High-performance in-memory cache for computed batch demand
+const batchDemandCache = new Map();
+const BATCH_DEMAND_CACHE_TTL = 60 * 1000; // 60 seconds TTL
+
+export const invalidateBatchDemandCache = (batch_id = null) => {
+    if (!batch_id) {
+        batchDemandCache.clear();
+    } else {
+        const prefix = `${batch_id}_`;
+        for (const key of batchDemandCache.keys()) {
+            if (key.startsWith(prefix)) {
+                batchDemandCache.delete(key);
+            }
+        }
+    }
+};
+
 // GET /api/admin/batches/:id/demands
-export const computeBatchDemandHelper = async (batch_id, date) => {
+export const computeBatchDemandHelper = async (batch_id, date, options = {}) => {
+    const cacheKey = `${batch_id}_${date}`;
+    if (!options.bypassCache && batchDemandCache.has(cacheKey)) {
+        const cached = batchDemandCache.get(cacheKey);
+        if (Date.now() - cached.timestamp < BATCH_DEMAND_CACHE_TTL) {
+            return cached.data;
+        }
+    }
+
     // 1. Fetch Subscription & Water Deliveries
     const schedules = await DeliverySchedule.findAll({
         where: { batch_id, scheduled_date: date, status: ['pending', 'ready_for_delivery'] },
@@ -287,6 +312,7 @@ export const computeBatchDemandHelper = async (batch_id, date) => {
         }
     });
 
+    batchDemandCache.set(cacheKey, { data: demandMap, timestamp: Date.now() });
     return demandMap;
 };
 
