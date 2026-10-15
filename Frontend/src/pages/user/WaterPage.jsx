@@ -53,20 +53,62 @@ export default function WaterPage() {
   // Pause states
   const [pausingSub, setPausingSub] = useState(null);
   const [pauseType, setPauseType] = useState("monthly");
-  const [daysToPause, setDaysToPause] = useState(5);
+  const [pauseFromDate, setPauseFromDate] = useState("");
+  const [pauseToDate, setPauseToDate] = useState("");
   const [pauseScope, setPauseScope] = useState("single");
   const [pausingMsg, setPausingMsg] = useState("");
   const [pausingLoader, setPausingLoader] = useState(false);
 
   const getMinStartDate = () => {
     const now = new Date();
-    const minDate = new Date();
-    if (now.getHours() < 20) {
-      minDate.setDate(minDate.getDate() + 1); // tomorrow
-    } else {
-      minDate.setDate(minDate.getDate() + 2); // day after tomorrow
-    }
-    return minDate.toISOString().split('T')[0];
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    });
+    const parts = formatter.formatToParts(now);
+    const getPart = (type) => parts.find(p => p.type === type)?.value;
+    const year = parseInt(getPart("year"), 10);
+    const month = parseInt(getPart("month"), 10);
+    const day = parseInt(getPart("day"), 10);
+    const hour = parseInt(getPart("hour"), 10);
+
+    const daysToAdd = hour < 20 ? 1 : 2;
+    const target = new Date(Date.UTC(year, month - 1, day + daysToAdd));
+    return target.toISOString().split("T")[0];
+  };
+
+  const calculatePauseDays = (from, to) => {
+    if (!from || !to) return 0;
+    const d1 = new Date(from);
+    const d2 = new Date(to);
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  const getResumeDateFromToDate = (to) => {
+    if (!to) return "";
+    const parts = to.split('-').map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1));
+    return d.toISOString().split('T')[0];
+  };
+
+  const openPauseModal = (w) => {
+    const minStart = getMinStartDate();
+    setPausingSub(w);
+    setPauseType("monthly");
+    setPauseFromDate(minStart);
+    const parts = minStart.split('-').map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 4));
+    setPauseToDate(d.toISOString().split('T')[0]);
+    setPauseScope("single");
+    setPausingMsg("");
   };
 
   const fetchWater = () => {
@@ -120,14 +162,14 @@ export default function WaterPage() {
         if (defaultAddr) setSelectedAddressId(defaultAddr.id);
         else if (addrs.length > 0) setSelectedAddressId(addrs[0].id);
       });
-      
+
     api.get("/user/batches")
       .then(r => {
         const b = r.data.batches || [];
         setActiveBatches(b);
         if (b.length > 0) setSelectedBatchId(b[0].id);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const getMatchedProduct = () => {
@@ -145,7 +187,7 @@ export default function WaterPage() {
   const pricePerBottle = matchedProduct ? parseFloat(matchedProduct.selling_price_per_gm) : 0;
   const bottleCapacity = matchedProduct ? (parseFloat(matchedProduct.water_capacity_liters) || 1) : 1;
   const bottlesCount = parseInt(form.bottles_per_day || 1);
-  
+
   // Daily: 30 deliveries per month. Alternate: 15 deliveries per month.
   const servicesPerMonth = form.frequency === "daily" ? 30 : 15;
   const totalServices = selectedType === "yearly" ? servicesPerMonth * 12 : servicesPerMonth;
@@ -171,7 +213,7 @@ export default function WaterPage() {
         is_default: true
       });
       setShowInlineAddressModal(false);
-      
+
       api.get("/addresses").then(r => {
         const addrs = r.data.addresses || [];
         setAddresses(addrs);
@@ -218,11 +260,11 @@ export default function WaterPage() {
         bottles_per_delivery: bottlesCount
       });
       setCurrentSubId(res.data.water_subscription_id);
-      
+
       // Fetch available start dates
       const datesRes = await api.get("/water/available-dates");
       setAvailableDates(datesRes.data.available_dates || []);
-      setSelectedDate(""); 
+      setSelectedDate("");
       setStep("confirm_date");
       setShowRazorpay(false);
       setMsg("✅ Wallet payment successful and water subscription purchased! Please select your delivery start date.");
@@ -264,7 +306,7 @@ export default function WaterPage() {
         bottles_per_delivery: bottlesCount
       });
       setCurrentSubId(res.data.water_subscription_id);
-      
+
       // Fetch available start dates
       const datesRes = await api.get("/water/available-dates");
       setAvailableDates(datesRes.data.available_dates || []);
@@ -295,11 +337,27 @@ export default function WaterPage() {
   };
 
   const handleConfirmPause = async () => {
+    if (!pauseFromDate || !pauseToDate) {
+      setPausingMsg("❌ Please select both From Date and To Date");
+      return;
+    }
+    const days = calculatePauseDays(pauseFromDate, pauseToDate);
+    if (days <= 0) {
+      setPausingMsg("❌ To Date must be on or after From Date");
+      return;
+    }
+    const maxDays = pauseType === "monthly" ? 15 : 45;
+    if (days > maxDays) {
+      setPausingMsg(`❌ Maximum pause duration for ${pauseType} plan is ${maxDays} days. Selected: ${days} days.`);
+      return;
+    }
+
     setPausingLoader(true);
     setPausingMsg("");
     try {
       const res = await api.patch(`/water/${pausingSub.id}/pause`, {
-        pause_days: parseInt(daysToPause),
+        from_date: pauseFromDate,
+        to_date: pauseToDate,
         pause_type: pauseType,
         pause_scope: pauseScope
       });
@@ -315,12 +373,17 @@ export default function WaterPage() {
 
   const startResumeFlow = async (sub) => {
     setResumingSub(sub);
-    setSelectedResumeDate(getMinStartDate());
+    const minDate = getMinStartDate();
+    setSelectedResumeDate(minDate);
     setResumeMsg("");
     setResumeDates([]);
     try {
       const datesRes = await api.get("/water/available-dates");
-      setResumeDates(datesRes.data.available_dates || []);
+      const validDates = (datesRes.data.available_dates || []).filter(d => d >= minDate);
+      setResumeDates(validDates);
+      if (validDates.length > 0 && !validDates.includes(minDate)) {
+        setSelectedResumeDate(validDates[0]);
+      }
     } catch (err) {
       setResumeMsg(`❌ Failed to load suggested dates: ${err.response?.data?.message}`);
     }
@@ -393,11 +456,10 @@ export default function WaterPage() {
                 <button
                   key={date}
                   onClick={() => setSelectedDate(date)}
-                  className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                    selectedDate === date
-                      ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
-                      : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
-                  }`}
+                  className={`p-3 rounded-xl border text-left transition-all duration-200 ${selectedDate === date
+                    ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
+                    }`}
                 >
                   <p className="font-semibold text-sm">{dayName}</p>
                   <p className="text-xs text-gray-600 mt-0.5">{formatted}</p>
@@ -468,17 +530,31 @@ export default function WaterPage() {
               <div>
                 <label className="label">Pause Plan Type</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => { setPauseType("monthly"); setDaysToPause(5); }}
+                    onClick={() => {
+                      setPauseType("monthly");
+                      if (pauseFromDate) {
+                        const parts = pauseFromDate.split('-').map(Number);
+                        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 4));
+                        setPauseToDate(d.toISOString().split('T')[0]);
+                      }
+                    }}
                     className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "monthly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     📅 Monthly Pause
                     <span className="block text-[10px] text-gray-500 font-normal mt-0.5">Max 15 days total</span>
                   </button>
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => { setPauseType("yearly"); setDaysToPause(10); }}
+                    onClick={() => {
+                      setPauseType("yearly");
+                      if (pauseFromDate) {
+                        const parts = pauseFromDate.split('-').map(Number);
+                        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 9));
+                        setPauseToDate(d.toISOString().split('T')[0]);
+                      }
+                    }}
                     className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "yearly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     🏆 Yearly Pause
@@ -487,27 +563,75 @@ export default function WaterPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="label">Pause Duration (Days)</label>
-                <input 
-                  type="number"
-                  min="1"
-                  max={pauseType === "monthly" ? 15 : 45}
-                  className="input"
-                  value={daysToPause}
-                  onChange={e => setDaysToPause(e.target.value)}
-                  required
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  {pauseType === "monthly" 
-                    ? "Allows multiple pauses as long as total doesn't exceed 15 days this cycle."
-                    : "⚠️ Can only be paused once per year. Any unused days of the 45-day limit will be forfeited."}
-                </p>
+              {/* Date Pickers: From Date & To Date */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">From Date</label>
+                  <input
+                    type="date"
+                    min={getMinStartDate()}
+                    className="input text-sm"
+                    value={pauseFromDate}
+                    onChange={e => {
+                      const newFrom = e.target.value;
+                      setPauseFromDate(newFrom);
+                      if (pauseToDate && newFrom > pauseToDate) {
+                        setPauseToDate(newFrom);
+                      }
+                    }}
+                    required
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Earliest cutoff: {getMinStartDate()}
+                  </p>
+                </div>
+                <div>
+                  <label className="label">To Date</label>
+                  <input
+                    type="date"
+                    min={pauseFromDate || getMinStartDate()}
+                    className="input text-sm"
+                    value={pauseToDate}
+                    onChange={e => setPauseToDate(e.target.value)}
+                    required
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    End of pause period
+                  </p>
+                </div>
               </div>
+
+              {/* Dynamic Calculation Summary */}
+              {(() => {
+                const totalDays = calculatePauseDays(pauseFromDate, pauseToDate);
+                const maxDays = pauseType === "monthly" ? 15 : 45;
+                const isOverLimit = totalDays > maxDays;
+                const resumeDate = getResumeDateFromToDate(pauseToDate);
+
+                return (
+                  <div className={`p-3 rounded-xl border text-xs space-y-1.5 ${isOverLimit ? 'bg-red-50 border-red-200 text-red-700' : 'bg-fresh-50/50 border-fresh-200 text-gray-700'}`}>
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">Total Pause Days:</span>
+                      <span className={`font-bold ${isOverLimit ? 'text-red-600' : 'text-fresh-700'}`}>
+                        {totalDays} day{totalDays !== 1 ? 's' : ''} (Max: {maxDays} days)
+                      </span>
+                    </div>
+                    {resumeDate && (
+                      <div className="flex justify-between items-center text-gray-600">
+                        <span>Deliveries Resume On:</span>
+                        <span className="font-semibold text-gray-900">{resumeDate}</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-gray-500 pt-1 border-t border-gray-200">
+                      💧 Unfulfilled water servings during this pause window will be automatically shifted forward starting on {resumeDate || "the day after pause"}.
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="label">Apply To</label>
-                <select 
+                <select
                   className="input text-sm"
                   value={pauseScope}
                   onChange={e => setPauseScope(e.target.value)}
@@ -519,10 +643,10 @@ export default function WaterPage() {
             </div>
 
             <div className="flex gap-3 pt-4 border-t border-gray-200">
-              <button 
-                onClick={handleConfirmPause} 
-                disabled={pausingLoader || !daysToPause} 
-                className="btn-primary flex-1 py-2"
+              <button
+                onClick={handleConfirmPause}
+                disabled={pausingLoader || !pauseFromDate || !pauseToDate || calculatePauseDays(pauseFromDate, pauseToDate) <= 0 || calculatePauseDays(pauseFromDate, pauseToDate) > (pauseType === "monthly" ? 15 : 45)}
+                className="btn-primary flex-1 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {pausingLoader ? "Pausing..." : "Confirm Pause"}
               </button>
@@ -563,11 +687,10 @@ export default function WaterPage() {
                       key={date}
                       type="button"
                       onClick={() => setSelectedResumeDate(date)}
-                      className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                        selectedResumeDate === date
-                          ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
-                          : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
-                      }`}
+                      className={`p-3 rounded-xl border text-left transition-all duration-200 ${selectedResumeDate === date
+                        ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600"
+                        : "border-gray-300 bg-white text-gray-700 hover:border-gray-600"
+                        }`}
                     >
                       <p className="font-semibold text-sm">{dayName}</p>
                       <p className="text-xs text-gray-600 mt-0.5">{formatted}</p>
@@ -612,7 +735,7 @@ export default function WaterPage() {
           {!waters.some(w => ["active", "paused"].includes(w.status)) ? (
             <div className="card space-y-4">
               <h3 className="font-bold text-gray-900 text-lg border-b border-gray-200 pb-3">New Water Plan</h3>
-              
+
               {/* Type toggle */}
               <div className="flex gap-2 bg-gray-100 rounded-xl p-1 w-full">
                 {["monthly", "yearly"].map(t => (
@@ -660,7 +783,7 @@ export default function WaterPage() {
 
                 <div>
                   <label className="label">Frequency</label>
-                  <select className="input" value={form.frequency} onChange={e => setForm({...form, frequency: e.target.value})}>
+                  <select className="input" value={form.frequency} onChange={e => setForm({ ...form, frequency: e.target.value })}>
                     <option value="daily">Daily Delivery (30 days)</option>
                     <option value="alternate">Alternate Days (Mon-Wed-Fri...)</option>
                   </select>
@@ -703,9 +826,9 @@ export default function WaterPage() {
                       <button type="button" onClick={() => navigate("/addresses")} className="btn-secondary text-xs py-1.5 w-fit">📍 Add Address</button>
                     </div>
                   ) : (
-                    <select 
-                      className="input text-sm" 
-                      value={selectedAddressId} 
+                    <select
+                      className="input text-sm"
+                      value={selectedAddressId}
                       onChange={e => setSelectedAddressId(e.target.value)}
                     >
                       {addresses.map(a => (
@@ -723,9 +846,9 @@ export default function WaterPage() {
                       <p className="text-yellow-400 text-xs font-semibold">⚠️ No batches found.</p>
                     </div>
                   ) : (
-                    <select 
-                      className="input text-sm" 
-                      value={selectedBatchId} 
+                    <select
+                      className="input text-sm"
+                      value={selectedBatchId}
                       onChange={e => setSelectedBatchId(e.target.value)}
                     >
                       {activeBatches.map(b => (
@@ -792,8 +915,8 @@ export default function WaterPage() {
                     <span className={`badge ${statusBadge(w.status)}`}>{w.status}</span>
                     <span className="badge badge-gray capitalize">{w.type}</span>
                   </div>
-                   <p className="text-gray-600 text-sm capitalize">{w.bottles_per_delivery || 1} × {w.container} bottle ({parseFloat(w.capacity_liters || 1)}L) · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
-                  
+                  <p className="text-gray-600 text-sm capitalize">{w.bottles_per_delivery || 1} × {w.container} bottle ({parseFloat(w.capacity_liters || 1)}L) · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
+
                   {w.start_date ? (
                     <p className="text-gray-500 text-xs mt-1.5">
                       📅 {w.start_date} → {w.end_date} · {w.services_completed}/{w.total_services} deliveries done
@@ -808,13 +931,7 @@ export default function WaterPage() {
               <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-gray-200">
                 {w.status === "active" && (
                   <>
-                    <button onClick={() => {
-                      setPausingSub(w);
-                      setPauseType("monthly");
-                      setDaysToPause(5);
-                      setPauseScope("single");
-                      setPausingMsg("");
-                    }} className="btn-secondary text-xs py-1.5 px-4">
+                    <button onClick={() => openPauseModal(w)} className="btn-secondary text-xs py-1.5 px-4">
                       ⏸ Pause Plan
                     </button>
                     <button onClick={() => handleCancel(w.id)} className="btn-danger text-xs py-1.5 px-3">✕ Cancel</button>
@@ -829,7 +946,7 @@ export default function WaterPage() {
                 )}
 
                 {!w.start_date && w.status === "active" && (
-                  <button 
+                  <button
                     onClick={() => {
                       setCurrentSubId(w.id);
                       api.get("/water/available-dates").then(res => {
@@ -869,14 +986,14 @@ export default function WaterPage() {
             </button>
             <h2 className="text-xl font-bold text-gray-900 mb-4">📍 Where to deliver?</h2>
             <p className="text-gray-600 text-sm mb-6">Aap {form.water_type} water deliveries kahan receive karna chahte hain?</p>
-            
+
             <div className="space-y-4">
               <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'existing' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
-                  <input 
-                    type="radio" 
-                    name="addressChoice" 
-                    checked={addressChoiceMode === 'existing'} 
+                  <input
+                    type="radio"
+                    name="addressChoice"
+                    checked={addressChoiceMode === 'existing'}
                     onChange={() => setAddressChoiceMode('existing')}
                     className="w-4 h-4 accent-fresh-500"
                   />
@@ -905,17 +1022,17 @@ export default function WaterPage() {
 
               <label className={`block p-4 rounded-xl border cursor-pointer transition-all ${addressChoiceMode === 'new' ? 'border-fresh-500 bg-fresh-100/20' : 'border-gray-300 bg-gray-100/40'}`}>
                 <div className="flex items-center gap-3">
-                  <input 
-                    type="radio" 
-                    name="addressChoice" 
-                    checked={addressChoiceMode === 'new'} 
+                  <input
+                    type="radio"
+                    name="addressChoice"
+                    checked={addressChoiceMode === 'new'}
                     onChange={() => setAddressChoiceMode('new')}
                     className="w-4 h-4 accent-fresh-500"
                   />
                   <span className="text-gray-900 font-medium">Deliver to a new address</span>
                 </div>
               </label>
-              
+
               <div className="space-y-1.5 mt-2">
                 <label className="text-gray-600 text-xs font-bold uppercase tracking-wider">⏱ Delivery Batch</label>
                 {activeBatches.length === 0 ? (
@@ -940,19 +1057,19 @@ export default function WaterPage() {
             </div>
 
             <div className="mt-8 flex gap-3">
-              <button 
+              <button
                 onClick={() => {
                   if (addressChoiceMode === 'new') {
                     setShowAddressChoiceModal(false);
                     setShowInlineAddressModal(true);
                   } else {
                     if (addresses.length === 0) {
-                       setMsg("❌ Please add an address first.");
-                       return;
+                      setMsg("❌ Please add an address first.");
+                      return;
                     }
                     if (!selectedBatchId) {
-                       setMsg("❌ Please select a delivery batch.");
-                       return;
+                      setMsg("❌ Please select a delivery batch.");
+                      return;
                     }
                     setShowAddressChoiceModal(false);
                     setShowRazorpay(true);
@@ -1073,9 +1190,9 @@ export default function WaterPage() {
                 <span className="text-blue-400 font-extrabold text-xl tracking-tight">Razorpay</span>
                 <span className="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-500/20">SECURE CHECKOUT</span>
               </div>
-              <button 
+              <button
                 type="button"
-                onClick={() => setShowRazorpay(false)} 
+                onClick={() => setShowRazorpay(false)}
                 className="text-gray-600 hover:text-gray-900 text-2xl leading-none transition-colors"
                 disabled={paymentStatus === "processing"}
               >
@@ -1138,24 +1255,24 @@ export default function WaterPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 pt-2">
-                  <button 
+                  <button
                     type="button"
-                    onClick={handleSimulatedPayment} 
+                    onClick={handleSimulatedPayment}
                     className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-gray-900 font-bold rounded-xl transition-all duration-300 shadow-lg shadow-blue-950 flex items-center justify-center gap-2"
                   >
                     🔒 Pay ₹{totalPrice.toFixed(2)} Securely
                   </button>
-                  <button 
+                  <button
                     type="button"
-                    onClick={handleWalletPayment} 
+                    onClick={handleWalletPayment}
                     disabled={subscribing}
                     className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-green-900/50 flex items-center justify-center gap-2"
                   >
                     {subscribing ? "Processing..." : `💳 Pay ₹${totalPrice.toFixed(2)} via Wallet`}
                   </button>
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => setShowRazorpay(false)} 
+                    onClick={() => setShowRazorpay(false)}
                     className="w-full py-2.5 bg-transparent hover:bg-white text-gray-600 hover:text-gray-900 font-medium rounded-xl transition-all text-sm"
                   >
                     Cancel Payment

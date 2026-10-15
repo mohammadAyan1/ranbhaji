@@ -11,7 +11,8 @@ export default function MySubscriptions() {
   // Pause Configuration Modal state
   const [pausingSub, setPausingSub] = useState(null);
   const [pauseType, setPauseType] = useState("monthly");
-  const [daysToPause, setDaysToPause] = useState(5);
+  const [pauseFromDate, setPauseFromDate] = useState("");
+  const [pauseToDate, setPauseToDate] = useState("");
   const [pauseScope, setPauseScope] = useState("single");
   const [pausingMsg, setPausingMsg] = useState("");
   const [pausingLoader, setPausingLoader] = useState(false);
@@ -66,13 +67,54 @@ export default function MySubscriptions() {
 
   const getMinStartDate = () => {
     const now = new Date();
-    const minDate = new Date();
-    if (now.getHours() < 20) {
-      minDate.setDate(minDate.getDate() + 1); // tomorrow
-    } else {
-      minDate.setDate(minDate.getDate() + 2); // day after tomorrow
-    }
-    return minDate.toISOString().split('T')[0];
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    });
+    const parts = formatter.formatToParts(now);
+    const getPart = (type) => parts.find(p => p.type === type)?.value;
+    const year = parseInt(getPart("year"), 10);
+    const month = parseInt(getPart("month"), 10);
+    const day = parseInt(getPart("day"), 10);
+    const hour = parseInt(getPart("hour"), 10);
+
+    const daysToAdd = hour < 20 ? 1 : 2;
+    const target = new Date(Date.UTC(year, month - 1, day + daysToAdd));
+    return target.toISOString().split("T")[0];
+  };
+
+  const calculatePauseDays = (from, to) => {
+    if (!from || !to) return 0;
+    const d1 = new Date(from);
+    const d2 = new Date(to);
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  const getResumeDateFromToDate = (to) => {
+    if (!to) return "";
+    const parts = to.split('-').map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1));
+    return d.toISOString().split('T')[0];
+  };
+
+  const openPauseModal = (sub) => {
+    const minStart = getMinStartDate();
+    setPausingSub(sub);
+    setPauseType("monthly");
+    setPauseFromDate(minStart);
+    const parts = minStart.split('-').map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 4));
+    setPauseToDate(d.toISOString().split('T')[0]);
+    setPauseScope("single");
+    setPausingMsg("");
   };
 
   const handleConfirmStartDate = async () => {
@@ -94,11 +136,27 @@ export default function MySubscriptions() {
   };
 
   const handleConfirmPause = async () => {
+    if (!pauseFromDate || !pauseToDate) {
+      setPausingMsg("❌ Please select both From Date and To Date");
+      return;
+    }
+    const days = calculatePauseDays(pauseFromDate, pauseToDate);
+    if (days <= 0) {
+      setPausingMsg("❌ To Date must be on or after From Date");
+      return;
+    }
+    const maxDays = pauseType === "monthly" ? 15 : 45;
+    if (days > maxDays) {
+      setPausingMsg(`❌ Maximum pause duration for ${pauseType} plan is ${maxDays} days. Selected: ${days} days.`);
+      return;
+    }
+
     setPausingLoader(true);
     setPausingMsg("");
     try {
       const res = await api.patch(`/subscriptions/${pausingSub.id}/pause`, {
-        pause_days: parseInt(daysToPause),
+        from_date: pauseFromDate,
+        to_date: pauseToDate,
         pause_type: pauseType,
         pause_scope: pauseScope
       });
@@ -114,12 +172,17 @@ export default function MySubscriptions() {
 
   const startResumeFlow = async (sub) => {
     setResumingSub(sub);
-    setSelectedResumeDate(getMinStartDate());
+    const minDate = getMinStartDate();
+    setSelectedResumeDate(minDate);
     setResumeMsg("");
     setResumeDates([]);
     try {
       const datesRes = await api.get(`/available-dates?package_id=${sub.package_id}`);
-      setResumeDates(datesRes.data.available_dates || []);
+      const validDates = (datesRes.data.available_dates || []).filter(d => d >= minDate);
+      setResumeDates(validDates);
+      if (validDates.length > 0 && !validDates.includes(minDate)) {
+        setSelectedResumeDate(validDates[0]);
+      }
     } catch (err) {
       setResumeMsg(`❌ Failed to load suggested dates: ${err.response?.data?.message}`);
     }
@@ -560,7 +623,14 @@ export default function MySubscriptions() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => { setPauseType("monthly"); setDaysToPause(5); }}
+                    onClick={() => {
+                      setPauseType("monthly");
+                      if (pauseFromDate) {
+                        const parts = pauseFromDate.split('-').map(Number);
+                        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 4));
+                        setPauseToDate(d.toISOString().split('T')[0]);
+                      }
+                    }}
                     className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "monthly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     📅 Monthly Pause
@@ -568,7 +638,14 @@ export default function MySubscriptions() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setPauseType("yearly"); setDaysToPause(10); }}
+                    onClick={() => {
+                      setPauseType("yearly");
+                      if (pauseFromDate) {
+                        const parts = pauseFromDate.split('-').map(Number);
+                        const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 9));
+                        setPauseToDate(d.toISOString().split('T')[0]);
+                      }
+                    }}
                     className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all ${pauseType === "yearly" ? "border-fresh-500 bg-fresh-50 border-fresh-200 text-fresh-600" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     🏆 Yearly Pause
@@ -577,23 +654,71 @@ export default function MySubscriptions() {
                 </div>
               </div>
 
-              <div>
-                <label className="label">Pause Duration (Days)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={pauseType === "monthly" ? 15 : 45}
-                  className="input"
-                  value={daysToPause}
-                  onChange={e => setDaysToPause(e.target.value)}
-                  required
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  {pauseType === "monthly"
-                    ? "Allows multiple pauses as long as total doesn't exceed 15 days this cycle."
-                    : "⚠️ Can only be paused once per year. Any unused days of the 45-day limit will be forfeited."}
-                </p>
+              {/* Date Pickers: From Date & To Date */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">From Date</label>
+                  <input
+                    type="date"
+                    min={getMinStartDate()}
+                    className="input text-sm"
+                    value={pauseFromDate}
+                    onChange={e => {
+                      const newFrom = e.target.value;
+                      setPauseFromDate(newFrom);
+                      if (pauseToDate && newFrom > pauseToDate) {
+                        setPauseToDate(newFrom);
+                      }
+                    }}
+                    required
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Earliest cutoff: {getMinStartDate()}
+                  </p>
+                </div>
+                <div>
+                  <label className="label">To Date</label>
+                  <input
+                    type="date"
+                    min={pauseFromDate || getMinStartDate()}
+                    className="input text-sm"
+                    value={pauseToDate}
+                    onChange={e => setPauseToDate(e.target.value)}
+                    required
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    End of pause period
+                  </p>
+                </div>
               </div>
+
+              {/* Dynamic Calculation Summary */}
+              {(() => {
+                const totalDays = calculatePauseDays(pauseFromDate, pauseToDate);
+                const maxDays = pauseType === "monthly" ? 15 : 45;
+                const isOverLimit = totalDays > maxDays;
+                const resumeDate = getResumeDateFromToDate(pauseToDate);
+
+                return (
+                  <div className={`p-3 rounded-xl border text-xs space-y-1.5 ${isOverLimit ? 'bg-red-50 border-red-200 text-red-700' : 'bg-fresh-50/50 border-fresh-200 text-gray-700'}`}>
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">Total Pause Days:</span>
+                      <span className={`font-bold ${isOverLimit ? 'text-red-600' : 'text-fresh-700'}`}>
+                        {totalDays} day{totalDays !== 1 ? 's' : ''} (Max: {maxDays} days)
+                      </span>
+                    </div>
+                    {resumeDate && (
+                      <div className="flex justify-between items-center text-gray-600">
+                        <span>Deliveries Resume On:</span>
+                        <span className="font-semibold text-gray-900">{resumeDate}</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-gray-500 pt-1 border-t border-gray-200">
+                      🚚 Unfulfilled servings during this pause window will be automatically shifted forward starting on {resumeDate || "the day after pause"}.
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="label">Apply To</label>
@@ -611,8 +736,8 @@ export default function MySubscriptions() {
             <div className="flex gap-3 pt-4 border-t border-gray-200">
               <button
                 onClick={handleConfirmPause}
-                disabled={pausingLoader || !daysToPause}
-                className="btn-primary flex-1 py-2"
+                disabled={pausingLoader || !pauseFromDate || !pauseToDate || calculatePauseDays(pauseFromDate, pauseToDate) <= 0 || calculatePauseDays(pauseFromDate, pauseToDate) > (pauseType === "monthly" ? 15 : 45)}
+                className="btn-primary flex-1 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {pausingLoader ? "Pausing..." : "Confirm Pause"}
               </button>
@@ -1146,13 +1271,7 @@ export default function MySubscriptions() {
                               🥦 Select Sabji (Per-Service)
                             </button>
                           )}
-                          <button onClick={() => {
-                            setPausingSub(sub);
-                            setPauseType("monthly");
-                            setDaysToPause(5);
-                            setPauseScope("single");
-                            setPausingMsg("");
-                          }} className="btn-secondary text-sm py-1.5 px-4">
+                          <button onClick={() => openPauseModal(sub)} className="btn-secondary text-sm py-1.5 px-4">
                             ⏸ Pause Package
                           </button>
                           <button onClick={() => handleCancel(sub.id)} className="btn-danger text-sm py-1.5 px-3">✕ Cancel</button>

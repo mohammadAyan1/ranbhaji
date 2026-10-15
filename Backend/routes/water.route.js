@@ -1,6 +1,6 @@
 import express from "express";
-import { 
-    subscribeWater, getWaterSubscriptions, getWaterAvailableDates, 
+import {
+    subscribeWater, getWaterSubscriptions, getWaterAvailableDates,
     confirmWaterStartDate, pauseWaterSubscription, restartWaterSubscription, cancelWaterSubscription,
     updateWaterSubscriptionBatch
 } from "../controllers/water.controller.js";

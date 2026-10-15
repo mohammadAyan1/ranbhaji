@@ -7,6 +7,7 @@ import {
     ScheduleSeasonalSelection, PackageSeasonalConfig, PauseLog, PackageSeasonalPool,
     RetailOrder, RetailOrderItem, BatchSplit, ProductionBatch
 } from "../models/index.js";
+import { generateWaterDeliveryDates, generateDeliveryDates } from "./scheduleEngine.js";
 
 let ioInstance = null;
 
@@ -77,28 +78,34 @@ const runNightlyJob = async () => {
                 });
 
                 if (subscription && subscription.status === 'paused') {
-                    const remainingServices = subscription.total_services - subscription.services_completed;
-                    const newDates = [];
+                    const existingPending = await DeliverySchedule.count({
+                        where: {
+                            subscription_id: subscription.id,
+                            status: 'pending',
+                            scheduled_date: { [Op.gte]: tomorrowStr }
+                        },
+                        transaction: t
+                    });
 
-                    if (remainingServices > 0) {
-                        const gap_days = 30 / subscription.Package.services_per_month;
-                        const startParts = tomorrowStr.split('-').map(Number);
-                        const baseTime = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
+                    if (existingPending === 0) {
+                        const remainingServices = subscription.total_services - subscription.services_completed;
+                        const newDates = remainingServices > 0
+                            ? generateDeliveryDates(tomorrowStr, subscription.Package.services_per_month, 1, remainingServices)
+                            : [];
 
-                        for (let i = 0; i < remainingServices; i++) {
-                            const dateVal = new Date(baseTime + Math.round(i * gap_days) * 24 * 60 * 60 * 1000);
-                            if (dateVal.getUTCDay() === 0) {
-                                dateVal.setUTCDate(dateVal.getUTCDate() - 1);
-                            }
-                            newDates.push(dateVal.toISOString().split('T')[0]);
-                        }
+                        const scheduleRows = newDates.map(date => ({
+                            subscription_id: subscription.id,
+                            scheduled_date: date,
+                            status: 'pending',
+                            batch_id: subscription.batch_id
+                        }));
+                        await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+
+                        const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : subscription.end_date;
+                        await subscription.update({ status: 'active', end_date: new_end_date }, { transaction: t });
+                    } else {
+                        await subscription.update({ status: 'active' }, { transaction: t });
                     }
-
-                    const scheduleRows = newDates.map(date => ({ subscription_id: subscription.id, scheduled_date: date, status: 'pending', batch_id: subscription.batch_id }));
-                    await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
-
-                    const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : subscription.end_date;
-                    await subscription.update({ status: 'active', end_date: new_end_date }, { transaction: t });
                     console.log(`[CRON] Auto-restarted subscription ${subscription.id} for tomorrow`);
                 }
             }
@@ -107,33 +114,34 @@ const runNightlyJob = async () => {
             if (p.water_subscription_id) {
                 const sub = await WaterSubscription.findByPk(p.water_subscription_id, { transaction: t });
                 if (sub && sub.status === 'paused') {
-                    const remainingServices = sub.total_services - sub.services_completed;
-                    const newDates = [];
+                    const existingPendingWater = await DeliverySchedule.count({
+                        where: {
+                            water_subscription_id: sub.id,
+                            status: 'pending',
+                            scheduled_date: { [Op.gte]: tomorrowStr }
+                        },
+                        transaction: t
+                    });
 
-                    if (remainingServices > 0) {
-                        const gap_days = sub.frequency === 'daily' ? 1 : 2;
-                        const startParts = tomorrowStr.split('-').map(Number);
-                        const baseTime = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
+                    if (existingPendingWater === 0) {
+                        const remainingServices = sub.total_services - sub.services_completed;
+                        const newDates = remainingServices > 0
+                            ? generateWaterDeliveryDates(tomorrowStr, remainingServices, sub.frequency)
+                            : [];
 
-                        for (let i = 0; i < remainingServices; i++) {
-                            const dateVal = new Date(baseTime + Math.round(i * gap_days) * 24 * 60 * 60 * 1000);
-                            if (dateVal.getUTCDay() === 0) {
-                                dateVal.setUTCDate(dateVal.getUTCDate() - 1);
-                            }
-                            newDates.push(dateVal.toISOString().split('T')[0]);
-                        }
+                        const scheduleRows = newDates.map(date => ({
+                            water_subscription_id: sub.id,
+                            scheduled_date: date,
+                            status: 'pending',
+                            batch_id: sub.batch_id
+                        }));
+                        await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+
+                        const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : sub.end_date;
+                        await sub.update({ status: 'active', end_date: new_end_date }, { transaction: t });
+                    } else {
+                        await sub.update({ status: 'active' }, { transaction: t });
                     }
-
-                    const scheduleRows = newDates.map(date => ({
-                        water_subscription_id: sub.id,
-                        scheduled_date: date,
-                        status: 'pending',
-                        batch_id: sub.batch_id
-                    }));
-                    await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
-
-                    const new_end_date = newDates.length > 0 ? newDates[newDates.length - 1] : sub.end_date;
-                    await sub.update({ status: 'active', end_date: new_end_date }, { transaction: t });
                     console.log(`[CRON] Auto-restarted water subscription ${sub.id} for tomorrow`);
                 }
             }

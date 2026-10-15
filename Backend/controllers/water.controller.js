@@ -1,6 +1,8 @@
 import { sequelize } from "../confiq/db.js";
 import { WaterSubscription, User, WalletTransaction, PaymentTransaction, DeliverySchedule, PauseLog, Product, Address, Subscription, Package } from "../models/index.js";
 import { Op } from "sequelize";
+import { normalizeDateString, getEarliestCutoffDate, getDaysBetween, getDayAfterDate, getDayBeforeDate } from "../utils/helper.js";
+import { generateWaterDeliveryDates, generateDeliveryDates } from "../utils/scheduleEngine.js";
 
 // POST /api/water/subscribe
 export const subscribeWater = async (req, res) => {
@@ -213,23 +215,8 @@ export const confirmWaterStartDate = async (req, res) => {
             return res.status(400).json({ success: false, message: "Start date already confirmed" });
         }
 
-        // Generate delivery dates based on Daily/Alternate days
-        const gap_days = sub.frequency === 'daily' ? 1 : 2;
-        const totalServices = sub.total_services;
-        const dates = [];
-
-        const startParts = start_date.split('-').map(Number);
-        const baseTime = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
-
-        for (let i = 0; i < totalServices; i++) {
-            const dateVal = new Date(baseTime + Math.round(i * gap_days) * 24 * 60 * 60 * 1000);
-
-            if (dateVal.getUTCDay() === 0) { // Sunday rule: shift to Saturday
-                dateVal.setUTCDate(dateVal.getUTCDate() - 1);
-            }
-            dates.push(dateVal.toISOString().split('T')[0]);
-        }
-
+        // Generate delivery dates based on Daily/Alternate days (Sunday skipped, dates extended)
+        const dates = generateWaterDeliveryDates(start_date, sub.total_services, sub.frequency);
         const end_date = dates[dates.length - 1];
 
         // Create schedules
@@ -258,8 +245,7 @@ export const confirmWaterStartDate = async (req, res) => {
 };
 
 // Helper for pausing a standard subscription
-const pauseStandardSubscription = async (subscription, pause_days, pause_type, today, t) => {
-    const todayStr = today.toISOString().split('T')[0];
+const pauseStandardSubscription = async (subscription, from_date, to_date, days, pause_type, t) => {
     if (pause_type === 'monthly') {
         const cycleStart = new Date(subscription.start_date);
         const existingPauses = await PauseLog.sum('actual_days_used', {
@@ -270,21 +256,9 @@ const pauseStandardSubscription = async (subscription, pause_days, pause_type, t
             throw new Error(`Monthly pause limit reached (${existingPauses}/15 days used this cycle)`);
         }
         const remaining = 15 - existingPauses;
-        if (pause_days > remaining) {
-            throw new Error(`Only ${remaining} monthly pause days remaining. Requested: ${pause_days}`);
+        if (days > remaining) {
+            throw new Error(`Only ${remaining} monthly pause days remaining. Requested: ${days} days (${from_date} to ${to_date})`);
         }
-        const pause_end = new Date(today);
-        pause_end.setDate(pause_end.getDate() + pause_days - 1);
-
-        await PauseLog.create({
-            subscription_id: subscription.id,
-            pause_start: today,
-            pause_end,
-            requested_days: pause_days,
-            actual_days_used: pause_days,
-            type: 'monthly',
-            status: 'active'
-        }, { transaction: t });
     } else {
         // yearly
         const existingPause = await PauseLog.findOne({
@@ -294,42 +268,69 @@ const pauseStandardSubscription = async (subscription, pause_days, pause_type, t
         if (existingPause) {
             throw new Error("Yearly pause can only be taken once per subscription");
         }
-        if (pause_days > 45) {
-            throw new Error("Yearly pause limit is 45 days maximum");
+        if (days > 45) {
+            throw new Error(`Yearly pause limit is 45 days maximum. Requested: ${days} days`);
         }
-        const pause_end = new Date(today);
-        pause_end.setDate(pause_end.getDate() + pause_days - 1);
-
-        await PauseLog.create({
-            subscription_id: subscription.id,
-            pause_start: today,
-            pause_end,
-            requested_days: pause_days,
-            actual_days_used: pause_days,
-            type: 'yearly',
-            status: 'active'
-        }, { transaction: t });
     }
 
-    await subscription.update({ status: 'paused' }, { transaction: t });
+    await PauseLog.create({
+        subscription_id: subscription.id,
+        pause_start: from_date,
+        pause_end: to_date,
+        requested_days: days,
+        actual_days_used: days,
+        type: pause_type,
+        status: 'active'
+    }, { transaction: t });
 
-    // Cancel pending deliveries from today onwards
+    // 1. Mark pending schedules between from_date and to_date as skipped
     await DeliverySchedule.update(
         { status: 'skipped' },
         {
             where: {
                 subscription_id: subscription.id,
                 status: 'pending',
-                scheduled_date: { [Op.gte]: todayStr }
+                scheduled_date: { [Op.between]: [from_date, to_date] }
             },
             transaction: t
         }
     );
+
+    // 2. Remove pending schedules after to_date so we can reschedule remaining servings cleanly
+    await DeliverySchedule.destroy({
+        where: {
+            subscription_id: subscription.id,
+            status: 'pending',
+            scheduled_date: { [Op.gt]: to_date }
+        },
+        transaction: t
+    });
+
+    // 3. Reschedule remaining servings starting on the day after to_date
+    const resumeDate = getDayAfterDate(to_date);
+    const remainingServices = subscription.total_services - subscription.services_completed;
+    let new_end_date = subscription.end_date;
+
+    if (remainingServices > 0) {
+        const pkg = subscription.Package || await Package.findByPk(subscription.package_id, { transaction: t });
+        const newDates = generateDeliveryDates(resumeDate, pkg.services_per_month, 1, remainingServices);
+        const scheduleRows = newDates.map(date => ({
+            subscription_id: subscription.id,
+            scheduled_date: date,
+            status: 'pending',
+            batch_id: subscription.batch_id
+        }));
+        await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+        if (newDates.length > 0) {
+            new_end_date = newDates[newDates.length - 1];
+        }
+    }
+
+    await subscription.update({ status: 'paused', end_date: new_end_date }, { transaction: t });
 };
 
 // Helper for pausing a water subscription
-const pauseWaterSubscriptionInternal = async (sub, pause_days, pause_type, today, t) => {
-    const todayStr = today.toISOString().split('T')[0];
+const pauseWaterSubscriptionInternal = async (sub, from_date, to_date, days, pause_type, t) => {
     if (pause_type === 'monthly') {
         const cycleStart = new Date(sub.start_date);
         const existingPauses = await PauseLog.sum('actual_days_used', {
@@ -340,21 +341,9 @@ const pauseWaterSubscriptionInternal = async (sub, pause_days, pause_type, today
             throw new Error(`Monthly pause limit reached (${existingPauses}/15 days used this cycle)`);
         }
         const remaining = 15 - existingPauses;
-        if (pause_days > remaining) {
-            throw new Error(`Only ${remaining} monthly pause days remaining. Requested: ${pause_days}`);
+        if (days > remaining) {
+            throw new Error(`Only ${remaining} monthly pause days remaining. Requested: ${days} days (${from_date} to ${to_date})`);
         }
-        const pause_end = new Date(today);
-        pause_end.setDate(pause_end.getDate() + pause_days - 1);
-
-        await PauseLog.create({
-            water_subscription_id: sub.id,
-            pause_start: today,
-            pause_end,
-            requested_days: pause_days,
-            actual_days_used: pause_days,
-            type: 'monthly',
-            status: 'active'
-        }, { transaction: t });
     } else {
         // yearly
         const existingPause = await PauseLog.findOne({
@@ -364,58 +353,120 @@ const pauseWaterSubscriptionInternal = async (sub, pause_days, pause_type, today
         if (existingPause) {
             throw new Error("Yearly pause can only be taken once per subscription");
         }
-        if (pause_days > 45) {
-            throw new Error("Yearly pause limit is 45 days maximum");
+        if (days > 45) {
+            throw new Error(`Yearly pause limit is 45 days maximum. Requested: ${days} days`);
         }
-        const pause_end = new Date(today);
-        pause_end.setDate(pause_end.getDate() + pause_days - 1);
-
-        await PauseLog.create({
-            water_subscription_id: sub.id,
-            pause_start: today,
-            pause_end,
-            requested_days: pause_days,
-            actual_days_used: pause_days,
-            type: 'yearly',
-            status: 'active'
-        }, { transaction: t });
     }
 
-    await sub.update({ status: 'paused' }, { transaction: t });
+    await PauseLog.create({
+        water_subscription_id: sub.id,
+        pause_start: from_date,
+        pause_end: to_date,
+        requested_days: days,
+        actual_days_used: days,
+        type: pause_type,
+        status: 'active'
+    }, { transaction: t });
 
-    // Cancel pending deliveries from today onwards
+    // 1. Mark pending schedules between from_date and to_date as skipped
     await DeliverySchedule.update(
         { status: 'skipped' },
         {
             where: {
                 water_subscription_id: sub.id,
                 status: 'pending',
-                scheduled_date: { [Op.gte]: todayStr }
+                scheduled_date: { [Op.between]: [from_date, to_date] }
             },
             transaction: t
         }
     );
+
+    // 2. Remove pending schedules after to_date so we can reschedule remaining servings cleanly
+    await DeliverySchedule.destroy({
+        where: {
+            water_subscription_id: sub.id,
+            status: 'pending',
+            scheduled_date: { [Op.gt]: to_date }
+        },
+        transaction: t
+    });
+
+    // 3. Reschedule remaining servings starting on the day after to_date (skipping Sundays!)
+    const resumeDate = getDayAfterDate(to_date);
+    const remainingServices = sub.total_services - sub.services_completed;
+    let new_end_date = sub.end_date;
+
+    if (remainingServices > 0) {
+        const newDates = generateWaterDeliveryDates(resumeDate, remainingServices, sub.frequency);
+        const scheduleRows = newDates.map(date => ({
+            water_subscription_id: sub.id,
+            scheduled_date: date,
+            status: 'pending',
+            batch_id: sub.batch_id
+        }));
+        await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+        if (newDates.length > 0) {
+            new_end_date = newDates[newDates.length - 1];
+        }
+    }
+
+    await sub.update({ status: 'paused', end_date: new_end_date }, { transaction: t });
 };
 
 // PATCH /api/water/:id/pause
 export const pauseWaterSubscription = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { pause_days, pause_type, pause_scope } = req.body;
+        const { from_date, to_date, pause_days, pause_type, pause_scope } = req.body;
         const subId = req.params.id;
         const user_id = req.user.id;
 
-        const days = parseInt(pause_days);
         const type = pause_type || 'monthly'; // 'monthly' or 'yearly'
         const scope = pause_scope || 'single'; // 'single' or 'all'
 
-        if (!days || days <= 0) {
-            await t.rollback();
-            return res.status(400).json({ success: false, message: "Valid pause_days is required" });
-        }
+        let validFrom = null;
+        let validTo = null;
+        let days = 0;
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const minAllowedFromDate = getEarliestCutoffDate();
+
+        if (from_date && to_date) {
+            validFrom = normalizeDateString(from_date);
+            validTo = normalizeDateString(to_date);
+
+            if (!validFrom || !validTo) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: "Invalid date format for from_date or to_date (YYYY-MM-DD)." });
+            }
+
+            if (validFrom < minAllowedFromDate) {
+                await t.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid from_date. Based on the 8 PM cutoff rule, the earliest possible pause start date is ${minAllowedFromDate}`
+                });
+            }
+
+            if (validTo < validFrom) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: "to_date cannot be earlier than from_date" });
+            }
+
+            days = getDaysBetween(validFrom, validTo);
+        } else if (pause_days) {
+            days = parseInt(pause_days);
+            if (isNaN(days) || days <= 0) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: "Valid pause_days is required" });
+            }
+            validFrom = minAllowedFromDate;
+            const endParts = validFrom.split('-').map(Number);
+            const endD = new Date(Date.UTC(endParts[0], endParts[1] - 1, endParts[2] + days - 1));
+            validTo = endD.toISOString().split('T')[0];
+        } else {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "from_date and to_date are required to pause." });
+        }
 
         if (scope === 'all') {
             const standardSubs = await Subscription.findAll({
@@ -438,7 +489,7 @@ export const pauseWaterSubscription = async (req, res) => {
 
             for (const sub of standardSubs) {
                 try {
-                    await pauseStandardSubscription(sub, days, type, today, t);
+                    await pauseStandardSubscription(sub, validFrom, validTo, days, type, t);
                     pausedCount++;
                 } catch (e) {
                     errors.push(`${sub.Package?.name || 'Standard Package'}: ${e.message}`);
@@ -447,7 +498,7 @@ export const pauseWaterSubscription = async (req, res) => {
 
             for (const sub of waterSubs) {
                 try {
-                    await pauseWaterSubscriptionInternal(sub, days, type, today, t);
+                    await pauseWaterSubscriptionInternal(sub, validFrom, validTo, days, type, t);
                     pausedCount++;
                 } catch (e) {
                     errors.push(`${sub.water_type} Water: ${e.message}`);
@@ -462,7 +513,11 @@ export const pauseWaterSubscription = async (req, res) => {
             await t.commit();
             return res.status(200).json({
                 success: true,
-                message: `Successfully paused ${pausedCount} package(s).${errors.length > 0 ? ' Skipped: ' + errors.join(', ') : ''}`
+                message: `Successfully paused ${pausedCount} package(s) from ${validFrom} to ${validTo} (${days} days). Deliveries will resume on ${getDayAfterDate(validTo)}.${errors.length > 0 ? ' Skipped: ' + errors.join(', ') : ''}`,
+                from_date: validFrom,
+                to_date: validTo,
+                days,
+                resume_date: getDayAfterDate(validTo)
             });
 
         } else {
@@ -478,14 +533,21 @@ export const pauseWaterSubscription = async (req, res) => {
             }
 
             try {
-                await pauseWaterSubscriptionInternal(sub, days, type, today, t);
+                await pauseWaterSubscriptionInternal(sub, validFrom, validTo, days, type, t);
             } catch (e) {
                 await t.rollback();
                 return res.status(400).json({ success: false, message: e.message });
             }
 
             await t.commit();
-            res.status(200).json({ success: true, message: "Water subscription paused successfully" });
+            res.status(200).json({
+                success: true,
+                message: `Water subscription paused successfully from ${validFrom} to ${validTo} (${days} days). Deliveries will resume on ${getDayAfterDate(validTo)}.`,
+                from_date: validFrom,
+                to_date: validTo,
+                days,
+                resume_date: getDayAfterDate(validTo)
+            });
         }
     } catch (error) {
         await t.rollback();
@@ -498,23 +560,23 @@ export const restartWaterSubscription = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { restart_date } = req.body;
-        if (!restart_date) {
-            await t.rollback();
-            return res.status(400).json({ success: false, message: "restart_date is required" });
-        }
+        const minDateStr = getEarliestCutoffDate();
+        let normalizedRestartDate = null;
 
-        // Validate restart_date with 8 PM rule
-        const now = new Date();
-        const currentHour = now.getHours();
-        const daysToAdd = currentHour >= 20 ? 2 : 1;
+        if (restart_date) {
+            normalizedRestartDate = normalizeDateString(restart_date);
+            if (!normalizedRestartDate) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: "Invalid date format. Please provide a valid date (YYYY-MM-DD)." });
+            }
 
-        const minDate = new Date(now);
-        minDate.setDate(minDate.getDate() + daysToAdd);
-        const minDateStr = minDate.toISOString().split('T')[0];
-
-        if (restart_date < minDateStr) {
-            await t.rollback();
-            return res.status(400).json({ success: false, message: `Invalid restart date. Based on the 8 PM cutoff rule, the earliest possible restart date is ${minDateStr}` });
+            if (normalizedRestartDate < minDateStr) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: `Invalid restart date. Based on the 8 PM cutoff rule, the earliest possible restart date is ${minDateStr}` });
+            }
+        } else {
+            // Auto-select earliest allowable restart date
+            normalizedRestartDate = minDateStr;
         }
 
         const sub = await WaterSubscription.findOne({ where: { id: req.params.id, user_id: req.user.id } });
@@ -525,29 +587,25 @@ export const restartWaterSubscription = async (req, res) => {
 
         const pauseLog = await PauseLog.findOne({ where: { water_subscription_id: sub.id, status: 'active' } });
         if (pauseLog) {
-            const today = new Date();
-            const daysUsed = Math.ceil((today - new Date(pauseLog.pause_start)) / (1000 * 60 * 60 * 24));
-            await pauseLog.update({ status: 'completed', actual_days_used: daysUsed, pause_end: today }, { transaction: t });
+            const actualEnd = getDayBeforeDate(normalizedRestartDate);
+            const daysUsed = Math.max(0, getDaysBetween(pauseLog.pause_start, actualEnd));
+            await pauseLog.update({ status: 'completed', actual_days_used: daysUsed, pause_end: actualEnd }, { transaction: t });
         }
 
-        // Generate delivery dates for remaining services
+        // Clean up any pending or skipped deliveries on or after normalizedRestartDate
+        await DeliverySchedule.destroy({
+            where: {
+                water_subscription_id: sub.id,
+                scheduled_date: { [Op.gte]: normalizedRestartDate }
+            },
+            transaction: t
+        });
+
+        // Generate delivery dates for remaining services (Sunday skipped, dates extended)
         const remainingServices = sub.total_services - sub.services_completed;
-        const newDates = [];
-
-        if (remainingServices > 0) {
-            const gap_days = sub.frequency === 'daily' ? 1 : 2;
-            const startParts = restart_date.split('-').map(Number);
-            const baseTime = Date.UTC(startParts[0], startParts[1] - 1, startParts[2]);
-
-            for (let i = 0; i < remainingServices; i++) {
-                const dateVal = new Date(baseTime + Math.round(i * gap_days) * 24 * 60 * 60 * 1000);
-
-                if (dateVal.getUTCDay() === 0) { // Sunday rule
-                    dateVal.setUTCDate(dateVal.getUTCDate() - 1);
-                }
-                newDates.push(dateVal.toISOString().split('T')[0]);
-            }
-        }
+        const newDates = remainingServices > 0
+            ? generateWaterDeliveryDates(normalizedRestartDate, remainingServices, sub.frequency)
+            : [];
 
         const scheduleRows = newDates.map(date => ({
             water_subscription_id: sub.id,
@@ -565,7 +623,7 @@ export const restartWaterSubscription = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Water subscription restarted successfully",
-            restart_date,
+            restart_date: normalizedRestartDate,
             end_date: new_end_date,
             new_delivery_dates: newDates
         });

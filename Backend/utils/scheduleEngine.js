@@ -9,9 +9,9 @@
  * @param {number} cycles - how many 30-day cycles (1 for monthly, 12 for yearly)
  * @returns {string[]} Array of ISO date strings
  */
-export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1) => {
+export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1, customTotalServices = null) => {
     const gap_days = 30 / servicesPerMonth;
-    const totalServices = servicesPerMonth * cycles;
+    const totalServices = customTotalServices !== null ? customTotalServices : (servicesPerMonth * cycles);
     const dates = [];
 
     const startParts = startDate.split('-').map(Number);
@@ -76,6 +76,47 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1) =
         dates.push(scheduledDate.toISOString().split('T')[0]);
     }
 
+    return dates;
+};
+
+/**
+ * Generates water delivery dates:
+ * - Sundays are completely skipped (0 deliveries on Sunday).
+ * - Saturdays receive only 1 normal delivery (NO shifting Sunday to Saturday).
+ * - Total services count is strictly preserved by extending the end date forward.
+ *
+ * @param {string} startDate - ISO date string e.g. "2026-10-16"
+ * @param {number} totalServices - total deliveries (e.g. 30 or 15)
+ * @param {string} frequency - 'daily' or 'alternate'
+ * @returns {string[]} Array of date strings (YYYY-MM-DD)
+ */
+export const generateWaterDeliveryDates = (startDate, totalServices, frequency = 'daily') => {
+    const dates = [];
+    const startParts = startDate.split('-').map(Number);
+    let current = new Date(Date.UTC(startParts[0], startParts[1] - 1, startParts[2]));
+
+    // If start date itself is Sunday, advance to Monday
+    if (current.getUTCDay() === 0) {
+        current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    while (dates.length < totalServices) {
+        if (current.getUTCDay() !== 0) { // Not Sunday
+            dates.push(current.toISOString().split('T')[0]);
+
+            if (frequency === 'daily') {
+                current.setUTCDate(current.getUTCDate() + 1);
+            } else {
+                // Alternate: every 2 days
+                current.setUTCDate(current.getUTCDate() + 2);
+                if (current.getUTCDay() === 0) {
+                    current.setUTCDate(current.getUTCDate() + 1); // Shift Sunday to Monday
+                }
+            }
+        } else {
+            current.setUTCDate(current.getUTCDate() + 1);
+        }
+    }
     return dates;
 };
 
