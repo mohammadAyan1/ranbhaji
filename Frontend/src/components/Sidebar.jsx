@@ -22,6 +22,7 @@ const adminLinks = [
       { to: "/admin/packages", label: "Package" },
       { to: "/admin/master/zones", label: "Zone" },
       { to: "/admin/units", label: "Unit" },
+      { to: "/admin/master/wallets", label: "Wallet" },
       // { to: "/admin/waste", label: "Waste" },
       { to: "/admin/closing-stock", label: "Closing Stock" },
     ]

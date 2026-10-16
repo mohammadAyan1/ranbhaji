@@ -41,8 +41,25 @@ export default function PackagesPage() {
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
-  const [activeBatches, setActiveBatches] = useState([]);
-  const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState("07:00 AM - 09:00 AM");
+  const [customTimeFrom, setCustomTimeFrom] = useState("07:00");
+  const [customTimeTo, setCustomTimeTo] = useState("09:00");
+  const [isCustomTime, setIsCustomTime] = useState(false);
+
+  const formatTime12h = (time24) => {
+    if (!time24) return "";
+    const [h, m] = time24.split(":");
+    let hours = parseInt(h);
+    const suffix = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    return `${hours.toString().padStart(2, "0")}:${m} ${suffix}`;
+  };
+
+  const updateCustomSlot = (from, to) => {
+    if (from && to) {
+      setDeliveryTimeSlot(`${formatTime12h(from)} - ${formatTime12h(to)}`);
+    }
+  };
 
   // PhonePe Checkout states
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
@@ -156,8 +173,8 @@ export default function PackagesPage() {
       setMsg("❌ Please add or select a delivery address first.");
       return;
     }
-    if (!selectedBatchId) {
-      setMsg("❌ Please select a delivery batch.");
+    if (!deliveryTimeSlot || !deliveryTimeSlot.trim()) {
+      setMsg("❌ Please specify your preferred serving delivery time.");
       return;
     }
     setInitiatingPayment(true);
@@ -168,7 +185,7 @@ export default function PackagesPage() {
         type: selectedType,
         payment_method: "wallet",
         address_id: parseInt(selectedAddressId),
-        batch_id: parseInt(selectedBatchId)
+        delivery_time_slot: deliveryTimeSlot.trim()
       });
       const sub_id = res.data.subscription_id;
       setCurrentSub({ subscription_id: sub_id, package_id: checkoutPkg.id, package_name: checkoutPkg.name });
@@ -198,8 +215,8 @@ export default function PackagesPage() {
       setMsg("❌ Please add or select a delivery address first.");
       return;
     }
-    if (!selectedBatchId) {
-      setMsg("❌ Please select a delivery batch.");
+    if (!deliveryTimeSlot || !deliveryTimeSlot.trim()) {
+      setMsg("❌ Please specify your preferred serving delivery time.");
       return;
     }
     setInitiatingPayment(true);
@@ -210,7 +227,7 @@ export default function PackagesPage() {
         package_id: checkoutPkg.id,
         billing_type: selectedType,
         address_id: parseInt(selectedAddressId),
-        batch_id: parseInt(selectedBatchId)
+        delivery_time_slot: deliveryTimeSlot.trim()
       });
       if (res.data.redirectUrl) {
         window.location.href = res.data.redirectUrl;
@@ -268,7 +285,7 @@ export default function PackagesPage() {
         type: selectedType,
         payment_method: "razorpay",
         address_id: parseInt(selectedAddressId),
-        batch_id: parseInt(selectedBatchId)
+        delivery_time_slot: deliveryTimeSlot.trim()
       });
       const sub_id = res.data.subscription_id;
       setCurrentSub({ subscription_id: sub_id, package_id: razorpayPkg.id, package_name: razorpayPkg.name });
@@ -858,26 +875,96 @@ export default function PackagesPage() {
                 </div>
               </label>
 
-              <div className="space-y-1.5 mt-2">
-                <label className="text-gray-600 text-xs font-bold uppercase tracking-wider">⏱ Delivery Batch</label>
-                {activeBatches.length === 0 ? (
-                  <div className="bg-yellow-950/15 border border-yellow-800/30 rounded-xl p-3 text-center">
-                    <p className="text-yellow-400 text-xs font-medium">⚠️ No batches available.</p>
-                  </div>
-                ) : (
-                  <select
-                    className="input py-2 text-sm w-full"
-                    value={selectedBatchId}
-                    onChange={e => setSelectedBatchId(e.target.value)}
+              {/* Preferred Serving Time Selection */}
+              <div className="space-y-3 mt-3 p-4 bg-gray-50 border border-gray-200 rounded-2xl">
+                <div>
+                  <label className="text-gray-800 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <span>⏱</span> Serving Time Window (समय चुनें)
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Aapko serving kis samay ke beech delivery chahiye?
+                  </p>
+                </div>
+
+                {/* Preset Chips */}
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "06:00 AM - 08:00 AM",
+                    "07:00 AM - 09:00 AM",
+                    "08:00 AM - 10:00 AM",
+                    "10:00 AM - 12:00 PM",
+                    "04:00 PM - 06:00 PM",
+                    "06:00 PM - 08:00 PM"
+                  ].map((slot) => (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => {
+                        setDeliveryTimeSlot(slot);
+                        setIsCustomTime(false);
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
+                        !isCustomTime && deliveryTimeSlot === slot
+                          ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomTime(true);
+                      updateCustomSlot(customTimeFrom, customTimeTo);
+                    }}
+                    className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
+                      isCustomTime
+                        ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                    }`}
                   >
-                    <option value="" disabled>-- Select a batch --</option>
-                    {activeBatches.map(b => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.time_range})
-                      </option>
-                    ))}
-                  </select>
+                    ✏️ Custom Time
+                  </button>
+                </div>
+
+                {/* Custom Time Pickers */}
+                {isCustomTime && (
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-600 mb-1 block">From Time (से)</label>
+                      <input
+                        type="time"
+                        value={customTimeFrom}
+                        onChange={(e) => {
+                          setCustomTimeFrom(e.target.value);
+                          updateCustomSlot(e.target.value, customTimeTo);
+                        }}
+                        className="input py-2 text-sm w-full bg-white border-gray-300 rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-600 mb-1 block">To Time (तक)</label>
+                      <input
+                        type="time"
+                        value={customTimeTo}
+                        onChange={(e) => {
+                          setCustomTimeTo(e.target.value);
+                          updateCustomSlot(customTimeFrom, e.target.value);
+                        }}
+                        className="input py-2 text-sm w-full bg-white border-gray-300 rounded-xl"
+                      />
+                    </div>
+                  </div>
                 )}
+
+                {/* Selected Time Display */}
+                <div className="bg-white px-3 py-2 rounded-xl border border-gray-200 flex items-center justify-between text-xs">
+                  <span className="text-gray-500 font-medium">Selected Time:</span>
+                  <span className="text-fresh-700 font-bold bg-fresh-50 px-2.5 py-0.5 rounded-md border border-fresh-200">
+                    ⏱ {deliveryTimeSlot || "Not selected"}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -892,8 +979,8 @@ export default function PackagesPage() {
                        setMsg("❌ Please add an address first.");
                        return;
                     }
-                    if (!selectedBatchId) {
-                       setMsg("❌ Please select a delivery batch.");
+                    if (!deliveryTimeSlot || !deliveryTimeSlot.trim()) {
+                       setMsg("❌ Please specify your preferred serving delivery time.");
                        return;
                     }
                     setShowAddressChoiceModal(false);
@@ -960,9 +1047,9 @@ export default function PackagesPage() {
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-600 font-medium">Batch:</span>
+                  <span className="text-gray-600 font-medium">Serving Time:</span>
                   <span className="text-gray-900 font-semibold">
-                    {activeBatches.find(b => b.id === parseInt(selectedBatchId))?.name || "Not selected"}
+                    {deliveryTimeSlot || "Not specified"}
                   </span>
                 </div>
               </div>

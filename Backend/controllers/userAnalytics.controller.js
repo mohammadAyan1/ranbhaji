@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 export const getAllUsers = async (req, res) => {
     try {
         const users = await User.findAll({
-            attributes: ['id', 'name', 'phone', 'email', 'role', 'status', 'wallet_balance', 'due_amount', 'actual_password'],
+            attributes: ['id', 'name', 'phone', 'email', 'role', 'status', 'wallet_balance', 'due_amount', 'actual_password', 'discount_percentage'],
             order: [['created_at', 'DESC']]
         });
         res.status(200).json({ success: true, users });
@@ -82,13 +82,36 @@ export const updateUserRole = async (req, res) => {
     }
 };
 
+// PATCH /api/admin/user-analytics/users/:id/discount
+export const updateUserDiscount = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { discount_percentage } = req.body;
+        
+        const discount = parseFloat(discount_percentage);
+        if (isNaN(discount) || discount < 0 || discount > 100) {
+            return res.status(400).json({ success: false, message: "Discount percentage must be between 0 and 100" });
+        }
+
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        user.discount_percentage = discount;
+        await user.save();
+
+        res.status(200).json({ success: true, message: `Discount updated to ${discount}% successfully`, user });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // GET /api/admin/user-analytics/:userId
 export const getUserAnalytics = async (req, res) => {
     try {
         const userId = req.params.userId;
 
         // Fetch User Info
-        const user = await User.findByPk(userId, { attributes: ['id', 'name', 'phone', 'actual_password'] });
+        const user = await User.findByPk(userId, { attributes: ['id', 'name', 'phone', 'actual_password', 'discount_percentage', 'wallet_balance', 'due_amount', 'email'] });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
         // 1. Fetch Subscriptions (Packages)
@@ -260,6 +283,12 @@ export const getUserAnalytics = async (req, res) => {
                     orderId: order.id,
                     date: date,
                     totalAmount: order.total_amount,
+                    subtotal: order.subtotal,
+                    delivery_charge: order.delivery_charge,
+                    discount_percent: parseFloat(order.discount_percent || 0),
+                    discount_amount: parseFloat(order.discount_amount || 0),
+                    payment_method: order.payment_method,
+                    payment_status: order.payment_status,
                     status: order.delivery_status,
                     items: items
                 });

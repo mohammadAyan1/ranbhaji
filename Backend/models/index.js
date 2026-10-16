@@ -23,7 +23,8 @@ const User = sequelize.define('User', {
   disliked_products: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
   delivery_profile: { type: DataTypes.JSON, allowNull: true },
   referral_code: { type: DataTypes.STRING(20), allowNull: true },
-  total_free_servings: { type: DataTypes.INTEGER, defaultValue: 0 }
+  total_free_servings: { type: DataTypes.INTEGER, defaultValue: 0 },
+  discount_percentage: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 }
 }, { tableName: 'users', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 // 1.1 FRANCHISE
@@ -171,6 +172,7 @@ const Subscription = sequelize.define('Subscription', {
   locked_price: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
   postpaid_serving_given: { type: DataTypes.BOOLEAN, defaultValue: false },
   batch_id: { type: DataTypes.INTEGER, allowNull: true },
+  delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true },
   free_servings_awarded: { type: DataTypes.INTEGER, defaultValue: 0 }
 }, { tableName: 'subscriptions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
@@ -194,6 +196,7 @@ const DeliverySchedule = sequelize.define('DeliverySchedule', {
   delivery_photo_url: { type: DataTypes.STRING(255), allowNull: true },
   delivery_remark: { type: DataTypes.STRING(255), allowNull: true },
   batch_id: { type: DataTypes.INTEGER, allowNull: true },
+  delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true },
   is_returned_serving: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, { tableName: 'delivery_schedule', timestamps: false });
 
@@ -464,7 +467,10 @@ const RetailOrder = sequelize.define('RetailOrder', {
   delivery_status: { type: DataTypes.ENUM('pending', 'ready_for_delivery', 'delivered', 'cancelled'), defaultValue: 'pending' },
   phonepe_txn_id: { type: DataTypes.STRING(100), allowNull: true },
   batch_id: { type: DataTypes.INTEGER, allowNull: true },
-  delivery_boy_id: { type: DataTypes.INTEGER, allowNull: true }
+  delivery_boy_id: { type: DataTypes.INTEGER, allowNull: true },
+  discount_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
+  discount_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  subtotal: { type: DataTypes.DECIMAL(10, 2), allowNull: true }
 }, { tableName: 'retail_orders', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 RetailOrder.belongsTo(User, { foreignKey: 'user_id' });

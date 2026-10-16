@@ -63,6 +63,7 @@ import Landing from "./pages/Landing/Landing";
 import AdminCategories from "./pages/admin/Master/AdminCategories";
 import AdminSubCategories from "./pages/admin/Master/AdminSubCategories";
 import AdminZones from "./pages/admin/Master/AdminZones";
+import AdminWallets from "./pages/admin/Master/AdminWallets";
 // import AdminWaste from "./pages/admin/AdminWaste";
 import AdminClosingStock from "./pages/admin/AdminClosingStock";
 
@@ -174,6 +175,7 @@ function App() {
 
           {/* Master */}
           <Route path="/admin/master/categories" element={<AdminCategories />} />
+          <Route path="/admin/master/wallets" element={<AdminWallets />} />
 
           {/* Package Management */}
           <Route path="/admin/package-management/draft" element={<DraftPackages />} />

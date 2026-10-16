@@ -521,40 +521,22 @@ export default function AdminProducts() {
       const displayQty = isGm ? parseFloat((totalQty / 1000).toFixed(3)) : totalQty;
       const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : (d.unit || 'pcs');
 
-      const pkgDisplay = isGm ? parseFloat((pkgQty / 1000).toFixed(3)) : pkgQty;
-      const rtlDisplay = isGm ? parseFloat((rtlQty / 1000).toFixed(3)) : rtlQty;
-
       const matchingProduct = products.find(p => p.id === d.id);
-      const isCompleted = completedDemands.includes(d.id);
 
       return {
         "S.No.": index + 1,
         "Product Name": d.name || "—",
         "Hindi Name": matchingProduct?.hindi_name || d.hindi_name || "—",
-        "Total Quantity": `${displayQty} ${displayUnit}`,
-        "Quantity": displayQty,
-        "Unit": displayUnit,
-        "Package Demand": `${pkgDisplay} ${displayUnit}`,
-        "Retail Demand": `${rtlDisplay} ${displayUnit}`,
-        "Category": d.category || matchingProduct?.category || "—",
-        "Status": isCompleted ? "Purchased" : "Pending",
-        "Date": demandDate
+        "Total Quantity": `${displayQty} ${displayUnit}`
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     worksheet["!cols"] = [
       { wch: 8 },   // S.No.
-      { wch: 24 },  // Product Name
-      { wch: 20 },  // Hindi Name
-      { wch: 16 },  // Total Quantity
-      { wch: 12 },  // Quantity
-      { wch: 10 },  // Unit
-      { wch: 16 },  // Package Demand
-      { wch: 16 },  // Retail Demand
-      { wch: 16 },  // Category
-      { wch: 14 },  // Status
-      { wch: 14 }   // Date
+      { wch: 28 },  // Product Name
+      { wch: 24 },  // Hindi Name
+      { wch: 18 }   // Total Quantity
     ];
 
     const workbook = XLSX.utils.book_new();

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Search, X } from "lucide-react";
 import api from "../../../api/axios";
 
 export default function PackageCalculator() {
@@ -46,6 +46,10 @@ export default function PackageCalculator() {
   
   const [shareDraft, setShareDraft] = useState(null);
   const [sharePhone, setSharePhone] = useState("");
+
+  // Drafts filtering & search state
+  const [draftSearch, setDraftSearch] = useState("");
+  const [draftFilterType, setDraftFilterType] = useState("all");
 
   useEffect(() => {
     setLoading(true);
@@ -314,6 +318,16 @@ export default function PackageCalculator() {
       setSaving(false);
     }
   };
+
+  const filteredDrafts = drafts.filter((draft) => {
+    const q = draftSearch.trim().toLowerCase();
+    const matchesSearch = !q ||
+      (draft.name && draft.name.toLowerCase().includes(q)) ||
+      (draft.target_mobile_number && draft.target_mobile_number.includes(q)) ||
+      (draft.calculated_price && draft.calculated_price.toString().includes(q));
+    const matchesType = draftFilterType === "all" || draft.draft_type === draftFilterType;
+    return matchesSearch && matchesType;
+  });
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading products...</div>;
 
@@ -804,12 +818,63 @@ export default function PackageCalculator() {
 
       {/* ─── DRAFTS LIST ────────────────────────────────────────── */}
       <div className="mt-8 pt-8 border-t border-gray-200">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Saved Calculator Drafts</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-gray-900">Saved Calculator Drafts</h2>
+            <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2.5 py-0.5 rounded-full border border-gray-200">
+              {filteredDrafts.length} {filteredDrafts.length === 1 ? 'draft' : 'drafts'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative min-w-[220px] sm:min-w-[280px]">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search draft packages..."
+                value={draftSearch}
+                onChange={(e) => setDraftSearch(e.target.value)}
+                className="input pl-9 pr-8 py-1.5 text-xs w-full bg-white border-gray-300 focus:border-fresh-500 rounded-xl"
+              />
+              {draftSearch && (
+                <button
+                  type="button"
+                  onClick={() => setDraftSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                  title="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <select
+              value={draftFilterType}
+              onChange={(e) => setDraftFilterType(e.target.value)}
+              className="input py-1.5 px-3 text-xs bg-white border-gray-300 rounded-xl font-medium"
+            >
+              <option value="all">All Types</option>
+              <option value="standard">Standard</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+        </div>
+
         {drafts.length === 0 ? (
           <p className="text-gray-500 text-sm">No price calculator drafts saved yet.</p>
+        ) : filteredDrafts.length === 0 ? (
+          <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            <p className="text-gray-500 text-sm mb-2">No draft packages found matching "{draftSearch}"</p>
+            <button
+              onClick={() => { setDraftSearch(""); setDraftFilterType("all"); }}
+              className="btn-secondary text-xs py-1 px-3"
+            >
+              Clear Filter
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {drafts.map(draft => (
+            {filteredDrafts.map(draft => (
               <div key={draft.id} className={`card p-4 border ${editingDraftId === draft.id ? 'border-fresh-500 bg-fresh-50' : 'border-gray-200'} transition-all`}>
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-bold text-gray-900">{draft.name}</h3>

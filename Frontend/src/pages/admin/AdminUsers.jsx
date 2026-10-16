@@ -144,6 +144,7 @@ export default function AdminUsers() {
                 <th className="text-left p-3">Role</th>
                 <th className="text-right p-3">Wallet</th>
                 <th className="text-right p-3">Due</th>
+                <th className="text-center p-3">Discount</th>
                 <th className="text-center p-3">Status</th>
                 <th className="text-right p-3 rounded-tr-xl">Action</th>
               </tr>
@@ -178,6 +179,15 @@ export default function AdminUsers() {
                   </td>
                   <td className="p-3 text-right text-fresh-600">₹{parseFloat(u.wallet_balance || 0).toFixed(0)}</td>
                   <td className="p-3 text-right text-red-600">₹{parseFloat(u.due_amount || 0).toFixed(0)}</td>
+                  <td className="p-3 text-center">
+                    {parseFloat(u.discount_percentage || 0) > 0 ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
+                        🏷️ {parseFloat(u.discount_percentage)}%
+                      </span>
+                    ) : (
+                      <span className="text-xs font-semibold text-gray-400">0%</span>
+                    )}
+                  </td>
                   <td className="p-3 text-center">
                     <span className={u.status === "active" ? "badge-green" : "badge-red"}>{u.status}</span>
                   </td>

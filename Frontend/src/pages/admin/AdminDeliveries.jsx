@@ -183,6 +183,7 @@ export default function AdminDeliveries() {
                 <tr className="table-header">
                   <th className="text-left p-3 rounded-tl-xl">Date & Time</th>
                   <th className="text-left p-3">Customer</th>
+                  <th className="text-left p-3">Requested Time</th>
                   <th className="text-left p-3">Delivery Person</th>
                   <th className="text-left p-3">Package / Plan</th>
                   <th className="text-right p-3 rounded-tr-xl">Actions</th>
@@ -215,6 +216,15 @@ export default function AdminDeliveries() {
                         <td className="p-3">
                           <p className="text-gray-900 font-medium">{customer.name}</p>
                           <p className="text-gray-500 text-xs">📞 {customer.phone}</p>
+                        </td>
+                        <td className="p-3">
+                          {(d.delivery_time_slot || d.Subscription?.delivery_time_slot) ? (
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
+                              ⏱ {d.delivery_time_slot || d.Subscription?.delivery_time_slot}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs italic">—</span>
+                          )}
                         </td>
                         <td className="p-3">
                           {d.DeliveryBoy ? (
@@ -265,7 +275,7 @@ export default function AdminDeliveries() {
 
                       {isExpanded && (
                         <tr className="bg-gray-50/50 border-b border-gray-100">
-                          <td colSpan="5" className="p-4">
+                          <td colSpan="6" className="p-4">
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                               {/* Items List */}
                               <div className="lg:col-span-2">
@@ -328,6 +338,12 @@ export default function AdminDeliveries() {
                               <div>
                                 <h4 className="text-sm font-semibold text-gray-900 mb-3 border-b pb-2">Delivery Proof & Remarks</h4>
                                 <div className="space-y-4">
+                                  {(d.delivery_time_slot || d.Subscription?.delivery_time_slot) && (
+                                    <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-lg flex items-center justify-between text-xs">
+                                      <span className="text-amber-800 font-medium">Requested Time:</span>
+                                      <span className="text-amber-900 font-bold">⏱ {d.delivery_time_slot || d.Subscription?.delivery_time_slot}</span>
+                                    </div>
+                                  )}
                                   {d.delivery_remark && (
                                     <div>
                                       <span className="block text-xs font-medium text-gray-500 mb-1">Remarks:</span>

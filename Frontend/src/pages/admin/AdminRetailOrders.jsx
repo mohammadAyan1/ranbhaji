@@ -70,10 +70,20 @@ export default function AdminRetailOrders() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
+                  <span className="badge uppercase text-xs bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                    🛒 Retail Order
+                  </span>
+
+                  {parseFloat(order.discount_percent || 0) > 0 && (
+                    <span className="badge uppercase text-xs bg-purple-100 text-purple-800 border border-purple-300 font-bold">
+                      🏷️ {parseFloat(order.discount_percent)}% Discount
+                    </span>
+                  )}
+
                   <span className={`badge uppercase text-xs ${
-                    order.payment_method === 'phonepe' ? 'badge-blue' : 'bg-amber-950/20 text-amber-400 border border-amber-800/30'
+                    order.payment_method === 'phonepe' ? 'badge-blue' : order.payment_method === 'wallet' ? 'badge-green' : 'bg-amber-950/20 text-amber-400 border border-amber-800/30'
                   }`}>
-                    💳 {order.payment_method === 'phonepe' ? 'PhonePe Online' : 'Cash on Delivery (COD)'}
+                    💳 {order.payment_method === 'phonepe' ? 'PhonePe Online' : order.payment_method === 'wallet' ? 'Wallet' : 'Cash on Delivery (COD)'}
                   </span>
 
                   <span className={`badge uppercase text-xs ${
@@ -97,6 +107,9 @@ export default function AdminRetailOrders() {
                   <p className="text-gray-500 font-bold uppercase tracking-wider text-xs">Customer Details</p>
                   <p className="text-gray-900 font-medium">{order.User?.name}</p>
                   <p className="text-gray-600 text-xs">📞 {order.User?.phone}</p>
+                  {parseFloat(order.User?.discount_percentage || 0) > 0 && (
+                    <p className="text-purple-700 text-xs font-semibold">🏷️ User Account Discount: {parseFloat(order.User.discount_percentage)}%</p>
+                  )}
 
                   <div className="mt-3 pt-3 border-t border-gray-200/50 space-y-1">
                     <p className="text-gray-500 font-bold uppercase tracking-wider text-xs">Delivery Address</p>
@@ -141,6 +154,12 @@ export default function AdminRetailOrders() {
                             </tr>
                           );
                         })}
+                        {parseFloat(order.discount_percent || 0) > 0 && (
+                          <tr className="border-t border-purple-100 bg-purple-50/50 text-purple-700 font-semibold">
+                            <td colSpan="3" className="p-2 text-right">Retail Discount ({parseFloat(order.discount_percent)}%):</td>
+                            <td className="p-2 text-right text-purple-700 font-bold">-₹{parseFloat(order.discount_amount || 0).toFixed(2)}</td>
+                          </tr>
+                        )}
                         <tr className="border-t border-gray-200 text-gray-600 font-medium">
                           <td colSpan="3" className="p-2 text-right">Delivery Charge:</td>
                           <td className="p-2 text-right text-gray-700">₹{parseFloat(order.delivery_charge).toFixed(2)}</td>

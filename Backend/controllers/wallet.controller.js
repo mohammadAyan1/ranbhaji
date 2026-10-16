@@ -338,3 +338,70 @@ export const getUserWalletTransactions = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// GET /api/admin/wallets
+export const getAdminWalletUsers = async (req, res) => {
+    try {
+        const users = await User.findAll({
+            where: {
+                role: 'user'
+            },
+            attributes: ['id', 'name', 'phone', 'email', 'wallet_balance', 'due_amount', 'postpaid_debt', 'status', 'created_at'],
+            include: [
+                {
+                    model: WalletTransaction,
+                    attributes: ['id', 'amount', 'type', 'reason', 'reference_id', 'photo_url', 'created_at'],
+                    required: false
+                }
+            ],
+            order: [
+                ['updated_at', 'DESC'],
+                [{ model: WalletTransaction }, 'created_at', 'DESC']
+            ]
+        });
+
+        const walletUsers = users.filter(u => 
+            (u.WalletTransactions && u.WalletTransactions.length > 0) || 
+            parseFloat(u.wallet_balance || 0) !== 0 ||
+            parseFloat(u.postpaid_debt || 0) !== 0
+        ).map(u => {
+            const txns = u.WalletTransactions || [];
+            let totalCredit = 0;
+            let totalDebit = 0;
+            txns.forEach(t => {
+                const amt = parseFloat(t.amount || 0);
+                if (t.type === 'credit') totalCredit += amt;
+                else if (t.type === 'debit') totalDebit += amt;
+            });
+
+            return {
+                id: u.id,
+                name: u.name,
+                phone: u.phone,
+                email: u.email,
+                status: u.status,
+                wallet_balance: parseFloat(u.wallet_balance || 0),
+                due_amount: parseFloat(u.due_amount || 0),
+                postpaid_debt: parseFloat(u.postpaid_debt || 0),
+                created_at: u.created_at,
+                total_credit: totalCredit,
+                total_debit: totalDebit,
+                total_transactions: txns.length,
+                last_transaction: txns.length > 0 ? txns[0] : null,
+                transactions: txns
+            };
+        });
+
+        const stats = {
+            total_users_with_wallet: walletUsers.length,
+            total_wallet_balance: walletUsers.reduce((sum, u) => sum + u.wallet_balance, 0),
+            total_credited: walletUsers.reduce((sum, u) => sum + u.total_credit, 0),
+            total_debited: walletUsers.reduce((sum, u) => sum + u.total_debit, 0)
+        };
+
+        res.status(200).json({ success: true, users: walletUsers, stats });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+

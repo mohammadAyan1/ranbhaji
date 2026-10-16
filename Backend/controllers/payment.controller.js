@@ -15,7 +15,7 @@ const PHONEPE_STATUS_URL = process.env.PHONEPE_STATUS_URL || "https://api-prepro
 export const initiatePhonePePayment = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { type, package_id, billing_type, address_id, batch_id, items, redirectUrl } = req.body;
+        const { type, package_id, billing_type, address_id, batch_id, delivery_time_slot, items, redirectUrl } = req.body;
         const user_id = req.user.id;
 
         if (!type || (type !== 'package' && type !== 'retail')) {
@@ -78,8 +78,15 @@ export const initiatePhonePePayment = async (req, res) => {
                 });
             }
 
+            const user = await User.findByPk(user_id, { transaction: t });
             const deliveryCharge = 30.00;
-            const totalAmount = subtotal + deliveryCharge;
+            const discountPercent = parseFloat(user?.discount_percentage || 0);
+            let discountAmount = 0;
+            if (discountPercent > 0) {
+                discountAmount = parseFloat(((subtotal * discountPercent) / 100).toFixed(2));
+            }
+            const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+            const totalAmount = parseFloat((discountedSubtotal + deliveryCharge).toFixed(2));
             amount = totalAmount;
 
             const now = new Date();
@@ -95,6 +102,9 @@ export const initiatePhonePePayment = async (req, res) => {
             retailOrder = await RetailOrder.create({
                 user_id,
                 address_id,
+                subtotal,
+                discount_percent: discountPercent,
+                discount_amount: discountAmount,
                 total_amount: totalAmount,
                 delivery_charge: deliveryCharge,
                 payment_method: 'phonepe',
@@ -116,7 +126,8 @@ export const initiatePhonePePayment = async (req, res) => {
 
         let customTxnId = "";
         if (type === 'package') {
-            customTxnId = `PKG_${package_id}_${billing_type}_${address_id}_${batch_id}_${Date.now()}`;
+            const slotHex = delivery_time_slot ? Buffer.from(delivery_time_slot).toString('hex') : 'none';
+            customTxnId = `PKG_${package_id}_${billing_type}_${address_id}_${batch_id || 0}_${slotHex}_${Date.now()}`;
         } else {
             customTxnId = `RTL_${retailOrder.id}_${Date.now()}`;
         }
@@ -261,7 +272,9 @@ export const getPhonePeStatus = async (req, res) => {
                 const package_id = parseInt(parts[1]);
                 const type = parts[2];
                 const address_id = parseInt(parts[3]);
-                const batch_id = parseInt(parts[4]);
+                const batch_id = parseInt(parts[4]) || null;
+                const slotHex = parts.length >= 7 ? parts[5] : null;
+                const delivery_time_slot = (slotHex && slotHex !== 'none') ? Buffer.from(slotHex, 'hex').toString('utf8') : null;
 
                 const pkg = await Package.findByPk(package_id, {
                     include: [
@@ -353,7 +366,8 @@ export const getPhonePeStatus = async (req, res) => {
                     yearly_amount_paid,
                     total_services,
                     address_id,
-                    batch_id,
+                    batch_id: batch_id || null,
+                    delivery_time_slot: delivery_time_slot || null,
                     renewal_count,
                     locked_price
                 }, { transaction: t });

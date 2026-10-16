@@ -14,6 +14,10 @@ export default function AdminUserHistory() {
   const [msg, setMsg] = useState("");
   const [currentUserInfo, setCurrentUserInfo] = useState(null);
 
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountPercent, setDiscountPercent] = useState("");
+  const [savingDiscount, setSavingDiscount] = useState(false);
+
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -85,6 +89,7 @@ export default function AdminUserHistory() {
         ]);
         setAnalytics(res.data.analytics);
         setCurrentUserInfo(res.data.user);
+        setDiscountPercent(res.data.user?.discount_percentage ?? "0");
         setWalletTransactions(transRes.data.transactions);
       } catch (err) {
         setMsg(`❌ Failed to load analytics for user: ${err.response?.data?.message || err.message}`);
@@ -218,7 +223,7 @@ export default function AdminUserHistory() {
       </div>
 
       {selectedUserId && (
-        <div className="flex gap-4 mb-4">
+        <div className="flex flex-wrap gap-3 mb-4">
           <button onClick={() => setShowAssignModal(true)} className="btn-primary text-sm px-4 py-2 flex items-center gap-2">
             <span>🎁</span> Assign New Package
           </button>
@@ -231,20 +236,49 @@ export default function AdminUserHistory() {
           <button onClick={() => setShowAddressModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100">
             <span>📍</span> Add Address
           </button>
+          <button 
+            onClick={() => {
+              setDiscountPercent(currentUserInfo?.discount_percentage ?? "0");
+              setShowDiscountModal(true);
+            }} 
+            className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors shadow-2xs"
+          >
+            <span>🏷️</span> Set Retail Discount ({parseFloat(currentUserInfo?.discount_percentage || 0)}%)
+          </button>
         </div>
       )}
 
       {selectedUserId && currentUserInfo && (
-        <div className="card bg-gray-50 border border-gray-200 mb-6 flex items-center justify-between">
+        <div className="card bg-gray-50 border border-gray-200 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="font-bold text-gray-900">{currentUserInfo.name}</h3>
+            <h3 className="font-bold text-gray-900 text-base">{currentUserInfo.name}</h3>
             <p className="text-sm text-gray-600">{currentUserInfo.phone} {currentUserInfo.email && `| ${currentUserInfo.email}`}</p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">User Password</p>
-            <p className="font-mono text-sm font-semibold text-gray-900 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm">
-              {currentUserInfo.actual_password || "Not Available"}
-            </p>
+          <div className="flex items-center gap-6">
+            <div className="text-center">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Retail Discount</p>
+              <button
+                onClick={() => {
+                  setDiscountPercent(currentUserInfo?.discount_percentage ?? "0");
+                  setShowDiscountModal(true);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition-all hover:scale-105 cursor-pointer ${
+                  parseFloat(currentUserInfo.discount_percentage || 0) > 0
+                    ? "bg-purple-100 text-purple-800 border-purple-300 shadow-2xs"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-purple-300 hover:text-purple-700"
+                }`}
+                title="Click to edit discount"
+              >
+                <span>🏷️</span>
+                <span>{parseFloat(currentUserInfo.discount_percentage || 0)}% OFF</span>
+              </button>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">User Password</p>
+              <p className="font-mono text-sm font-semibold text-gray-900 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm">
+                {currentUserInfo.actual_password || "Not Available"}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -380,6 +414,110 @@ export default function AdminUserHistory() {
                 <button type="button" onClick={() => setShowBatchModal(false)} className="btn-secondary text-sm px-6">Cancel</button>
                 <button type="submit" disabled={saving} className="btn-primary text-sm px-6">
                   {saving ? "Saving..." : "Save Batch"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DISCOUNT MODAL */}
+      {showDiscountModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-purple-700 to-indigo-700 text-white">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <span>🏷️</span> Set User Retail Discount
+                </h2>
+                <p className="text-xs text-purple-200 mt-0.5">{currentUserInfo?.name} ({currentUserInfo?.phone})</p>
+              </div>
+              <button 
+                onClick={() => setShowDiscountModal(false)} 
+                className="text-white hover:bg-white/20 p-1.5 rounded-full transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!selectedUserId) return;
+              setSavingDiscount(true);
+              setActionMsg("");
+              try {
+                const discountVal = parseFloat(discountPercent) || 0;
+                await api.patch(`/admin/user-analytics/users/${selectedUserId}/discount`, {
+                  discount_percentage: discountVal
+                });
+                setCurrentUserInfo(prev => ({ ...prev, discount_percentage: discountVal }));
+                setUsers(prev => prev.map(u => u.id === parseInt(selectedUserId) ? { ...u, discount_percentage: discountVal } : u));
+                setActionMsg(`✅ Retail discount updated to ${discountVal}% successfully!`);
+                setShowDiscountModal(false);
+              } catch (err) {
+                setActionMsg(`❌ Failed to update discount: ${err.response?.data?.message || err.message}`);
+              } finally {
+                setSavingDiscount(false);
+              }
+            }} className="p-6 space-y-4">
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1.5 block font-semibold text-gray-700">
+                  Discount Percentage (%)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    className="input w-full text-lg font-bold pr-10 text-purple-700 border-purple-200 focus:border-purple-500 focus:ring-purple-200"
+                    value={discountPercent}
+                    onChange={(e) => setDiscountPercent(e.target.value)}
+                    placeholder="Enter discount % (e.g. 10)"
+                    required
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base">%</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Jab ye user retail store se order karega, toh uske total par itne percentage ka discount automatically apply ho jayega.
+                </p>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Quick Presets</label>
+                <div className="flex flex-wrap gap-2">
+                  {[0, 5, 10, 15, 20, 25, 30, 50].map((val) => (
+                    <button
+                      type="button"
+                      key={val}
+                      onClick={() => setDiscountPercent(val.toString())}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                        parseFloat(discountPercent) === val
+                          ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-purple-50 hover:border-purple-200"
+                      }`}
+                    >
+                      {val === 0 ? "No Discount (0%)" : `${val}%`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDiscountModal(false)}
+                  className="btn-secondary text-sm px-4 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDiscount}
+                  className="btn-primary text-sm px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl shadow-md transition-all disabled:opacity-50"
+                >
+                  {savingDiscount ? "Saving..." : "Save Discount"}
                 </button>
               </div>
             </form>
@@ -559,9 +697,27 @@ export default function AdminUserHistory() {
                           ))}
                         </div>
                       </div>
-                      <div className="mt-3 text-right">
-                        <p className="text-xs text-gray-500">Total Spent</p>
-                        <p className="font-bold text-gray-900">₹{order.totalAmount}</p>
+                      <div className="mt-3 flex justify-between items-end border-t border-gray-100 pt-2.5">
+                        <div>
+                          {parseFloat(order.discount_percent || 0) > 0 ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                🏷️ {parseFloat(order.discount_percent)}% Discount (-₹{parseFloat(order.discount_amount || 0).toFixed(2)})
+                              </span>
+                              {order.subtotal && (
+                                <p className="text-[10px] text-gray-400 line-through mt-0.5">
+                                  Subtotal: ₹{parseFloat(order.subtotal).toFixed(2)}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 font-medium">Standard Retail Order</span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] text-gray-500 font-medium">Total Paid</p>
+                          <p className="font-bold text-gray-900 text-base">₹{order.totalAmount}</p>
+                        </div>
                       </div>
                     </div>
                   ))}

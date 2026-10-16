@@ -199,6 +199,11 @@ export default function BatchAssign() {
                           <div>
                             <p className="font-semibold text-gray-900 text-sm capitalize">{o.type} #{o.order_id}</p>
                             <p className="text-xs text-gray-500">{o.description}</p>
+                            {o.delivery_time_slot && (
+                              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-bold mt-1">
+                                ⏱ Requested: {o.delivery_time_slot}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>

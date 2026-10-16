@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+import useAuthStore from "../../store/authStore";
 
 export default function RetailStore() {
+  const { user } = useAuthStore();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -221,8 +223,11 @@ export default function RetailStore() {
     const qtyInKg = (item.product.unit === 'gm' || item.product.unit === 'ml') ? item.quantity / 1000 : item.quantity;
     return sum + (qtyInKg * rate);
   }, 0);
+  const discountPercent = parseFloat(user?.discount_percentage || 0);
+  const discountAmount = discountPercent > 0 ? (subtotal * discountPercent) / 100 : 0;
+  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
   const deliveryCharge = cartItems.length > 0 ? 30.00 : 0;
-  const grandTotal = subtotal + deliveryCharge;
+  const grandTotal = discountedSubtotal + deliveryCharge;
 
   const filteredProducts = products.filter(p => filterCategory === "all" || p.category === filterCategory);
 
@@ -252,6 +257,26 @@ export default function RetailStore() {
         </div>
         <span className="text-2xl">{deliveryTomorrow ? "🚚" : "🌙"}</span>
       </div>
+
+      {/* Special User Discount Banner */}
+      {discountPercent > 0 && (
+        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-center justify-between gap-4 text-purple-900 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🏷️</span>
+            <div>
+              <p className="font-bold text-sm text-purple-950">
+                Special User Discount Active: {discountPercent}% OFF!
+              </p>
+              <p className="text-xs text-purple-700">
+                Aapko har retail order par {discountPercent}% ka special discount mil raha hai. Checkout karte waqt discount automatically deduct ho jayega.
+              </p>
+            </div>
+          </div>
+          <span className="bg-purple-600 text-white font-bold text-xs px-3 py-1 rounded-full shadow-2xs whitespace-nowrap">
+            {discountPercent}% SAVINGS
+          </span>
+        </div>
+      )}
 
       {msg && (
         <div className={`rounded-xl px-4 py-3 text-sm ${msg.startsWith("✅") ? "bg-fresh-100/30 text-fresh-600 border border-fresh-700/50" : "bg-red-900/30 text-red-600 border border-red-700/50"}`}>
@@ -446,6 +471,12 @@ export default function RetailStore() {
                   <span>Subtotal:</span>
                   <span>₹{subtotal.toFixed(2)}</span>
                 </div>
+                {discountPercent > 0 && (
+                  <div className="flex justify-between text-purple-700 font-bold bg-purple-50 px-2.5 py-1.5 rounded-lg border border-purple-200">
+                    <span className="flex items-center gap-1">🏷️ Special Discount ({discountPercent}%):</span>
+                    <span>-₹{discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-gray-600">
                   <span>Delivery Charges:</span>
                   <span>₹{deliveryCharge.toFixed(2)}</span>

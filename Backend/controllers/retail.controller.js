@@ -54,8 +54,21 @@ export const createRetailOrder = async (req, res) => {
             });
         }
 
+        // Fetch user to check discount and balance
+        const user = await User.findByPk(user_id, { transaction: t });
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
         const deliveryCharge = 30.00;
-        const totalAmount = subtotal + deliveryCharge;
+        const discountPercent = parseFloat(user.discount_percentage || 0);
+        let discountAmount = 0;
+        if (discountPercent > 0) {
+            discountAmount = parseFloat(((subtotal * discountPercent) / 100).toFixed(2));
+        }
+        const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+        const totalAmount = parseFloat((discountedSubtotal + deliveryCharge).toFixed(2));
 
         // Cutoff Logic
         const now = new Date();
@@ -68,13 +81,7 @@ export const createRetailOrder = async (req, res) => {
         }
         const deliveryDateStr = deliveryDate.toISOString().split('T')[0];
 
-        let user = null;
         if (payment_method === 'wallet') {
-            user = await User.findByPk(user_id, { transaction: t });
-            if (!user) {
-                await t.rollback();
-                return res.status(404).json({ success: false, message: "User not found" });
-            }
             const todayStr = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Kolkata" }).split(" ")[0]; // YYYY-MM-DD in IST
 
             // Calculate today's locked amount for pending deliveries
@@ -115,13 +122,18 @@ export const createRetailOrder = async (req, res) => {
                 user_id,
                 amount: totalAmount,
                 type: 'debit',
-                reason: `Retail order payment`
+                reason: discountPercent > 0 
+                    ? `Retail order payment (${discountPercent}% discount applied)`
+                    : `Retail order payment`
             }, { transaction: t });
         }
 
         const retailOrder = await RetailOrder.create({
             user_id,
             address_id,
+            subtotal,
+            discount_percent: discountPercent,
+            discount_amount: discountAmount,
             total_amount: totalAmount,
             delivery_charge: deliveryCharge,
             payment_method: payment_method || 'cod',
@@ -174,7 +186,7 @@ export const getAdminRetailOrders = async (req, res) => {
     try {
         const orders = await RetailOrder.findAll({
             include: [
-                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: User, attributes: ['id', 'name', 'phone', 'discount_percentage'] },
                 { model: Address },
                 {
                     model: RetailOrderItem,

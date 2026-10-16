@@ -107,6 +107,12 @@ export default function MyRetailOrders() {
                             <td className="p-2 text-right text-gray-800">₹{parseFloat(item.total_price).toFixed(2)}</td>
                           </tr>
                         ))}
+                        {parseFloat(order.discount_percent || 0) > 0 && (
+                          <tr className="border-t border-purple-100 bg-purple-50/50 text-purple-700 font-semibold">
+                            <td colSpan="2" className="p-2 text-right">Discount ({parseFloat(order.discount_percent)}%):</td>
+                            <td className="p-2 text-right text-purple-700 font-bold">-₹{parseFloat(order.discount_amount || 0).toFixed(2)}</td>
+                          </tr>
+                        )}
                         <tr className="border-t border-gray-850 text-gray-600 font-medium">
                           <td colSpan="2" className="p-2 text-right">Delivery Charge:</td>
                           <td className="p-2 text-right text-gray-700">₹{parseFloat(order.delivery_charge).toFixed(2)}</td>

@@ -39,7 +39,7 @@ const leaveTaskHelper = async (workerId) => {
 
         // Only hands-on tasks should be "left"
         const isBackground = task.stage === 'SOAKING' || (task.stage === 'DRYING' && (!task.drying_mode || task.drying_mode === 'machine'));
-        
+
         if (isBackground) {
             continue; // Keep doing background tasks
         }
@@ -79,7 +79,7 @@ const checkForConflictingHandsOnTasks = async (workerId, excludeTaskId = null) =
     if (excludeTaskId) {
         whereClause.task_id = { [Op.ne]: excludeTaskId };
     }
-    
+
     const activeAssignments = await TaskWorkerAssignment.findAll({
         where: whereClause,
         include: [{ model: BatchProductTask, as: 'task', include: [{ model: Product }] }]
@@ -556,7 +556,7 @@ export const startTaskStage = async (req, res) => {
 
         if (isHandsOn) {
             const conflictingTasks = await checkForConflictingHandsOnTasks(workerId, taskId);
-            
+
             if (conflictingTasks.length > 0) {
                 if (!req.body.forceLeaveOther) {
                     const ct = conflictingTasks[0].task;

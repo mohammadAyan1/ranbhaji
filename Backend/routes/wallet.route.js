@@ -1,5 +1,5 @@
 import express from "express";
-import { getWallet, addFunds, getTransactions, getTomorrowSummary, getUserSubscriptions, getAllUsers, createUser, overrideCredit, updateUserStatus, assignDeliveryZones, updateUserDislikes, adjustUserWallet, getUserWalletTransactions } from "../controllers/wallet.controller.js";
+import { getWallet, addFunds, getTransactions, getTomorrowSummary, getUserSubscriptions, getAllUsers, createUser, overrideCredit, updateUserStatus, assignDeliveryZones, updateUserDislikes, adjustUserWallet, getUserWalletTransactions, getAdminWalletUsers } from "../controllers/wallet.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
 
@@ -23,5 +23,6 @@ router.put("/admin/users/:id/dislikes", requireAuth, requireRole(["admin"]), upd
 // New Admin Wallet Routes
 router.post("/admin/users/:id/wallet/adjust", requireAuth, requireRole(["admin"]), upload.single("photo"), adjustUserWallet);
 router.get("/admin/users/:id/wallet/transactions", requireAuth, requireRole(["admin"]), getUserWalletTransactions);
+router.get("/admin/wallets", requireAuth, requireRole(["admin"]), getAdminWalletUsers);
 
 export default router;

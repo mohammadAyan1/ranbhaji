@@ -947,6 +947,11 @@ export const getCompletedDeliveries = async (req, res) => {
             }
         }
 
+        // Ensure delivery_time_slot is set on each delivery
+        for (const delivery of deliveriesData) {
+            delivery.delivery_time_slot = delivery.delivery_time_slot || delivery.Subscription?.delivery_time_slot || null;
+        }
+
         res.status(200).json({ success: true, deliveries: deliveriesData });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -1499,6 +1504,7 @@ export const getAllOrdersForDate = async (req, res) => {
                     hasPackage: false,
                     is_returned_serving: false,
                     status: status,
+                    delivery_time_slot: null,
                     addressesMap: {}, // To group by address string
                     // Also keep total map for the overall summary view
                     totalItemsMap: {},
@@ -1510,11 +1516,12 @@ export const getAllOrdersForDate = async (req, res) => {
             return usersMap[user.id];
         };
 
-        const getOrInitAddressGroup = (uMap, addrStr, batchId, status, deliveryBoyId) => {
+        const getOrInitAddressGroup = (uMap, addrStr, batchId, status, deliveryBoyId, timeSlot = null) => {
             if (!uMap.addressesMap[addrStr]) {
                 uMap.addressesMap[addrStr] = {
                     addressText: addrStr,
                     batch_id: batchId,
+                    delivery_time_slot: timeSlot || null,
                     delivery_boy_id: deliveryBoyId,
                     status: status, // Add status to track if it's ready_for_delivery
                     is_returned_serving: false,
@@ -1522,6 +1529,9 @@ export const getAllOrdersForDate = async (req, res) => {
                     retailOrderIds: [],
                     itemsMap: {}
                 };
+            }
+            if (timeSlot && !uMap.addressesMap[addrStr].delivery_time_slot) {
+                uMap.addressesMap[addrStr].delivery_time_slot = timeSlot;
             }
             if (batchId && !uMap.addressesMap[addrStr].batch_id) {
                 uMap.addressesMap[addrStr].batch_id = batchId;
@@ -1581,13 +1591,18 @@ export const getAllOrdersForDate = async (req, res) => {
             const uMap = getOrInitUser(user, s.status);
             if (!uMap) continue;
 
+            const slot = s.delivery_time_slot || s.Subscription?.delivery_time_slot || null;
+            if (slot && !uMap.delivery_time_slot) {
+                uMap.delivery_time_slot = slot;
+            }
+
             uMap.hasPackage = true;
             uMap.allScheduleIds.push(s.id);
             if (s.is_returned_serving) uMap.is_returned_serving = true;
             if (!uMap.commonBatchId && s.batch_id) uMap.commonBatchId = s.batch_id;
 
             const addrStr = formatAddress(address);
-            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id, s.status, s.delivery_boy_id);
+            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id, s.status, s.delivery_boy_id, slot);
             addrGrp.scheduleIds.push(s.id);
             if (s.is_returned_serving) addrGrp.is_returned_serving = true;
 
@@ -1698,6 +1713,7 @@ export const getAllOrdersForDate = async (req, res) => {
             const addresses = Object.values(u.addressesMap).map(a => ({
                 address: a.addressText,
                 batch_id: a.batch_id,
+                delivery_time_slot: a.delivery_time_slot || u.delivery_time_slot || null,
                 delivery_boy_id: a.delivery_boy_id,
                 status: a.status,
                 scheduleIds: a.scheduleIds,
@@ -1722,6 +1738,7 @@ export const getAllOrdersForDate = async (req, res) => {
                 hasPackage: u.hasPackage,
                 status: u.status,
                 batch_id: u.commonBatchId, // Overall batch if we want to default it
+                delivery_time_slot: u.delivery_time_slot || null,
                 allScheduleIds: u.allScheduleIds,
                 allRetailOrderIds: u.allRetailOrderIds,
                 totalItems: totalItems,

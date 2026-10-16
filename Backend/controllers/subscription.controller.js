@@ -12,7 +12,7 @@ import { normalizeDateString, getEarliestCutoffDate, getDaysBetween, getDayAfter
 export const subscribe = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { package_id, type, payment_method, address_id, batch_id } = req.body;
+        const { package_id, type, payment_method, address_id, batch_id, delivery_time_slot } = req.body;
         const user_id = req.user.id;
 
         const pkg = await Package.findByPk(package_id, {
@@ -156,7 +156,8 @@ export const subscribe = async (req, res) => {
             yearly_amount_paid,
             total_services,
             address_id: finalAddressId,
-            batch_id,
+            batch_id: batch_id || null,
+            delivery_time_slot: delivery_time_slot || null,
             renewal_count,
             locked_price
         }, { transaction: t });
@@ -298,7 +299,8 @@ export const confirmStartDate = async (req, res) => {
             subscription_id,
             scheduled_date: date,
             status: 'pending',
-            batch_id: subscription.batch_id
+            batch_id: subscription.batch_id || null,
+            delivery_time_slot: subscription.delivery_time_slot || null
         }));
 
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });

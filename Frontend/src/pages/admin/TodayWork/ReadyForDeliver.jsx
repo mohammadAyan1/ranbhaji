@@ -171,6 +171,7 @@ export default function ReadyForDeliver() {
                   <th className="p-4 w-12 font-medium"></th>
                   <th className="p-4 font-semibold text-sm">User</th>
                   <th className="p-4 font-semibold text-sm">Package Assigned</th>
+                  <th className="p-4 font-semibold text-sm">Requested Time</th>
                   <th className="p-4 font-semibold text-sm">Total Items</th>
                   <th className="p-4 font-semibold text-sm text-right">Batch</th>
                 </tr>
@@ -197,6 +198,15 @@ export default function ReadyForDeliver() {
                         </span>
                       </td>
                       <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                        {u.delivery_time_slot ? (
+                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
+                            ⏱ {u.delivery_time_slot}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs italic">—</span>
+                        )}
+                      </td>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
                         <span className="bg-gray-100 px-2.5 py-1 rounded-md text-xs font-medium text-gray-700">
                           {u.totalItems.length} items
                         </span>
@@ -210,7 +220,7 @@ export default function ReadyForDeliver() {
 
                     {expandedId === u.user.id && (
                       <tr className="bg-gray-50/30">
-                        <td colSpan="5" className="p-0 border-l-2 border-fresh-500">
+                        <td colSpan="6" className="p-0 border-l-2 border-fresh-500">
                           <div className="p-6">
                             <div className="mb-6 space-y-6">
                               <h4 className="text-sm font-bold text-gray-700 flex items-center">
@@ -233,11 +243,16 @@ export default function ReadyForDeliver() {
                                         </div>
                                         <p className="font-medium text-gray-900 text-sm">{addrGrp.address}</p>
                                       </div>
-                                      <div className="text-right">
-                                        <p className="text-gray-500 uppercase tracking-wide text-[10px] font-semibold mb-1">Assigned Batch</p>
+                                      <div className="text-right flex flex-col items-end gap-1">
+                                        <p className="text-gray-500 uppercase tracking-wide text-[10px] font-semibold">Assigned Batch</p>
                                         <span className="text-fresh-700 font-medium bg-fresh-50 px-2.5 py-1 rounded-md text-sm">
                                           {addrGrp.batch_id ? batches.find(b => b.id === addrGrp.batch_id)?.name || 'Assigned' : 'Unassigned'}
                                         </span>
+                                        {(addrGrp.delivery_time_slot || u.delivery_time_slot) && (
+                                          <span className="text-amber-800 font-bold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs">
+                                            ⏱ {addrGrp.delivery_time_slot || u.delivery_time_slot}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
 
