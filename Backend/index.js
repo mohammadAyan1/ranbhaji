@@ -46,6 +46,10 @@ import workerTaskRoutes from "./routes/workerTask.routes.js";
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
 
+
+import notificationRouter from "./routes/notification/notificationRoutes.js";
+
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -123,6 +127,9 @@ app.use("/api/production", productionRoutes);
 app.use("/api/referral", referralRoutes);
 app.use("/api/admin/closing-stock", closingStockRoutes);
 app.use("/api/worker-tasks", workerTaskRoutes);
+// notification
+app.use('/api/notifications', notificationRouter);
+
 
 // 404 fallback
 app.use((req, res) => {

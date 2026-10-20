@@ -117,13 +117,17 @@ export default function AdminPackages() {
     }));
     setSeasonalPool(seasonal);
 
+    const draftSeasonalCount = draft.max_seasonal_count !== undefined && draft.max_seasonal_count !== null
+      ? parseInt(draft.max_seasonal_count)
+      : (seasonal.length > 0 ? 3 : 0);
+
     if (draft.seasonal_quantities && draft.seasonal_quantities.length > 0) {
       setSeasonalQuantities(draft.seasonal_quantities);
     } else {
-      setSeasonalQuantities(Array(draft.max_seasonal_count || 3).fill(250));
+      setSeasonalQuantities(draftSeasonalCount > 0 ? Array(draftSeasonalCount).fill(250) : []);
     }
 
-    setMaxSelectCount(draft.max_seasonal_count || 3);
+    setMaxSelectCount(draftSeasonalCount);
     setIsDraftApplied(true);
     setMsg(`✅ Auto-filled package from draft calculation: "${draft.name}"`);
   };
@@ -145,8 +149,12 @@ export default function AdminPackages() {
       }
     });
     const seasonal_budget = per_service - fixed_cost;
-    setValidationResult({ per_service, fixed_cost, seasonal_budget, valid: fixed_cost < per_service });
-  }, [fixedItems, form.price, form.services_per_month, products]);
+    const hasSeasonal = seasonalPool.length > 0 && parseInt(maxSelectCount || 0) > 0;
+    // If package has seasonal items, fixed_cost must be less than per_service (leaving budget for seasonal items).
+    // If pure fixed package, fixed_cost can be equal to per_service (allow tiny float margin +0.05).
+    const valid = hasSeasonal ? (fixed_cost < per_service) : (fixed_cost <= per_service + 0.05);
+    setValidationResult({ per_service, fixed_cost, seasonal_budget, valid, hasSeasonal });
+  }, [fixedItems, form.price, form.services_per_month, form.margin_percent, seasonalPool, maxSelectCount, products]);
 
   const resetForm = () => {
     setForm({ name: "", num_persons: 2, num_persons_max: "", services_per_month: 12, price: 1200, type: "standard", target_user_id: "", target_mobile_number: "", margin_percent: 0, image: null, creation_source: "manual" });
@@ -188,7 +196,9 @@ export default function AdminPackages() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (validationResult && !validationResult.valid) {
-      setMsg("❌ Fixed item cost exceeds per-service amount. Please adjust quantities or price.");
+      setMsg(validationResult.hasSeasonal
+        ? "❌ Fixed item cost must be less than per-service amount to leave budget for seasonal items."
+        : "❌ Fixed item cost exceeds per-service amount. Please adjust quantities or price.");
       return;
     }
     setSubmitting(true); setMsg("");
@@ -451,17 +461,25 @@ export default function AdminPackages() {
                 </div>
                 <div>
                   <p className="text-gray-600">Fixed Items Cost</p>
-                  <p className={`font-bold ${validationResult.valid ? "text-yellow-400" : "text-red-600"}`}>₹{validationResult.fixed_cost.toFixed(2)}</p>
+                  <p className={`font-bold ${validationResult.valid ? "text-yellow-600" : "text-red-600"}`}>₹{validationResult.fixed_cost.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-gray-600">Seasonal Budget</p>
-                  <p className={`font-bold ${validationResult.seasonal_budget > 0 ? "text-fresh-600" : "text-red-600"}`}>
+                  <p className={`font-bold ${
+                    validationResult.seasonal_budget > 0
+                      ? "text-fresh-600"
+                      : (validationResult.hasSeasonal ? "text-red-600" : "text-gray-600")
+                  }`}>
                     ₹{validationResult.seasonal_budget.toFixed(2)}
                   </p>
                 </div>
               </div>
               {!validationResult.valid && (
-                <p className="text-red-600 text-xs mt-2">⚠️ Fixed item cost must be LESS than per-service amount. Increase price or reduce quantities.</p>
+                <p className="text-red-600 text-xs mt-2">
+                  {validationResult.hasSeasonal
+                    ? "⚠️ Fixed item cost must be LESS than per-service amount to leave budget for seasonal items."
+                    : "⚠️ Fixed item cost cannot exceed per-service amount. Increase price or reduce quantities."}
+                </p>
               )}
             </div>
           )}
@@ -545,7 +563,7 @@ export default function AdminPackages() {
               <div className="flex items-center gap-2">
                 <span className="text-gray-600 text-xs">Max picks:</span>
                 <input
-                  type="number" min="1" max="20"
+                  type="number" min="0" max="20"
                   value={maxSelectCount}
                   disabled={isDraftApplied}
                   onChange={e => {

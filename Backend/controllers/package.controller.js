@@ -27,15 +27,21 @@ export const createPackage = async (req, res) => {
                     await t.rollback();
                     return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
                 }
-                fixed_cost_per_service += parseFloat(item.default_qty_gm) * parseFloat(product.purchase_price_per_gm);
+                const pricePerGm = item.purchase_price_per_gm != null
+                    ? parseFloat(item.purchase_price_per_gm)
+                    : (product ? parseFloat(product.purchase_price_per_gm || 0) : 0);
+                fixed_cost_per_service += parseFloat(item.default_qty_gm) * pricePerGm;
             }
         }
 
-        if (fixed_cost_per_service >= per_service_amount) {
+        const hasSeasonal = seasonal_pool && seasonal_pool.length > 0 && parseInt(max_select_count || 0) > 0;
+        if (hasSeasonal ? (fixed_cost_per_service >= per_service_amount) : (fixed_cost_per_service > per_service_amount + 0.05)) {
             await t.rollback();
             return res.status(400).json({
                 success: false,
-                message: `Package price validation failed: Fixed item cost per service (₹${fixed_cost_per_service.toFixed(2)}) must be LESS than per-service amount (₹${per_service_amount.toFixed(2)}). No budget left for seasonal items.`
+                message: hasSeasonal
+                    ? `Package price validation failed: Fixed item cost per service (₹${fixed_cost_per_service.toFixed(2)}) must be LESS than per-service amount (₹${per_service_amount.toFixed(2)}). No budget left for seasonal items.`
+                    : `Package price validation failed: Fixed item cost per service (₹${fixed_cost_per_service.toFixed(2)}) cannot exceed per-service amount (₹${per_service_amount.toFixed(2)}).`
             });
         }
 
@@ -270,18 +276,34 @@ export const updatePackage = async (req, res) => {
             for (const item of fixed_items) {
                 const product = await Product.findByPk(item.product_id);
                 if (!product) { await t.rollback(); return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` }); }
-                const freshPrice = parseFloat(product.purchase_price_per_gm || 0);
-                fixed_cost_per_service += parseFloat(item.default_qty_gm) * freshPrice;
+                const itemPrice = item.purchase_price_per_gm != null
+                    ? parseFloat(item.purchase_price_per_gm)
+                    : parseFloat(product.purchase_price_per_gm || 0);
+                fixed_cost_per_service += parseFloat(item.default_qty_gm) * itemPrice;
                 fixedRows.push({
                     package_id: pkg.id,
                     product_id: item.product_id,
                     default_qty_gm: item.default_qty_gm,
-                    purchase_price_per_gm: freshPrice
+                    purchase_price_per_gm: itemPrice
                 });
             }
-            if (fixed_cost_per_service >= per_service_amount) {
+
+            const currentSeasonalPoolCount = seasonal_pool
+                ? seasonal_pool.length
+                : await PackageSeasonalPool.count({ where: { package_id: pkg.id }, transaction: t });
+            const currentMaxSelectCount = max_select_count !== undefined
+                ? parseInt(max_select_count || 0)
+                : parseInt((await PackageSeasonalConfig.findOne({ where: { package_id: pkg.id }, transaction: t }))?.max_select_count || 0);
+            const hasSeasonal = currentSeasonalPoolCount > 0 && currentMaxSelectCount > 0;
+
+            if (hasSeasonal ? (fixed_cost_per_service >= per_service_amount) : (fixed_cost_per_service > per_service_amount + 0.05)) {
                 await t.rollback();
-                return res.status(400).json({ success: false, message: `Fixed item cost (₹${fixed_cost_per_service.toFixed(2)}) must be < per-service amount (₹${per_service_amount.toFixed(2)})` });
+                return res.status(400).json({
+                    success: false,
+                    message: hasSeasonal
+                        ? `Fixed item cost (₹${fixed_cost_per_service.toFixed(2)}) must be < per-service amount (₹${per_service_amount.toFixed(2)}) to leave budget for seasonal items`
+                        : `Fixed item cost (₹${fixed_cost_per_service.toFixed(2)}) cannot exceed per-service amount (₹${per_service_amount.toFixed(2)})`
+                });
             }
             await PackageFixedItem.destroy({ where: { package_id: pkg.id }, transaction: t });
             await PackageFixedItem.bulkCreate(fixedRows, { transaction: t });

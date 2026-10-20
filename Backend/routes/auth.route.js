@@ -5,6 +5,8 @@ import {
     forgotPassword, verifyForgotPasswordOTP, resetPassword, updateDislikes
 } from "../controllers/auth.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
+import { savePushToken } from "../controllers/notification/pushTokenController.js";
+
 
 const router = express.Router();
 /////////////////////////////////////////////////
@@ -20,5 +22,9 @@ router.post("/resend-otp", resendOTP);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-forgot-password-otp", verifyForgotPasswordOTP);
 router.post("/reset-password", resetPassword);
+
+
+router.post("/save-push-token", requireAuth, savePushToken); // 👈 NAYA ROUTE
+
 
 export default router;

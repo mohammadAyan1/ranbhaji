@@ -729,6 +729,21 @@ BatchProductTask.hasMany(TaskWorkerAssignment, { foreignKey: 'task_id', as: 'wor
 TaskWorkerAssignment.belongsTo(User, { foreignKey: 'worker_id', as: 'worker' });
 User.hasMany(TaskWorkerAssignment, { foreignKey: 'worker_id', as: 'task_assignments' });
 
+// PUSH_TOKENS
+const PushToken = sequelize.define('PushToken', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: DataTypes.INTEGER, allowNull: false, unique: 'uq_user' },
+  token: { type: DataTypes.STRING(255), allowNull: false }
+}, {
+  tableName: 'pushtoken',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
+PushToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+User.hasOne(PushToken, { foreignKey: 'userId', as: 'push_token' });
+
 export {
   sequelize,
   User,
@@ -774,6 +789,7 @@ export {
   ReferralLog,
   BatchProductDemand,
   BatchProductTask,
-  TaskWorkerAssignment
+  TaskWorkerAssignment,
+  PushToken
 };
 
