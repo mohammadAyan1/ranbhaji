@@ -181,8 +181,8 @@ export const getTodayDeliveries = async (req, res) => {
                         hindi_name: i.Product?.hindi_name,
                         qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.qty_gm),
                         unit: i.Product?.unit,
-                        image: i.Product?.image
-
+                        image_url: i.Product?.image_url || null,
+                        image: i.Product?.image_url || null
                     }))
             });
         }
@@ -222,7 +222,8 @@ export const getTodayDeliveries = async (req, res) => {
                         hindi_name: i.Product?.hindi_name,
                         qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.quantity),
                         unit: i.Product?.unit,
-                        image: i.Product?.image
+                        image_url: i.Product?.image_url || null,
+                        image: i.Product?.image_url || null
                     }))
             });
         }
