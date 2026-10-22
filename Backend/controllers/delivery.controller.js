@@ -12,20 +12,7 @@ import path from "path";
 // GET /api/today-deliveries  (delivery role)
 export const getTodayDeliveries = async (req, res) => {
     try {
-        // const today = new Date().toISOString().split('T')[0];
-
-
-
-        //////
-
-        const date = new Date();
-        date.setDate(date.getDate() + 2);
-
-        const today = date.toISOString().split('T')[0];
-
-        console.log(today);
-
-        //////
+        const today = req.query.date || new Date().toISOString().split('T')[0];
 
 
         const deliveryBoyId = req.user.id;
@@ -2205,7 +2192,7 @@ export const getDeliveryBoyHistory = async (req, res) => {
             // no date filter
         } else if (from_date && to_date) {
             whereClause.actual_delivery_date = { [Op.between]: [from_date, to_date] };
-            retailWhereClause.actual_delivery_date = { [Op.between]: [from_date, to_date] };
+            retailWhereClause.delivery_date = { [Op.between]: [from_date, to_date] };
         } else {
             // Default to today
             const today = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
@@ -2213,7 +2200,7 @@ export const getDeliveryBoyHistory = async (req, res) => {
             const dateStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
 
             whereClause.actual_delivery_date = dateStr;
-            retailWhereClause.actual_delivery_date = dateStr;
+            retailWhereClause.delivery_date = dateStr;
         }
 
         const schedules = await DeliverySchedule.findAll({
@@ -2235,7 +2222,7 @@ export const getDeliveryBoyHistory = async (req, res) => {
                 { model: Address },
                 { model: RetailOrderItem, as: 'Items', include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] }] }
             ],
-            order: [['actual_delivery_date', 'DESC']]
+            order: [['delivery_date', 'DESC']]
         });
 
         const schedulesData = schedules.map(s => s.toJSON());
