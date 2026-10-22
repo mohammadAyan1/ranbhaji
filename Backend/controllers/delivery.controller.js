@@ -108,7 +108,7 @@ export const getTodayDeliveries = async (req, res) => {
             // Load delivery items
             let items = await DeliveryItem.findAll({
                 where: { schedule_id: sched.id },
-                include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category'] }]
+                include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category', 'image_url'] }]
             });
 
             if (items.length > 0) {
@@ -141,7 +141,7 @@ export const getTodayDeliveries = async (req, res) => {
                         // Re-fetch
                         items = await DeliveryItem.findAll({
                             where: { schedule_id: sched.id },
-                            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category'] }]
+                            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category', 'image_url'] }]
                         });
                     }
                 } else if (sched.WaterSubscription) {
@@ -164,7 +164,7 @@ export const getTodayDeliveries = async (req, res) => {
                         // Re-fetch
                         items = await DeliveryItem.findAll({
                             where: { schedule_id: sched.id },
-                            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category'] }]
+                            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category', 'image_url'] }]
                         });
                     }
                 }
@@ -180,7 +180,9 @@ export const getTodayDeliveries = async (req, res) => {
                         product: i.Product?.name,
                         hindi_name: i.Product?.hindi_name,
                         qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.qty_gm),
-                        unit: i.Product?.unit
+                        unit: i.Product?.unit,
+                        image: i.Product?.image
+
                     }))
             });
         }
@@ -219,7 +221,8 @@ export const getTodayDeliveries = async (req, res) => {
                         product: i.Product?.name,
                         hindi_name: i.Product?.hindi_name,
                         qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.quantity),
-                        unit: i.Product?.unit
+                        unit: i.Product?.unit,
+                        image: i.Product?.image
                     }))
             });
         }
