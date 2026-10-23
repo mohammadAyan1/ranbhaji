@@ -53,6 +53,7 @@ export default function WaterPage() {
   // Form states
   const [selectedType, setSelectedType] = useState("monthly"); // monthly or yearly
   const [form, setForm] = useState({ product_id: "", water_type: "health", container: "glass", frequency: "daily", bottles_per_day: 1 });
+  const [waterDiscounts, setWaterDiscounts] = useState([]);
 
   // Flow step state: "list" | "confirm_date"
   const [step, setStep] = useState("list");
@@ -172,6 +173,7 @@ export default function WaterPage() {
   useEffect(() => {
     fetchWater();
     fetchProducts();
+    api.get("/water/my-discounts").then(r => setWaterDiscounts(r.data.discounts || [])).catch(() => {});
     api.get("/addresses")
       .then(r => {
         const addrs = r.data.addresses || [];
@@ -206,7 +208,21 @@ export default function WaterPage() {
   const totalServices = selectedType === "yearly" ? servicesPerMonth * 12 : servicesPerMonth;
   const totalBottlesInPlan = totalServices * bottlesCount;
   const rawTotal = pricePerBottle * totalBottlesInPlan;
-  const totalPrice = selectedType === "yearly" ? rawTotal * 0.75 : rawTotal;
+  const subtotalPrice = selectedType === "yearly" ? rawTotal * 0.75 : rawTotal;
+
+  // Water Discount matching:
+  // Match tier with highest bottles_count <= bottlesCount
+  // If user chooses more bottles than highest tier, highest tier discount applies.
+  const eligibleTiers = waterDiscounts.filter(d => parseInt(d.bottles_count) <= bottlesCount);
+  const activeDiscountTier = eligibleTiers.length > 0 ? eligibleTiers[eligibleTiers.length - 1] : null;
+  const appliedDiscountPercent = activeDiscountTier ? parseFloat(activeDiscountTier.discount_percentage) : 0;
+  const isHighestTierCapped = activeDiscountTier && bottlesCount > parseInt(activeDiscountTier.bottles_count) && (waterDiscounts.length > 0 && activeDiscountTier.id === waterDiscounts[waterDiscounts.length - 1].id);
+
+  const discountSavings = (subtotalPrice * appliedDiscountPercent) / 100;
+  const totalPrice = Math.max(0, subtotalPrice - discountSavings);
+
+  // Next available tier tip
+  const nextTier = waterDiscounts.find(d => parseInt(d.bottles_count) > bottlesCount);
 
   const handleSaveInlineAddress = async (e) => {
     e.preventDefault();
@@ -802,7 +818,7 @@ export default function WaterPage() {
                   <label className="label">Frequency</label>
                   <select className="input" value={form.frequency} onChange={e => setForm({ ...form, frequency: e.target.value })}>
                     <option value="daily">Daily Delivery (30 days)</option>
-                    <option value="alternate">Alternate Days (Mon-Wed-Fri...)</option>
+                    {/* <option value="alternate">Alternate Days (Mon-Wed-Fri...)</option> */}
                   </select>
                 </div>
 
@@ -833,6 +849,20 @@ export default function WaterPage() {
                       +
                     </button>
                   </div>
+
+                  {appliedDiscountPercent > 0 ? (
+                    <div className="mt-2 flex items-center justify-between text-xs px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                      <span className="font-bold flex items-center gap-1.5">
+                        <span>🎉</span> Special Discount: {appliedDiscountPercent}% OFF
+                        {isHighestTierCapped && <span className="text-[10px] text-amber-800 bg-amber-100 font-normal px-1.5 py-0.2 rounded">Max tier cap applied</span>}
+                      </span>
+                      <span className="font-extrabold text-emerald-700">Save ₹{discountSavings.toFixed(2)}</span>
+                    </div>
+                  ) : nextTier ? (
+                    <p className="text-[11px] text-blue-600 mt-1.5 font-medium flex items-center gap-1">
+                      <span>💡</span> Tip: Select {nextTier.bottles_count} bottles/day to unlock {parseFloat(nextTier.discount_percentage)}% discount!
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>
@@ -884,11 +914,10 @@ export default function WaterPage() {
                           setDeliveryTimeSlot(slot);
                           setIsCustomTime(false);
                         }}
-                        className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition-all ${
-                          !isCustomTime && deliveryTimeSlot === slot
-                            ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
-                            : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
-                        }`}
+                        className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition-all ${!isCustomTime && deliveryTimeSlot === slot
+                          ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                          }`}
                       >
                         {slot}
                       </button>
@@ -899,11 +928,10 @@ export default function WaterPage() {
                         setIsCustomTime(true);
                         updateCustomSlot(customTimeFrom, customTimeTo);
                       }}
-                      className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition-all ${
-                        isCustomTime
-                          ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
-                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
-                      }`}
+                      className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition-all ${isCustomTime
+                        ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                        }`}
                     >
                       ✏️ Custom Time
                     </button>
@@ -959,14 +987,28 @@ export default function WaterPage() {
                     <span className="text-blue-600 font-bold">{totalBottlesInPlan} bottles ({totalBottlesInPlan * bottleCapacity}L)</span>
                   </div>
                   {selectedType === "yearly" && (
-                    <div className="flex justify-between text-xs text-fresh-600">
-                      <span>Annual Discount Applied:</span>
-                      <span>-25%</span>
+                    <div className="flex justify-between text-xs text-fresh-600 font-semibold">
+                      <span>Annual Booking Discount (25% OFF):</span>
+                      <span>Included</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-sm pt-2 border-t border-gray-300 font-bold">
+                  {appliedDiscountPercent > 0 && (
+                    <div className="flex justify-between text-xs text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                      <div>
+                        <span>🏷️ Special Water Discount ({appliedDiscountPercent}% OFF):</span>
+                        {isHighestTierCapped && <span className="text-[10px] text-gray-500 block">({activeDiscountTier.bottles_count} bottle tier cap applied)</span>}
+                      </div>
+                      <span className="font-bold text-emerald-700">-₹{discountSavings.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm pt-2 border-t border-gray-300 font-bold items-center">
                     <span className="text-gray-900">Amount Due:</span>
-                    <span className="text-gradient">₹{totalPrice.toFixed(2)}</span>
+                    <div className="text-right">
+                      {appliedDiscountPercent > 0 && (
+                        <span className="text-xs text-gray-400 line-through mr-2 font-normal">₹{subtotalPrice.toFixed(2)}</span>
+                      )}
+                      <span className="text-gradient">₹{totalPrice.toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1157,11 +1199,10 @@ export default function WaterPage() {
                         setDeliveryTimeSlot(slot);
                         setIsCustomTime(false);
                       }}
-                      className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                        !isCustomTime && deliveryTimeSlot === slot
-                          ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
-                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
-                      }`}
+                      className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${!isCustomTime && deliveryTimeSlot === slot
+                        ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                        }`}
                     >
                       {slot}
                     </button>
@@ -1172,11 +1213,10 @@ export default function WaterPage() {
                       setIsCustomTime(true);
                       updateCustomSlot(customTimeFrom, customTimeTo);
                     }}
-                    className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                      isCustomTime
-                        ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
-                        : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
-                    }`}
+                    className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${isCustomTime
+                      ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                      }`}
                   >
                     ✏️ Custom Time
                   </button>
@@ -1380,14 +1420,25 @@ export default function WaterPage() {
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Deliveries:</span>
-                    <span className="font-semibold text-gray-900">{totalServices} services</span>
+                    <span className="font-semibold text-gray-900">{totalServices} services ({totalBottlesInPlan} bottles)</span>
                   </div>
+                  {appliedDiscountPercent > 0 && (
+                    <div className="flex justify-between items-center text-xs text-emerald-600 font-semibold">
+                      <span>Water Discount ({appliedDiscountPercent}% OFF):</span>
+                      <span>-₹{discountSavings.toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="border-t border-gray-200/80 my-1"></div>
                   <div className="flex justify-between items-center text-base font-bold">
                     <span className="text-gray-800">Amount Due:</span>
-                    <span className="text-gradient">
-                      ₹{totalPrice.toFixed(2)}
-                    </span>
+                    <div className="text-right">
+                      {appliedDiscountPercent > 0 && (
+                        <span className="text-xs text-gray-400 line-through mr-2 font-normal">₹{subtotalPrice.toFixed(2)}</span>
+                      )}
+                      <span className="text-gradient">
+                        ₹{totalPrice.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

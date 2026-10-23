@@ -2,7 +2,7 @@ import express from "express";
 import {
     subscribeWater, getWaterSubscriptions, getWaterAvailableDates,
     confirmWaterStartDate, pauseWaterSubscription, restartWaterSubscription, cancelWaterSubscription,
-    updateWaterSubscriptionBatch
+    updateWaterSubscriptionBatch, getMyWaterDiscounts
 } from "../controllers/water.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 
@@ -10,6 +10,7 @@ const router = express.Router();
 
 router.post("/subscribe", requireAuth, requireRole(["user"]), subscribeWater);
 router.get("/subscriptions", requireAuth, requireRole(["user"]), getWaterSubscriptions);
+router.get("/my-discounts", requireAuth, requireRole(["user"]), getMyWaterDiscounts);
 router.get("/available-dates", requireAuth, requireRole(["user"]), getWaterAvailableDates);
 router.post("/confirm-start-date", requireAuth, requireRole(["user"]), confirmWaterStartDate);
 router.patch("/:id/pause", requireAuth, requireRole(["user"]), pauseWaterSubscription);

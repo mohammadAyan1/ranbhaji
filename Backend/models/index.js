@@ -261,8 +261,31 @@ const WaterSubscription = sequelize.define('WaterSubscription', {
   total_services: { type: DataTypes.INTEGER, defaultValue: 0 },
   address_id: { type: DataTypes.INTEGER, allowNull: true },
   delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true },
-  batch_id: { type: DataTypes.INTEGER, allowNull: true }
+  batch_id: { type: DataTypes.INTEGER, allowNull: true },
+  discount_percentage: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
+  discount_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  final_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+  per_delivery_amount: { type: DataTypes.DECIMAL(10, 2), allowNull: true }
 }, { tableName: 'water_subscriptions', timestamps: true, createdAt: 'created_at', updatedAt: false });
+
+// 13.5. USER_WATER_DISCOUNTS
+const UserWaterDiscount = sequelize.define('UserWaterDiscount', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id: { type: DataTypes.INTEGER, allowNull: false },
+  bottles_count: { type: DataTypes.INTEGER, allowNull: false },
+  discount_percentage: { type: DataTypes.DECIMAL(5, 2), allowNull: false }
+}, {
+  tableName: 'user_water_discounts',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  indexes: [
+    {
+      unique: true,
+      fields: ['user_id', 'bottles_count']
+    }
+  ]
+});
 
 // 14. NOTIFICATIONS
 const Notification = sequelize.define('Notification', {
@@ -383,6 +406,10 @@ WaterSubscription.hasMany(PauseLog, { foreignKey: 'water_subscription_id' });
 // WaterSubscriptions
 WaterSubscription.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(WaterSubscription, { foreignKey: 'user_id' });
+
+// UserWaterDiscounts
+UserWaterDiscount.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(UserWaterDiscount, { foreignKey: 'user_id', as: 'WaterDiscounts' });
 
 // Notifications
 Notification.belongsTo(User, { foreignKey: 'user_id' });
@@ -765,6 +792,7 @@ export {
   WalletTransaction,
   PauseLog,
   WaterSubscription,
+  UserWaterDiscount,
   Notification,
   CreditLog,
   Address,

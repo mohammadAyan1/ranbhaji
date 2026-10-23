@@ -18,6 +18,14 @@ export default function AdminUserHistory() {
   const [discountPercent, setDiscountPercent] = useState("");
   const [savingDiscount, setSavingDiscount] = useState(false);
 
+  // Water Discount states
+  const [showWaterDiscountModal, setShowWaterDiscountModal] = useState(false);
+  const [waterDiscounts, setWaterDiscounts] = useState([]);
+  const [waterDiscountForm, setWaterDiscountForm] = useState({ discount_percentage: "", bottles_count: "1" });
+  const [savingWaterDiscount, setSavingWaterDiscount] = useState(false);
+  const [deletingWaterDiscountId, setDeletingWaterDiscountId] = useState(null);
+  const [waterDiscountError, setWaterDiscountError] = useState("");
+
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -90,6 +98,7 @@ export default function AdminUserHistory() {
         setAnalytics(res.data.analytics);
         setCurrentUserInfo(res.data.user);
         setDiscountPercent(res.data.user?.discount_percentage ?? "0");
+        setWaterDiscounts(res.data.waterDiscounts || []);
         setWalletTransactions(transRes.data.transactions);
       } catch (err) {
         setMsg(`❌ Failed to load analytics for user: ${err.response?.data?.message || err.message}`);
@@ -99,6 +108,61 @@ export default function AdminUserHistory() {
     };
     fetchAnalytics();
   }, [selectedUserId]);
+
+  const handleAddWaterDiscount = async (e) => {
+    e.preventDefault();
+    if (!selectedUserId) return;
+    setWaterDiscountError("");
+
+    const bottles = parseInt(waterDiscountForm.bottles_count, 10);
+    const percent = parseFloat(waterDiscountForm.discount_percentage);
+
+    if (isNaN(bottles) || bottles < 1) {
+      setWaterDiscountError("Bottles count must be an integer of at least 1");
+      return;
+    }
+    if (isNaN(percent) || percent < 0 || percent > 100) {
+      setWaterDiscountError("Discount percentage must be between 0% and 100%");
+      return;
+    }
+
+    // Check duplicate
+    const alreadyExists = waterDiscounts.some(d => parseInt(d.bottles_count) === bottles);
+    if (alreadyExists) {
+      setWaterDiscountError(`⚠️ Discount for ${bottles} bottle${bottles > 1 ? 's' : ''} already exists! Duplicate tiers for the same bottle count are not allowed.`);
+      return;
+    }
+
+    setSavingWaterDiscount(true);
+    try {
+      const res = await api.post(`/admin/user-analytics/users/${selectedUserId}/water-discounts`, {
+        bottles_count: bottles,
+        discount_percentage: percent
+      });
+      setWaterDiscounts(res.data.discounts || []);
+      setWaterDiscountForm({ discount_percentage: "", bottles_count: "1" });
+      setActionMsg(`✅ Water discount (${percent}% for ${bottles} bottle(s)) created successfully!`);
+    } catch (err) {
+      setWaterDiscountError(err.response?.data?.message || err.message);
+    } finally {
+      setSavingWaterDiscount(false);
+    }
+  };
+
+  const handleDeleteWaterDiscount = async (discountId) => {
+    if (!selectedUserId || !discountId) return;
+    setDeletingWaterDiscountId(discountId);
+    setWaterDiscountError("");
+    try {
+      const res = await api.delete(`/admin/user-analytics/users/${selectedUserId}/water-discounts/${discountId}`);
+      setWaterDiscounts(res.data.discounts || []);
+      setActionMsg("✅ Water discount tier removed successfully.");
+    } catch (err) {
+      setWaterDiscountError(err.response?.data?.message || err.message);
+    } finally {
+      setDeletingWaterDiscountId(null);
+    }
+  };
 
   const formatQuantity = (qty, unit) => {
     const numericQty = parseFloat(qty);
@@ -245,6 +309,16 @@ export default function AdminUserHistory() {
           >
             <span>🏷️</span> Set Retail Discount ({parseFloat(currentUserInfo?.discount_percentage || 0)}%)
           </button>
+          <button 
+            onClick={() => {
+              setWaterDiscountError("");
+              setWaterDiscountForm({ discount_percentage: "", bottles_count: "1" });
+              setShowWaterDiscountModal(true);
+            }} 
+            className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100 transition-colors shadow-2xs"
+          >
+            <span>💧</span> Set Water Discount ({waterDiscounts.length} Tier{waterDiscounts.length === 1 ? '' : 's'})
+          </button>
         </div>
       )}
 
@@ -271,6 +345,25 @@ export default function AdminUserHistory() {
               >
                 <span>🏷️</span>
                 <span>{parseFloat(currentUserInfo.discount_percentage || 0)}% OFF</span>
+              </button>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Water Discount</p>
+              <button
+                onClick={() => {
+                  setWaterDiscountError("");
+                  setWaterDiscountForm({ discount_percentage: "", bottles_count: "1" });
+                  setShowWaterDiscountModal(true);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition-all hover:scale-105 cursor-pointer ${
+                  waterDiscounts.length > 0
+                    ? "bg-sky-100 text-sky-800 border-sky-300 shadow-2xs"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-sky-300 hover:text-sky-700"
+                }`}
+                title="Click to view & configure water discount tiers"
+              >
+                <span>💧</span>
+                <span>{waterDiscounts.length > 0 ? `${waterDiscounts.length} Tier${waterDiscounts.length > 1 ? 's' : ''}` : '0 Tier'}</span>
               </button>
             </div>
             <div className="text-right">
@@ -521,6 +614,263 @@ export default function AdminUserHistory() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* WATER DISCOUNT MODAL */}
+      {showWaterDiscountModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up my-8 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-sky-600 flex justify-between items-center bg-gradient-to-r from-sky-600 via-blue-600 to-cyan-600 text-white shrink-0">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <span>💧</span> Set User Water Discounts
+                </h2>
+                <p className="text-xs text-sky-100 mt-0.5">{currentUserInfo?.name} ({currentUserInfo?.phone})</p>
+              </div>
+              <button 
+                onClick={() => setShowWaterDiscountModal(false)} 
+                className="text-white hover:bg-white/20 p-1.5 rounded-full transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6">
+              {waterDiscountError && (
+                <div className="rounded-xl px-4 py-3 text-xs bg-red-50 text-red-700 border border-red-200 flex items-start gap-2">
+                  <span>⚠️</span>
+                  <span>{waterDiscountError}</span>
+                </div>
+              )}
+
+              {/* SECTION 1: Active Configured Tiers */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    <span>📋</span> Configured Discount Tiers ({waterDiscounts.length})
+                  </h3>
+                  {waterDiscounts.length > 0 && (
+                    <span className="text-[11px] text-sky-600 font-semibold bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100">
+                      Multi-tier enabled
+                    </span>
+                  )}
+                </div>
+
+                {waterDiscounts.length === 0 ? (
+                  <div className="text-center py-6 px-4 bg-sky-50/50 rounded-xl border border-dashed border-sky-200">
+                    <p className="text-2xl mb-1">💧</p>
+                    <p className="text-xs font-semibold text-gray-700">No water discount tiers configured</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">This customer will be charged standard product prices.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {waterDiscounts.map((tier, idx) => {
+                      const bottles = parseInt(tier.bottles_count);
+                      const percent = parseFloat(tier.discount_percentage);
+                      const isHighest = idx === waterDiscounts.length - 1;
+                      const exampleBase = bottles * 20 * 30; // ₹20 bottle, 30 days
+                      const exampleOff = (exampleBase * percent) / 100;
+                      const exampleFinal = exampleBase - exampleOff;
+
+                      return (
+                        <div 
+                          key={tier.id} 
+                          className="flex items-center justify-between p-3 rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50/60 to-white hover:border-sky-300 transition-all shadow-2xs"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-lg text-xs font-extrabold bg-blue-600 text-white shadow-xs">
+                                🍼 {bottles} Bottle{bottles > 1 ? 's' : ''} / day
+                              </span>
+                              <span className="px-2 py-0.5 rounded-lg text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                🏷️ {percent}% OFF
+                              </span>
+                              {isHighest && (
+                                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
+                                  ⭐ Highest Tier (Applies to {bottles}+ bottles)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-500">
+                              Example (₹20/bottle, 30 days): ₹{exampleBase} → <span className="font-bold text-emerald-600">₹{exampleFinal}</span> (Save ₹{exampleOff})
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteWaterDiscount(tier.id)}
+                            disabled={deletingWaterDiscountId === tier.id}
+                            className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
+                            title="Delete this discount tier"
+                          >
+                            {deletingWaterDiscountId === tier.id ? "⏳" : "🗑️"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 2: Add New Discount Tier Form */}
+              <form onSubmit={handleAddWaterDiscount} className="p-4 rounded-xl border border-gray-200 bg-gray-50/70 space-y-4">
+                <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-200 pb-2">
+                  <span>➕</span> Create New Discount Tier
+                </h4>
+
+                {/* Question 1: Discount Percentage first (as requested) */}
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block font-semibold text-gray-700">
+                    1. Discount Percentage (%) <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-[11px] text-gray-500 mb-1.5">Kitne percentage ka discount dena chahte ho?</p>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      className="input w-full font-bold pr-10 text-sky-700 border-sky-200 focus:border-sky-500 focus:ring-sky-200"
+                      value={waterDiscountForm.discount_percentage}
+                      onChange={(e) => {
+                        setWaterDiscountError("");
+                        setWaterDiscountForm({ ...waterDiscountForm, discount_percentage: e.target.value });
+                      }}
+                      placeholder="e.g. 5 or 15"
+                      required
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base">%</span>
+                  </div>
+                  {/* Preset chips for discount */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[5, 10, 15, 20, 25, 30].map(val => (
+                      <button
+                        type="button"
+                        key={val}
+                        onClick={() => setWaterDiscountForm(prev => ({ ...prev, discount_percentage: val.toString() }))}
+                        className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border transition-all ${
+                          parseFloat(waterDiscountForm.discount_percentage) === val
+                            ? 'bg-sky-600 text-white border-sky-600'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-sky-50 hover:border-sky-200'
+                        }`}
+                      >
+                        {val}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Question 2: Bottle Count second (as requested) */}
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block font-semibold text-gray-700">
+                    2. Bottles Count (Per Day / Delivery) <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-[11px] text-gray-500 mb-1.5">Ye discount kitni bottle lene par dena chahte ho?</p>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      className="input w-full font-bold pr-16 text-blue-700 border-blue-200 focus:border-blue-500 focus:ring-blue-200"
+                      value={waterDiscountForm.bottles_count}
+                      onChange={(e) => {
+                        setWaterDiscountError("");
+                        setWaterDiscountForm({ ...waterDiscountForm, bottles_count: e.target.value });
+                      }}
+                      placeholder="e.g. 1, 2, 3"
+                      required
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-xs">Bottle(s)</span>
+                  </div>
+
+                  {/* Quick bottle selectors */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[1, 2, 3, 4, 5].map(b => {
+                      const alreadyUsed = waterDiscounts.some(d => parseInt(d.bottles_count) === b);
+                      return (
+                        <button
+                          type="button"
+                          key={b}
+                          onClick={() => setWaterDiscountForm(prev => ({ ...prev, bottles_count: b.toString() }))}
+                          className={`text-[11px] px-2.5 py-1 rounded-md font-semibold border transition-all ${
+                            parseInt(waterDiscountForm.bottles_count) === b
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : alreadyUsed
+                              ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-blue-50 hover:border-blue-200'
+                          }`}
+                          title={alreadyUsed ? `${b} bottle tier already exists` : ""}
+                        >
+                          {b} Bottle{b > 1 ? 's' : ''} {alreadyUsed ? '(Exists)' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Live Preview Box */}
+                {(() => {
+                  const b = parseInt(waterDiscountForm.bottles_count) || 1;
+                  const p = parseFloat(waterDiscountForm.discount_percentage) || 0;
+                  const approxTotal = b * 20 * 30;
+                  const approxOff = (approxTotal * p) / 100;
+                  const approxFinal = approxTotal - approxOff;
+
+                  return (
+                    <div className="p-3 bg-white rounded-lg border border-sky-200 text-xs text-gray-700 space-y-1">
+                      <p className="font-bold text-sky-800 flex items-center gap-1">
+                        <span>💡</span> Live Calculation Preview:
+                      </p>
+                      <p className="text-[11px] text-gray-600">
+                        At ₹20/bottle for 30 days ({b * 30} bottles):
+                      </p>
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-100">
+                        <span>Original: <span className="font-semibold">₹{approxTotal}</span></span>
+                        <span>Discount ({p}%): <span className="font-bold text-emerald-600">-₹{approxOff.toFixed(1)}</span></span>
+                        <span>Customer Pays: <span className="font-extrabold text-blue-700">₹{approxFinal.toFixed(1)}</span></span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <button
+                  type="submit"
+                  disabled={savingWaterDiscount}
+                  className="btn-primary w-full py-2.5 text-sm bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingWaterDiscount ? "Creating Tier..." : "➕ Add Water Discount Tier"}
+                </button>
+              </form>
+
+              {/* SECTION 3: System Rules Note */}
+              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs space-y-1.5">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span>ℹ️</span> Discount Application Rules:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-800">
+                  <li>
+                    <strong>Duplicate Rule:</strong> Ek bottle count ke liye sirf 1 discount tier ban sakta hai (e.g. 1 bottle ke liye ek baar create hone ke baad dobara nahi ban sakta).
+                  </li>
+                  <li>
+                    <strong>Highest Tier Rule:</strong> Agar user sabse highest bottle tier se zyada bottles order karta hai (e.g., tier is 2 bottles @ 15% and user orders 3 or 4 bottles), toh usko automatically highest tier (15%) discount apply hoga.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowWaterDiscountModal(false)}
+                className="btn-secondary text-sm px-5 py-2"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

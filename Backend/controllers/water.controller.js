@@ -1,5 +1,5 @@
 import { sequelize } from "../confiq/db.js";
-import { WaterSubscription, User, WalletTransaction, PaymentTransaction, DeliverySchedule, PauseLog, Product, Address, Subscription, Package } from "../models/index.js";
+import { WaterSubscription, User, WalletTransaction, PaymentTransaction, DeliverySchedule, PauseLog, Product, Address, Subscription, Package, UserWaterDiscount } from "../models/index.js";
 import { Op } from "sequelize";
 import { normalizeDateString, getEarliestCutoffDate, getDaysBetween, getDayAfterDate, getDayBeforeDate } from "../utils/helper.js";
 import { generateWaterDeliveryDates, generateDeliveryDates } from "../utils/scheduleEngine.js";
@@ -70,14 +70,39 @@ export const subscribeWater = async (req, res) => {
         const services_per_month = frequency === 'daily' ? 30 : 15;
         let total_services = services_per_month;
         let total_bottles = total_services * bottles_count;
-        let amount = price_per_bottle * total_bottles;
+        let base_amount = price_per_bottle * total_bottles;
         let yearly_amount_paid = null;
 
         if (subType === 'yearly') {
             total_services = services_per_month * 12; // 360 or 180
             total_bottles = total_services * bottles_count;
             const annual_total = price_per_bottle * total_bottles;
-            amount = annual_total * 0.75; // 25% discount for yearly booking
+            base_amount = annual_total * 0.75; // 25% discount for yearly booking
+        }
+
+        // Fetch user water discounts
+        const waterDiscounts = await UserWaterDiscount.findAll({
+            where: { user_id: req.user.id },
+            order: [['bottles_count', 'ASC']],
+            transaction: t
+        });
+
+        // Determine applied discount percentage:
+        // Match tier with highest bottles_count <= bottles_count
+        // If user bottles_count exceeds highest configured tier, the highest tier discount applies.
+        let applied_discount_percentage = 0;
+        if (waterDiscounts && waterDiscounts.length > 0) {
+            const eligibleTiers = waterDiscounts.filter(d => d.bottles_count <= bottles_count);
+            if (eligibleTiers.length > 0) {
+                const bestTier = eligibleTiers[eligibleTiers.length - 1];
+                applied_discount_percentage = parseFloat(bestTier.discount_percentage) || 0;
+            }
+        }
+
+        const discount_amount = (base_amount * applied_discount_percentage) / 100;
+        const amount = Math.max(0, base_amount - discount_amount);
+        const per_delivery_amount = total_services > 0 ? (amount / total_services) : 0;
+        if (subType === 'yearly') {
             yearly_amount_paid = amount;
         }
 
@@ -128,6 +153,10 @@ export const subscribeWater = async (req, res) => {
             container: parsedContainer,
             frequency,
             price_per_bottle,
+            discount_percentage: applied_discount_percentage,
+            discount_amount,
+            final_amount: amount,
+            per_delivery_amount,
             status: 'active',
             type: subType,
             yearly_amount_paid,
@@ -146,6 +175,8 @@ export const subscribeWater = async (req, res) => {
             message: "Water subscription purchased! Please select a start date.",
             water_subscription_id: water.id,
             amount_charged: amount,
+            discount_percentage: applied_discount_percentage,
+            discount_amount,
             wallet_balance: newBalance
         });
     } catch (error) {
@@ -729,6 +760,19 @@ export const updateWaterSubscriptionBatch = async (req, res) => {
         res.status(200).json({ success: true, message: "Water subscription batch updated successfully" });
     } catch (error) {
         await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/water/my-discounts
+export const getMyWaterDiscounts = async (req, res) => {
+    try {
+        const discounts = await UserWaterDiscount.findAll({
+            where: { user_id: req.user.id },
+            order: [['bottles_count', 'ASC']]
+        });
+        res.status(200).json({ success: true, discounts });
+    } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };

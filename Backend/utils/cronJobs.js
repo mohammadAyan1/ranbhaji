@@ -460,7 +460,9 @@ const runNightlyJob = async () => {
                 }
 
                 // Insufficient Balance Auto-Pause for Water
-                const water_price_per_service = parseFloat(sub.price_per_bottle);
+                const water_price_per_service = sub.per_delivery_amount !== null && sub.per_delivery_amount !== undefined
+                    ? parseFloat(sub.per_delivery_amount)
+                    : (parseFloat(sub.price_per_bottle) * (parseInt(sub.bottles_per_delivery) || 1));
                 if (parseFloat(sub.User.wallet_balance || 0) < water_price_per_service) {
                     console.log(`[CRON] Pausing water delivery for subscription ${sub.id} (user ${sub.user_id}) due to low wallet balance.`);
                     await schedule.update({ status: 'insufficient_balance' }, { transaction: t });

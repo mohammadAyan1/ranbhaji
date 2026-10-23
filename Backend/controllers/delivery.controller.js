@@ -386,7 +386,9 @@ export const markDelivered = async (req, res) => {
         } else if (schedule.WaterSubscription) {
             sub = schedule.WaterSubscription;
             user = sub.User;
-            per_service_amount = parseFloat(sub.price_per_bottle);
+            per_service_amount = sub.per_delivery_amount !== null && sub.per_delivery_amount !== undefined
+                ? parseFloat(sub.per_delivery_amount)
+                : (parseFloat(sub.price_per_bottle) * (parseInt(sub.bottles_per_delivery) || 1));
             name = `${sub.water_type} Water (${sub.container})`;
         }
 
