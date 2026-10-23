@@ -211,18 +211,18 @@ export default function WaterPage() {
   const subtotalPrice = selectedType === "yearly" ? rawTotal * 0.75 : rawTotal;
 
   // Water Discount matching:
-  // Match tier with highest bottles_count <= bottlesCount
-  // If user chooses more bottles than highest tier, highest tier discount applies.
-  const eligibleTiers = waterDiscounts.filter(d => parseInt(d.bottles_count) <= bottlesCount);
+  // Match tier with highest bottles_count <= bottlesCount for this specific water bottle product
+  const productWaterDiscounts = waterDiscounts.filter(d => matchedProduct && parseInt(d.product_id) === parseInt(matchedProduct.id));
+  const eligibleTiers = productWaterDiscounts.filter(d => parseInt(d.bottles_count) <= bottlesCount);
   const activeDiscountTier = eligibleTiers.length > 0 ? eligibleTiers[eligibleTiers.length - 1] : null;
   const appliedDiscountPercent = activeDiscountTier ? parseFloat(activeDiscountTier.discount_percentage) : 0;
-  const isHighestTierCapped = activeDiscountTier && bottlesCount > parseInt(activeDiscountTier.bottles_count) && (waterDiscounts.length > 0 && activeDiscountTier.id === waterDiscounts[waterDiscounts.length - 1].id);
+  const isHighestTierCapped = activeDiscountTier && bottlesCount > parseInt(activeDiscountTier.bottles_count) && (productWaterDiscounts.length > 0 && activeDiscountTier.id === productWaterDiscounts[productWaterDiscounts.length - 1].id);
 
   const discountSavings = (subtotalPrice * appliedDiscountPercent) / 100;
   const totalPrice = Math.max(0, subtotalPrice - discountSavings);
 
-  // Next available tier tip
-  const nextTier = waterDiscounts.find(d => parseInt(d.bottles_count) > bottlesCount);
+  // Next available tier tip for this specific water product
+  const nextTier = productWaterDiscounts.find(d => parseInt(d.bottles_count) > bottlesCount);
 
   const handleSaveInlineAddress = async (e) => {
     e.preventDefault();

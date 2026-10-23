@@ -112,7 +112,12 @@ export const getUserWaterDiscounts = async (req, res) => {
         const { id } = req.params;
         const discounts = await UserWaterDiscount.findAll({
             where: { user_id: id },
-            order: [['bottles_count', 'ASC']]
+            include: [{
+                model: Product,
+                as: 'Product',
+                attributes: ['id', 'name', 'hindi_name', 'selling_price_per_gm', 'unit', 'status', 'water_capacity_liters']
+            }],
+            order: [['product_id', 'ASC'], ['bottles_count', 'ASC']]
         });
         res.status(200).json({ success: true, discounts });
     } catch (error) {
@@ -124,10 +129,15 @@ export const getUserWaterDiscounts = async (req, res) => {
 export const createUserWaterDiscount = async (req, res) => {
     try {
         const { id } = req.params;
-        const { bottles_count, discount_percentage } = req.body;
+        const { product_id, bottles_count, discount_percentage } = req.body;
 
+        const productId = parseInt(product_id, 10);
         const bottles = parseInt(bottles_count, 10);
         const discount = parseFloat(discount_percentage);
+
+        if (isNaN(productId) || productId < 1) {
+            return res.status(400).json({ success: false, message: "Please select a valid water product." });
+        }
 
         if (isNaN(bottles) || bottles < 1) {
             return res.status(400).json({ success: false, message: "Bottle count must be an integer of at least 1." });
@@ -142,32 +152,44 @@ export const createUserWaterDiscount = async (req, res) => {
             return res.status(404).json({ success: false, message: "User not found." });
         }
 
-        // Check if discount tier for this bottle count already exists
+        // Validate that selected product is an active water product
+        const product = await Product.findByPk(productId);
+        if (!product || (product.category || '').toLowerCase().trim() !== 'water' || product.status !== 'active') {
+            return res.status(400).json({ success: false, message: "Selected product is not an active water product." });
+        }
+
+        // Check if discount tier for this (user_id, product_id, bottles_count) already exists
         const existing = await UserWaterDiscount.findOne({
-            where: { user_id: id, bottles_count: bottles }
+            where: { user_id: id, product_id: productId, bottles_count: bottles }
         });
 
         if (existing) {
             return res.status(400).json({
                 success: false,
-                message: `Discount for ${bottles} bottle${bottles > 1 ? 's' : ''} already exists (${parseFloat(existing.discount_percentage)}%). Duplicate tiers for the same bottle count are not allowed.`
+                message: `Discount for "${product.name}" with ${bottles} bottle${bottles > 1 ? 's' : ''} already exists (${parseFloat(existing.discount_percentage)}%). Duplicate tiers for the same product and bottle count are not allowed.`
             });
         }
 
         const newDiscount = await UserWaterDiscount.create({
             user_id: id,
+            product_id: productId,
             bottles_count: bottles,
             discount_percentage: discount
         });
 
         const allDiscounts = await UserWaterDiscount.findAll({
             where: { user_id: id },
-            order: [['bottles_count', 'ASC']]
+            include: [{
+                model: Product,
+                as: 'Product',
+                attributes: ['id', 'name', 'hindi_name', 'selling_price_per_gm', 'unit', 'status', 'water_capacity_liters']
+            }],
+            order: [['product_id', 'ASC'], ['bottles_count', 'ASC']]
         });
 
         res.status(201).json({
             success: true,
-            message: `Water discount of ${discount}% for ${bottles} bottle${bottles > 1 ? 's' : ''} created successfully!`,
+            message: `Water discount of ${discount}% for "${product.name}" (${bottles} bottle${bottles > 1 ? 's' : ''}) created successfully!`,
             discount: newDiscount,
             discounts: allDiscounts
         });
@@ -192,7 +214,12 @@ export const deleteUserWaterDiscount = async (req, res) => {
 
         const allDiscounts = await UserWaterDiscount.findAll({
             where: { user_id: id },
-            order: [['bottles_count', 'ASC']]
+            include: [{
+                model: Product,
+                as: 'Product',
+                attributes: ['id', 'name', 'hindi_name', 'selling_price_per_gm', 'unit', 'status', 'water_capacity_liters']
+            }],
+            order: [['product_id', 'ASC'], ['bottles_count', 'ASC']]
         });
 
         res.status(200).json({
@@ -236,7 +263,12 @@ export const getUserAnalytics = async (req, res) => {
         // 2.5. Fetch Water Discounts
         const waterDiscounts = await UserWaterDiscount.findAll({
             where: { user_id: userId },
-            order: [['bottles_count', 'ASC']]
+            include: [{
+                model: Product,
+                as: 'Product',
+                attributes: ['id', 'name', 'hindi_name', 'selling_price_per_gm', 'unit', 'status', 'water_capacity_liters']
+            }],
+            order: [['product_id', 'ASC'], ['bottles_count', 'ASC']]
         });
 
         // 3. Fetch Retail Orders
@@ -641,6 +673,16 @@ export const getCustomerProfile = async (req, res) => {
 
         const first_serving_date = mergedDeliveries.length > 0 ? mergedDeliveries[0].scheduled_date : null;
         const last_serving_date = mergedDeliveries.length > 0 ? mergedDeliveries[mergedDeliveries.length - 1].scheduled_date : null;
+
+        const waterDiscounts = await UserWaterDiscount.findAll({
+            where: { user_id: id },
+            include: [{
+                model: Product,
+                as: 'Product',
+                attributes: ['id', 'name', 'hindi_name', 'selling_price_per_gm', 'unit', 'status', 'water_capacity_liters']
+            }],
+            order: [['product_id', 'ASC'], ['bottles_count', 'ASC']]
+        });
 
         res.status(200).json({
             success: true,

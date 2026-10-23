@@ -21,7 +21,8 @@ export default function AdminUserHistory() {
   // Water Discount states
   const [showWaterDiscountModal, setShowWaterDiscountModal] = useState(false);
   const [waterDiscounts, setWaterDiscounts] = useState([]);
-  const [waterDiscountForm, setWaterDiscountForm] = useState({ discount_percentage: "", bottles_count: "1" });
+  const [waterProducts, setWaterProducts] = useState([]);
+  const [waterDiscountForm, setWaterDiscountForm] = useState({ product_id: "", discount_percentage: "", bottles_count: "1" });
   const [savingWaterDiscount, setSavingWaterDiscount] = useState(false);
   const [deletingWaterDiscountId, setDeletingWaterDiscountId] = useState(null);
   const [waterDiscountError, setWaterDiscountError] = useState("");
@@ -59,14 +60,16 @@ export default function AdminUserHistory() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, pkgRes, batchesRes] = await Promise.all([
+        const [usersRes, pkgRes, batchesRes, waterProdRes] = await Promise.all([
           api.get("/admin/users"),
           api.get("/packages"),
-          api.get("/user/batches")
+          api.get("/user/batches"),
+          api.get("/products?category=water&status=active")
         ]);
         setUsers(usersRes.data.users || []);
         setPackages(pkgRes.data.packages || []);
         setBatches(batchesRes.data.batches || []);
+        setWaterProducts(waterProdRes.data.products || []);
       } catch (err) {
         setMsg(`❌ Failed to load data: ${err.response?.data?.message || err.message}`);
       }
@@ -114,9 +117,14 @@ export default function AdminUserHistory() {
     if (!selectedUserId) return;
     setWaterDiscountError("");
 
+    const productId = parseInt(waterDiscountForm.product_id, 10);
     const bottles = parseInt(waterDiscountForm.bottles_count, 10);
     const percent = parseFloat(waterDiscountForm.discount_percentage);
 
+    if (isNaN(productId) || productId < 1) {
+      setWaterDiscountError("Please select a water product bottle.");
+      return;
+    }
     if (isNaN(bottles) || bottles < 1) {
       setWaterDiscountError("Bottles count must be an integer of at least 1");
       return;
@@ -126,22 +134,26 @@ export default function AdminUserHistory() {
       return;
     }
 
-    // Check duplicate
-    const alreadyExists = waterDiscounts.some(d => parseInt(d.bottles_count) === bottles);
+    const selectedProd = waterProducts.find(p => p.id === productId);
+    const prodName = selectedProd?.name || "Selected Product";
+
+    // Check duplicate for the same product and same bottle count
+    const alreadyExists = waterDiscounts.some(d => parseInt(d.product_id) === productId && parseInt(d.bottles_count) === bottles);
     if (alreadyExists) {
-      setWaterDiscountError(`⚠️ Discount for ${bottles} bottle${bottles > 1 ? 's' : ''} already exists! Duplicate tiers for the same bottle count are not allowed.`);
+      setWaterDiscountError(`⚠️ Discount for "${prodName}" with ${bottles} bottle${bottles > 1 ? 's' : ''} already exists! Duplicate tiers for the same product and bottle count are not allowed.`);
       return;
     }
 
     setSavingWaterDiscount(true);
     try {
       const res = await api.post(`/admin/user-analytics/users/${selectedUserId}/water-discounts`, {
+        product_id: productId,
         bottles_count: bottles,
         discount_percentage: percent
       });
       setWaterDiscounts(res.data.discounts || []);
-      setWaterDiscountForm({ discount_percentage: "", bottles_count: "1" });
-      setActionMsg(`✅ Water discount (${percent}% for ${bottles} bottle(s)) created successfully!`);
+      setWaterDiscountForm(prev => ({ ...prev, discount_percentage: "", bottles_count: "1" }));
+      setActionMsg(`✅ Water discount (${percent}% for "${prodName}" at ${bottles} bottle(s)) created successfully!`);
     } catch (err) {
       setWaterDiscountError(err.response?.data?.message || err.message);
     } finally {
@@ -312,7 +324,8 @@ export default function AdminUserHistory() {
           <button 
             onClick={() => {
               setWaterDiscountError("");
-              setWaterDiscountForm({ discount_percentage: "", bottles_count: "1" });
+              const firstId = waterProducts.length > 0 ? waterProducts[0].id.toString() : "";
+              setWaterDiscountForm({ product_id: firstId, discount_percentage: "", bottles_count: "1" });
               setShowWaterDiscountModal(true);
             }} 
             className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100 transition-colors shadow-2xs"
@@ -667,13 +680,19 @@ export default function AdminUserHistory() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {waterDiscounts.map((tier, idx) => {
+                    {waterDiscounts.map((tier) => {
                       const bottles = parseInt(tier.bottles_count);
                       const percent = parseFloat(tier.discount_percentage);
-                      const isHighest = idx === waterDiscounts.length - 1;
-                      const exampleBase = bottles * 20 * 30; // ₹20 bottle, 30 days
+                      const prod = tier.Product || waterProducts.find(p => p.id === tier.product_id);
+                      const prodName = prod?.name || `Product #${tier.product_id || ''}`;
+                      const bottlePrice = prod ? parseFloat(prod.selling_price_per_gm) : 20;
+                      const exampleBase = bottles * bottlePrice * 30; // bottle price, 30 days
                       const exampleOff = (exampleBase * percent) / 100;
                       const exampleFinal = exampleBase - exampleOff;
+
+                      // Check if highest tier for this product
+                      const productTiers = waterDiscounts.filter(d => parseInt(d.product_id) === parseInt(tier.product_id));
+                      const isHighestForProduct = productTiers.length > 0 && bottles === Math.max(...productTiers.map(d => parseInt(d.bottles_count)));
 
                       return (
                         <div 
@@ -681,21 +700,24 @@ export default function AdminUserHistory() {
                           className="flex items-center justify-between p-3 rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50/60 to-white hover:border-sky-300 transition-all shadow-2xs"
                         >
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-0.5 rounded-lg text-xs font-extrabold bg-blue-600 text-white shadow-xs">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                                💧 {prodName}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-lg text-xs font-extrabold bg-blue-600 text-white shadow-xs">
                                 🍼 {bottles} Bottle{bottles > 1 ? 's' : ''} / day
                               </span>
                               <span className="px-2 py-0.5 rounded-lg text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 🏷️ {percent}% OFF
                               </span>
-                              {isHighest && (
+                              {isHighestForProduct && productTiers.length > 1 && (
                                 <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
-                                  ⭐ Highest Tier (Applies to {bottles}+ bottles)
+                                  ⭐ Highest ({bottles}+ bottles)
                                 </span>
                               )}
                             </div>
                             <p className="text-[11px] text-gray-500">
-                              Example (₹20/bottle, 30 days): ₹{exampleBase} → <span className="font-bold text-emerald-600">₹{exampleFinal}</span> (Save ₹{exampleOff})
+                              At ₹{bottlePrice.toFixed(2)}/bottle (30 days): ₹{exampleBase.toFixed(1)} → <span className="font-bold text-emerald-600">₹{exampleFinal.toFixed(1)}</span> (Save ₹{exampleOff.toFixed(1)})
                             </p>
                           </div>
 
@@ -720,6 +742,30 @@ export default function AdminUserHistory() {
                 <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-200 pb-2">
                   <span>➕</span> Create New Discount Tier
                 </h4>
+
+                {/* Question 0: Select Water Bottle Product */}
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block font-semibold text-gray-700">
+                    Water Bottle Product <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-[11px] text-gray-500 mb-1.5">Ye discount kiss active water bottle ke liye create karna chahte ho?</p>
+                  <select
+                    value={waterDiscountForm.product_id}
+                    onChange={(e) => {
+                      setWaterDiscountError("");
+                      setWaterDiscountForm({ ...waterDiscountForm, product_id: e.target.value });
+                    }}
+                    className="input w-full font-bold text-sm text-gray-800 border-sky-200 focus:border-sky-500 focus:ring-sky-200 cursor-pointer"
+                    required
+                  >
+                    <option value="">-- Choose Active Water Product --</option>
+                    {waterProducts.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.water_capacity_liters ? `(${p.water_capacity_liters}L)` : ''} — ₹{parseFloat(p.selling_price_per_gm).toFixed(2)}/bottle
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 {/* Question 1: Discount Percentage first (as requested) */}
                 <div>
@@ -789,7 +835,10 @@ export default function AdminUserHistory() {
                   {/* Quick bottle selectors */}
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {[1, 2, 3, 4, 5].map(b => {
-                      const alreadyUsed = waterDiscounts.some(d => parseInt(d.bottles_count) === b);
+                      const alreadyUsed = waterDiscounts.some(d => 
+                        parseInt(d.product_id) === parseInt(waterDiscountForm.product_id) && 
+                        parseInt(d.bottles_count) === b
+                      );
                       return (
                         <button
                           type="button"
@@ -802,7 +851,7 @@ export default function AdminUserHistory() {
                               ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
                               : 'bg-white text-gray-700 border-gray-200 hover:bg-blue-50 hover:border-blue-200'
                           }`}
-                          title={alreadyUsed ? `${b} bottle tier already exists` : ""}
+                          title={alreadyUsed ? `${b} bottle tier already exists for selected product` : ""}
                         >
                           {b} Bottle{b > 1 ? 's' : ''} {alreadyUsed ? '(Exists)' : ''}
                         </button>
@@ -813,9 +862,11 @@ export default function AdminUserHistory() {
 
                 {/* Live Preview Box */}
                 {(() => {
+                  const selectedProd = waterProducts.find(p => p.id === parseInt(waterDiscountForm.product_id));
                   const b = parseInt(waterDiscountForm.bottles_count) || 1;
                   const p = parseFloat(waterDiscountForm.discount_percentage) || 0;
-                  const approxTotal = b * 20 * 30;
+                  const unitPrice = selectedProd ? parseFloat(selectedProd.selling_price_per_gm) : 20;
+                  const approxTotal = b * unitPrice * 30;
                   const approxOff = (approxTotal * p) / 100;
                   const approxFinal = approxTotal - approxOff;
 
@@ -825,10 +876,10 @@ export default function AdminUserHistory() {
                         <span>💡</span> Live Calculation Preview:
                       </p>
                       <p className="text-[11px] text-gray-600">
-                        At ₹20/bottle for 30 days ({b * 30} bottles):
+                        {selectedProd?.name || 'Selected Bottle'} at ₹{unitPrice.toFixed(2)}/bottle for 30 days ({b * 30} bottles):
                       </p>
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-100">
-                        <span>Original: <span className="font-semibold">₹{approxTotal}</span></span>
+                        <span>Original: <span className="font-semibold">₹{approxTotal.toFixed(1)}</span></span>
                         <span>Discount ({p}%): <span className="font-bold text-emerald-600">-₹{approxOff.toFixed(1)}</span></span>
                         <span>Customer Pays: <span className="font-extrabold text-blue-700">₹{approxFinal.toFixed(1)}</span></span>
                       </div>
@@ -838,7 +889,7 @@ export default function AdminUserHistory() {
 
                 <button
                   type="submit"
-                  disabled={savingWaterDiscount}
+                  disabled={savingWaterDiscount || !waterDiscountForm.product_id}
                   className="btn-primary w-full py-2.5 text-sm bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {savingWaterDiscount ? "Creating Tier..." : "➕ Add Water Discount Tier"}
@@ -852,10 +903,13 @@ export default function AdminUserHistory() {
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-800">
                   <li>
-                    <strong>Duplicate Rule:</strong> Ek bottle count ke liye sirf 1 discount tier ban sakta hai (e.g. 1 bottle ke liye ek baar create hone ke baad dobara nahi ban sakta).
+                    <strong>Product-Specific:</strong> Discount sirf usi water bottle par apply hoga jo admin ne select ki hai. Agar user doosri water bottle choose karta hai, toh us bottle ke liye alag se banaya gaya discount hi apply hoga.
                   </li>
                   <li>
-                    <strong>Highest Tier Rule:</strong> Agar user sabse highest bottle tier se zyada bottles order karta hai (e.g., tier is 2 bottles @ 15% and user orders 3 or 4 bottles), toh usko automatically highest tier (15%) discount apply hoga.
+                    <strong>Duplicate Rule:</strong> Ek specific product aur ek bottle count ke liye sirf 1 discount tier ban sakta hai (e.g. Water A ke 1 bottle ke liye duplicate tier nahi ban sakta, par Water B ke 1 bottle ke liye naya discount ban sakta hai).
+                  </li>
+                  <li>
+                    <strong>Highest Tier Rule:</strong> Agar user usi product me sabse highest bottle tier se zyada bottles order karta hai (e.g., tier is 2 bottles @ 15% and user orders 3 or 4 bottles), toh usko automatically highest tier (15%) discount apply hoga.
                   </li>
                 </ul>
               </div>

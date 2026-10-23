@@ -272,6 +272,7 @@ const WaterSubscription = sequelize.define('WaterSubscription', {
 const UserWaterDiscount = sequelize.define('UserWaterDiscount', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   user_id: { type: DataTypes.INTEGER, allowNull: false },
+  product_id: { type: DataTypes.INTEGER, allowNull: false },
   bottles_count: { type: DataTypes.INTEGER, allowNull: false },
   discount_percentage: { type: DataTypes.DECIMAL(5, 2), allowNull: false }
 }, {
@@ -282,7 +283,7 @@ const UserWaterDiscount = sequelize.define('UserWaterDiscount', {
   indexes: [
     {
       unique: true,
-      fields: ['user_id', 'bottles_count']
+      fields: ['user_id', 'product_id', 'bottles_count']
     }
   ]
 });
@@ -410,6 +411,8 @@ User.hasMany(WaterSubscription, { foreignKey: 'user_id' });
 // UserWaterDiscounts
 UserWaterDiscount.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(UserWaterDiscount, { foreignKey: 'user_id', as: 'WaterDiscounts' });
+UserWaterDiscount.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+Product.hasMany(UserWaterDiscount, { foreignKey: 'product_id', as: 'WaterDiscounts' });
 
 // Notifications
 Notification.belongsTo(User, { foreignKey: 'user_id' });

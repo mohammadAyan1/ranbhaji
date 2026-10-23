@@ -80,15 +80,18 @@ export const subscribeWater = async (req, res) => {
             base_amount = annual_total * 0.75; // 25% discount for yearly booking
         }
 
-        // Fetch user water discounts
+        // Fetch user water discounts for THIS SPECIFIC WATER PRODUCT
         const waterDiscounts = await UserWaterDiscount.findAll({
-            where: { user_id: req.user.id },
+            where: { 
+                user_id: req.user.id,
+                product_id: matchedProduct.id
+            },
             order: [['bottles_count', 'ASC']],
             transaction: t
         });
 
         // Determine applied discount percentage:
-        // Match tier with highest bottles_count <= bottles_count
+        // Match tier with highest bottles_count <= bottles_count for this product
         // If user bottles_count exceeds highest configured tier, the highest tier discount applies.
         let applied_discount_percentage = 0;
         if (waterDiscounts && waterDiscounts.length > 0) {
@@ -769,7 +772,12 @@ export const getMyWaterDiscounts = async (req, res) => {
     try {
         const discounts = await UserWaterDiscount.findAll({
             where: { user_id: req.user.id },
-            order: [['bottles_count', 'ASC']]
+            include: [{
+                model: Product,
+                as: 'Product',
+                attributes: ['id', 'name', 'hindi_name', 'selling_price_per_gm', 'unit', 'status', 'water_capacity_liters']
+            }],
+            order: [['product_id', 'ASC'], ['bottles_count', 'ASC']]
         });
         res.status(200).json({ success: true, discounts });
     } catch (error) {
