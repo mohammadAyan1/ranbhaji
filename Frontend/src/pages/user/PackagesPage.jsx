@@ -384,7 +384,7 @@ export default function PackagesPage() {
 
   const totalCost = fixedCost + seasonalCost;
   const remainingBudget = perServiceAmount - totalCost;
-  const isOverBudget = totalCost > perServiceAmount;
+  const isOverBudget = (totalCost - perServiceAmount) > 0.05;
 
   const updateFixedQty = (productId, value) => {
     setFixedItems(fixedItems.map(fi => {
@@ -521,8 +521,8 @@ export default function PackagesPage() {
                       <div className="flex items-center gap-2">
                         <input
                           type="number"
-                          min="50"
-                          step="50"
+                          min="0"
+                          step="1"
                           value={qty}
                           onChange={e => updateFixedQty(fi.product_id, e.target.value)}
                           placeholder="Qty"
@@ -532,8 +532,9 @@ export default function PackagesPage() {
                         <span className="text-gray-500 text-xs">{fi.Product?.unit || "gm"}</span>
                       </div>
                       {(() => {
-                        const maxAddable = remainingBudget > 0 && fi.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(fi.Product.purchase_price_per_gm) * 50)) * 50 : 0;
-                        return maxAddable >= 50 ? (
+                        const pricePerGm = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0);
+                        const maxAddable = remainingBudget > 0 && pricePerGm ? Math.floor(remainingBudget / pricePerGm) : 0;
+                        return maxAddable >= 1 ? (
                           <button
                             type="button"
                             onClick={() => updateFixedQty(fi.product_id, parseFloat(qty || 0) + maxAddable)}
@@ -610,9 +611,9 @@ export default function PackagesPage() {
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            min="50"
+                            min="1"
                             max="5000"
-                            step="50"
+                            step="1"
                             value={qty}
                             onChange={e => setSelectedItems({ ...selectedItems, [pid]: e.target.value })}
                             placeholder="Qty"
@@ -622,8 +623,9 @@ export default function PackagesPage() {
                           <span className="text-gray-500 text-xs">{sp.Product?.unit}</span>
                         </div>
                         {(() => {
-                          const maxAddable = remainingBudget > 0 && sp.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(sp.Product.purchase_price_per_gm) * 50)) * 50 : 0;
-                          return maxAddable >= 50 ? (
+                          const pricePerGm = sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0);
+                          const maxAddable = remainingBudget > 0 && pricePerGm ? Math.floor(remainingBudget / pricePerGm) : 0;
+                          return maxAddable >= 1 ? (
                             <button
                               type="button"
                               onClick={() => setSelectedItems({ ...selectedItems, [pid]: parseFloat(qty || 0) + maxAddable })}

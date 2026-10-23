@@ -375,7 +375,7 @@ export default function MySubscriptions() {
   const activeTotalCost = activeFixedCost + activeSeasonalCost;
   const activeActualLimit = Math.min(schedulesPerServiceAmount, walletBalance);
   const activeRemainingBudget = activeActualLimit - activeTotalCost;
-  const isActiveOverBudget = activeTotalCost > activeActualLimit;
+  const isActiveOverBudget = (activeTotalCost - activeActualLimit) > 0.05;
   const activeSelectedCount = Object.values(selectedScheduleItems).filter(v => parseFloat(v) > 0).length;
   const activeRemovedFixedCount = Object.values(editingScheduleFixedItems).filter(qty => parseFloat(qty || 0) === 0).length;
   const effectiveSchedulesMaxCount = schedulesMaxCount + activeRemovedFixedCount;
@@ -402,7 +402,7 @@ export default function MySubscriptions() {
   const totalCost = fixedCost + seasonalCost;
   const actualLimit = Math.min(perServiceAmount, walletBalance);
   const remainingBudget = actualLimit - totalCost;
-  const isOverBudget = totalCost > actualLimit;
+  const isOverBudget = (totalCost - actualLimit) > 0.05;
 
   const updateFixedQty = (productId, value) => {
     setFixedItems(fixedItems.map(fi => {
@@ -492,7 +492,7 @@ export default function MySubscriptions() {
                             <input
                               type="number"
                               min="0"
-                              step="50"
+                              step="1"
                               value={qty}
                               onChange={e => updateFixedQty(fi.product_id, e.target.value)}
                               className="input w-24 py-1 text-sm text-center"
@@ -502,8 +502,8 @@ export default function MySubscriptions() {
                           </div>
                           {(() => {
                             const pricePerGm = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0);
-                            const maxAddable = remainingBudget > 0 && pricePerGm ? Math.floor(remainingBudget / (pricePerGm * 50)) * 50 : 0;
-                            return maxAddable >= 50 ? (
+                            const maxAddable = remainingBudget > 0 && pricePerGm ? Math.floor(remainingBudget / pricePerGm) : 0;
+                            return maxAddable >= 1 ? (
                               <button
                                 type="button"
                                 onClick={() => updateFixedQty(fi.product_id, parseFloat(qty || 0) + maxAddable)}
@@ -562,7 +562,7 @@ export default function MySubscriptions() {
                           <div className="flex flex-col items-end gap-1">
                             <div className="flex items-center gap-1.5">
                               <input
-                                type="number" min="50" max="5000" step="50"
+                                type="number" min="1" max="5000" step="1"
                                 value={qty}
                                 onChange={e => setSelectedItems({ ...selectedItems, [pid]: e.target.value })}
                                 className="input w-24 py-1 text-sm text-center"
@@ -571,8 +571,9 @@ export default function MySubscriptions() {
                               <span className="text-gray-500 text-xs">{sp.Product?.unit}</span>
                             </div>
                             {(() => {
-                              const maxAddable = remainingBudget > 0 && sp.Product?.purchase_price_per_gm ? Math.floor(remainingBudget / (parseFloat(sp.Product.purchase_price_per_gm) * 50)) * 50 : 0;
-                              return maxAddable >= 50 ? (
+                              const pricePerGm = sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0);
+                              const maxAddable = remainingBudget > 0 && pricePerGm ? Math.floor(remainingBudget / pricePerGm) : 0;
+                              return maxAddable >= 1 ? (
                                 <button
                                   type="button"
                                   onClick={() => setSelectedItems({ ...selectedItems, [pid]: parseFloat(qty || 0) + maxAddable })}
@@ -991,7 +992,7 @@ export default function MySubscriptions() {
                                               <input
                                                 type="number"
                                                 min="0"
-                                                step="50"
+                                                step="1"
                                                 value={qty}
                                                 onChange={e => updateScheduleFixedQty(fi.product_id, e.target.value)}
                                                 className="input w-20 py-0.5 px-1.5 text-xs text-center border border-gray-300 bg-gray-850"
@@ -1001,8 +1002,8 @@ export default function MySubscriptions() {
                                             </div>
                                             {(() => {
                                               const pricePerGm = fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0);
-                                              const maxAddable = activeRemainingBudget > 0 && pricePerGm ? Math.floor(activeRemainingBudget / (pricePerGm * 50)) * 50 : 0;
-                                              return maxAddable >= 50 ? (
+                                              const maxAddable = activeRemainingBudget > 0 && pricePerGm ? Math.floor(activeRemainingBudget / pricePerGm) : 0;
+                                              return maxAddable >= 1 ? (
                                                 <button
                                                   type="button"
                                                   onClick={() => updateScheduleFixedQty(fi.product_id, parseFloat(qty || 0) + maxAddable)}
@@ -1064,8 +1065,8 @@ export default function MySubscriptions() {
                                               <div className="flex items-center gap-1">
                                                 <input
                                                   type="number"
-                                                  min="50"
-                                                  step="50"
+                                                  min="1"
+                                                  step="1"
                                                   value={qty}
                                                   onChange={e => {
                                                     const val = e.target.value;
@@ -1080,8 +1081,8 @@ export default function MySubscriptions() {
                                               </div>
                                               {(() => {
                                                 const pricePerGm = sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0);
-                                                const maxAddable = activeRemainingBudget > 0 && pricePerGm ? Math.floor(activeRemainingBudget / (pricePerGm * 50)) * 50 : 0;
-                                                return maxAddable >= 50 ? (
+                                                const maxAddable = activeRemainingBudget > 0 && pricePerGm ? Math.floor(activeRemainingBudget / pricePerGm) : 0;
+                                                return maxAddable >= 1 ? (
                                                   <button
                                                     type="button"
                                                     onClick={() => setSelectedScheduleItems({

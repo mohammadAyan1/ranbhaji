@@ -159,16 +159,17 @@ export default function PackageCalculator() {
   let baseSeasonalPricePerGm = 0;
   if (selectedSeasonalProducts.length > 0) {
     if (calculationMode === "highest") {
-      baseSeasonalPricePerGm = Math.max(...selectedSeasonalProducts.map(p => parseFloat(p.purchase_price_per_gm || 0)));
+      const maxPrice = Math.max(...selectedSeasonalProducts.map(p => parseFloat(p.purchase_price_per_gm || 0)));
+      baseSeasonalPricePerGm = Math.round(maxPrice * 10000) / 10000;
     } else if (calculationMode === "average") {
       const sumPrices = selectedSeasonalProducts.reduce((sum, p) => sum + parseFloat(p.purchase_price_per_gm || 0), 0);
-      baseSeasonalPricePerGm = sumPrices / selectedSeasonalProducts.length;
+      baseSeasonalPricePerGm = Math.round((sumPrices / selectedSeasonalProducts.length) * 10000) / 10000;
     }
   }
 
   if (calculationMode === "custom") {
-    // Treat customPrice as per kg, convert to per gm
-    baseSeasonalPricePerGm = parseFloat(customPrice || 0) / 1000;
+    // Treat customPrice as per kg, convert to per gm with 4-decimal precision
+    baseSeasonalPricePerGm = Math.round((parseFloat(customPrice || 0) / 1000) * 10000) / 10000;
   }
 
   // Seasonal Budget: Base Price -> Add Margin -> Multiply by Total Qty of all picks
@@ -177,7 +178,7 @@ export default function PackageCalculator() {
   const seasonalBudget = marginAddedSeasonalPricePerGm * totalSeasonalQtyGm;
 
   const pricePerService = fixedBudget + seasonalBudget;
-  const finalPackagePrice = pricePerService * parseInt(servicesCount || 1);
+  const finalPackagePrice = Math.round(pricePerService * parseInt(servicesCount || 1) * 100) / 100;
 
   const toggleSeasonalProduct = (product_id) => {
     const id = parseInt(product_id);
@@ -186,6 +187,20 @@ export default function PackageCalculator() {
     } else {
       setSeasonalPool([...seasonalPool, id]);
     }
+  };
+
+  const handleSelectAllRemainingSeasonal = () => {
+    const fixedProductIds = fixedItems.map(fi => parseInt(fi.product_id)).filter(Boolean);
+    const available = products.filter(p => {
+      const matchesFilter = !seasonalCategoryFilter || (p.category && p.category.toLowerCase().includes(seasonalCategoryFilter.toLowerCase()));
+      return matchesFilter && !fixedProductIds.includes(p.id);
+    }).map(p => p.id);
+
+    setSeasonalPool(Array.from(new Set([...seasonalPool, ...available])));
+  };
+
+  const handleClearSeasonalPool = () => {
+    setSeasonalPool([]);
   };
 
   const loadDraftIntoForm = (draft) => {
@@ -555,10 +570,14 @@ export default function PackageCalculator() {
 
         <div className="space-y-3">
           {fixedItems.map((item, index) => {
+            const selectedInOtherRows = fixedItems
+              .filter(f => f.id !== item.id && f.product_id)
+              .map(f => parseInt(f.product_id));
+
             const rowProducts = products.filter(
               (p) => {
                 const matchesFilter = !fixedCategoryFilter || (p.category && p.category.toLowerCase().includes(fixedCategoryFilter.toLowerCase()));
-                return matchesFilter && !seasonalPool.includes(p.id);
+                return matchesFilter && !seasonalPool.includes(p.id) && !selectedInOtherRows.includes(p.id);
               }
             );
 
@@ -710,7 +729,24 @@ export default function PackageCalculator() {
             </div>
           </div>
           
-          <div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSelectAllRemainingSeasonal}
+              className="btn-primary text-xs py-1.5 px-3 bg-fresh-600 hover:bg-fresh-500 flex items-center justify-center gap-1.5 whitespace-nowrap shadow-sm cursor-pointer"
+              title="Select all products that are not in fixed items"
+            >
+              ✅ Select All Remaining
+            </button>
+            {seasonalPool.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearSeasonalPool}
+                className="btn-secondary text-xs py-1.5 px-3 text-red-600 hover:bg-red-50 border-red-200 whitespace-nowrap cursor-pointer"
+              >
+                Clear All ({seasonalPool.length})
+              </button>
+            )}
             <select
               className="input py-1.5 px-3 text-xs w-full sm:w-48 bg-white"
               value={seasonalCategoryFilter}

@@ -914,8 +914,8 @@ export const selectSeasonalItems = async (req, res) => {
             total_cost += parseFloat(item.qty_gm) * price;
         }
 
-        let overage = total_cost - per_service_amount;
-        if (overage > 0) {
+        let overage = Math.round((total_cost - per_service_amount) * 100) / 100;
+        if (overage > 0.05) {
             const { payment_method } = req.body;
             if (payment_method === 'razorpay') {
                 // User paid the overage amount! Record transaction
@@ -1337,8 +1337,8 @@ export const saveScheduleSeasonal = async (req, res) => {
             total_cost += parseFloat(item.qty_gm) * price;
         }
 
-        let overage = total_cost - per_service_amount;
-        if (overage > 0) {
+        let overage = Math.round((total_cost - per_service_amount) * 100) / 100;
+        if (overage > 0.05) {
             const { payment_method } = req.body;
             if (payment_method === 'razorpay') {
                 // User paid the overage amount! Record transaction
