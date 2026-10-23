@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Download } from "lucide-react";
+import { Download, Search, X } from "lucide-react";
 import * as XLSX from "xlsx";
 
 const UNITS = ["gm", "ml", "piece"];
@@ -13,7 +13,7 @@ const emptyForm = {
   description: "", min_retail_qty: "", water_capacity_liters: "",
   weighing_time_seconds: 0, soaking_time_seconds: 0, cutting_mode: "PER_25G",
   pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0,
-  drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null, existing_image_url: "", is_qty_double: false, discount_percentage: ""
+  drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null, existing_image_url: "", is_qty_double: false, is_package_active: true, discount_percentage: ""
 };
 
 const showKgToggle = (category, unit) =>
@@ -87,6 +87,10 @@ export default function AdminProducts() {
   const [logEndDate, setLogEndDate] = useState(getToday());
   const [demandDate, setDemandDate] = useState(getToday());
   const [logCategory, setLogCategory] = useState("regular");
+
+  const [demandSearch, setDemandSearch] = useState("");
+  const [stockSearch, setStockSearch] = useState("");
+  const [logSearch, setLogSearch] = useState("");
 
   const [submittingPurchase, setSubmittingPurchase] = useState(false);
   const [selectedDemand, setSelectedDemand] = useState(null);
@@ -290,6 +294,7 @@ export default function AdminProducts() {
     payload.append("margin_percentage", marginPercentage);
     payload.append("discount_percentage", form.discount_percentage || 0);
     payload.append("is_qty_double", form.is_qty_double);
+    payload.append("is_package_active", form.is_package_active !== false);
 
     if (form.image) {
       payload.append("image", form.image);
@@ -310,6 +315,17 @@ export default function AdminProducts() {
       fetchStockSummary();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message}`);
+    }
+  };
+
+  const handleTogglePackageStatus = async (p) => {
+    const nextVal = p.is_package_active === false ? true : false;
+    try {
+      await api.patch(`/products/${p.id}/package-status`, { is_package_active: nextVal });
+      setMsg(`✅ Package status for "${p.name}" is now ${nextVal ? "ON (Available in Packages & Retail)" : "OFF (Available in Retail only)"}`);
+      fetchProducts();
+    } catch (err) {
+      setMsg(`❌ Failed to update package status: ${err.response?.data?.message || err.message}`);
     }
   };
 
@@ -385,6 +401,7 @@ export default function AdminProducts() {
       image: null,
       existing_image_url: p.image_url || "",
       is_qty_double: p.is_qty_double || false,
+      is_package_active: p.is_package_active !== false,
       discount_percentage: p.discount_percentage || ""
     });
     topRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -456,8 +473,12 @@ export default function AdminProducts() {
     }
   };
 
+  const normalizeCat = (c) => (c || "").trim().toLowerCase().replace(/s$/, "").replace(/_/g, " ");
+
   const filteredProducts = products.filter(p => {
-    const matchCategory = filterCategory === "all" || p.category === filterCategory;
+    const matchCategory = filterCategory === "all" ||
+      (p.category || "").trim().toLowerCase() === filterCategory.trim().toLowerCase() ||
+      normalizeCat(p.category) === normalizeCat(filterCategory);
     const matchStatus = statusFilter === "all" || p.status === statusFilter;
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.hindi_name && p.hindi_name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -505,7 +526,15 @@ export default function AdminProducts() {
   // Export Stock Demands to Excel
   const handleExportDemandsToExcel = () => {
     const pendingList = demands.filter(d => !completedDemands.includes(d.id));
-    const itemsToExport = pendingList.length > 0 ? pendingList : demands;
+    let itemsToExport = pendingList.length > 0 ? pendingList : demands;
+    const q = demandSearch.trim().toLowerCase();
+    if (q) {
+      itemsToExport = itemsToExport.filter(d =>
+        (d.name || "").toLowerCase().includes(q) ||
+        String(d.id).includes(q) ||
+        (d.unit || "").toLowerCase().includes(q)
+      );
+    }
 
     if (!itemsToExport || itemsToExport.length === 0) {
       alert(`No demand data found to export for ${demandDate || "the selected date"}.`);
@@ -546,13 +575,23 @@ export default function AdminProducts() {
 
   // Export Stock Inventory Summary to Excel
   const handleExportStockSummaryToExcel = () => {
-    const nonWater = stockSummary.filter(p => p.category !== 'water');
-    if (nonWater.length === 0) {
+    const nonWater = stockSummary.filter(p => (p.category || '').toLowerCase().trim() !== 'water');
+    const q = stockSearch.trim().toLowerCase();
+    const itemsToExport = q
+      ? nonWater.filter(p =>
+          (p.name || '').toLowerCase().includes(q) ||
+          String(p.id).includes(q) ||
+          (p.category || '').toLowerCase().includes(q) ||
+          (p.unit || '').toLowerCase().includes(q)
+        )
+      : nonWater;
+
+    if (itemsToExport.length === 0) {
       alert("No stock inventory data found to export.");
       return;
     }
 
-    const data = nonWater.map((p, idx) => ({
+    const data = itemsToExport.map((p, idx) => ({
       "S.No.": idx + 1,
       "Product ID": p.id,
       "Product Name": p.name,
@@ -588,8 +627,26 @@ export default function AdminProducts() {
 
   // Export Purchase Logs to Excel
   const handleExportPurchaseLogsToExcel = () => {
-    const filtered = purchaseLogs.filter(log => (logCategory === 'water' ? log.Product?.category === 'water' : log.Product?.category !== 'water'));
-    if (filtered.length === 0) {
+    const filtered = purchaseLogs.filter(log => (logCategory === 'water' ? (log.Product?.category || '').toLowerCase().trim() === 'water' : (log.Product?.category || '').toLowerCase().trim() !== 'water'));
+    const q = logSearch.trim().toLowerCase();
+    const itemsToExport = q
+      ? filtered.filter(log => {
+          const prodName = (log.Product?.name || '').toLowerCase();
+          const prodCat = (log.Product?.category || '').toLowerCase();
+          const prodUnit = (log.Product?.unit || '').toLowerCase();
+          const logId = String(log.id);
+          const prodId = String(log.product_id || log.Product?.id || '');
+          return (
+            prodName.includes(q) ||
+            prodCat.includes(q) ||
+            prodUnit.includes(q) ||
+            logId.includes(q) ||
+            prodId.includes(q)
+          );
+        })
+      : filtered;
+
+    if (itemsToExport.length === 0) {
       alert("No purchase logs found to export.");
       return;
     }
@@ -865,6 +922,19 @@ export default function AdminProducts() {
                       Restrict to Multiples (e.g. 500g, 1kg)
                     </label>
                   </div>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="is_package_active"
+                      checked={form.is_package_active !== false}
+                      onChange={e => handleFormChange("is_package_active", e.target.checked)}
+                      className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 cursor-pointer"
+                    />
+                    <label htmlFor="is_package_active" className="text-sm text-gray-700 font-medium cursor-pointer flex flex-wrap items-center gap-1.5">
+                      <span>📦 Include in Subscription Packages (Package Status: ON)</span>
+                      <span className="text-xs text-gray-400 font-normal">(Uncheck to turn OFF in Packages while keeping in Retail)</span>
+                    </label>
+                  </div>
                 </div>
               )}
 
@@ -1046,6 +1116,7 @@ export default function AdminProducts() {
                     {/* <th className="text-right p-3">Discount</th> */}
                     <th className="text-center p-3">Qty Double</th>
                     <th className="text-right p-3">Base Unit</th>
+                    <th className="text-center p-3">Package Status</th>
                     <th className="text-center p-3">Status</th>
                     <th className="text-right p-3 rounded-tr-xl">Actions</th>
                   </tr>
@@ -1122,6 +1193,20 @@ export default function AdminProducts() {
                         <td className="p-3 text-right text-gray-500">{p.unit}</td>
                         <td className="p-3 text-center">
                           <button
+                            type="button"
+                            onClick={() => handleTogglePackageStatus(p)}
+                            title={`Click to turn ${p.is_package_active === false ? "ON" : "OFF"} Package availability`}
+                            className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider transition-all shadow-sm ${
+                              p.is_package_active !== false
+                                ? "bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
+                                : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-300"
+                            }`}
+                          >
+                            {p.is_package_active !== false ? "📦 In Package: ON" : "🚫 In Package: OFF"}
+                          </button>
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
                             onClick={() => handleToggleStatus(p)}
                             title={`Click to ${p.status === "active" ? "disable" : "enable"}`}
                             className={`px-3 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider transition-all shadow-sm ${p.status === "active"
@@ -1162,6 +1247,28 @@ export default function AdminProducts() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 shrink-0">
+              {/* Demand Product Search */}
+              <div className="relative min-w-[200px] max-w-xs">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={demandSearch}
+                  onChange={(e) => setDemandSearch(e.target.value)}
+                  placeholder="Search products in demand..."
+                  className="w-full pl-10 pr-8 py-1.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+                />
+                {demandSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setDemandSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
               <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-2">Filter Date:</label>
                 <input
@@ -1193,48 +1300,73 @@ export default function AdminProducts() {
                 </tr>
               </thead>
               <tbody>
-                {demands.filter(d => !completedDemands.includes(d.id)).map(d => {
-                  const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
-                  // Ensure we show unit properly
-                  const isGm = d.unit === 'gm' || d.unit === 'ml';
-                  const displayQty = isGm ? totalQty / 1000 : totalQty;
-                  const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : 'pcs';
+                {(() => {
+                  const pendingDemands = demands.filter(d => !completedDemands.includes(d.id));
+                  const q = demandSearch.trim().toLowerCase();
+                  const filtered = pendingDemands.filter(d => {
+                    if (!q) return true;
+                    return (
+                      (d.name || "").toLowerCase().includes(q) ||
+                      String(d.id).includes(q) ||
+                      (d.unit || "").toLowerCase().includes(q)
+                    );
+                  });
 
-                  return (
-                    <tr key={d.id} className="table-row">
-                      <td className="p-3 text-gray-900 font-medium">{d.name}</td>
-                      <td
-                        className="p-3 text-right font-bold text-blue-400 cursor-pointer hover:underline hover:text-blue-500 transition-colors"
-                        title="Click to view demand breakdown"
-                        onClick={() => setSelectedDemand(d)}
-                      >
-                        {displayQty} {displayUnit}
-                      </td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => {
-                            const matchingProduct = products.find(p => p.id === d.id);
-                            const sellingPrice = matchingProduct ? (isGm ? matchingProduct.selling_price_per_gm * 1000 : matchingProduct.selling_price_per_gm) : "";
-                            setPurchaseForm({
-                              product_id: d.id,
-                              quantity: isGm ? totalQty : displayQty,
-                              total_price: "",
-                              selling_price_per_kg: sellingPrice || ""
-                            });
-                          }}
-                          className="btn-primary py-1 px-3 text-xs"
+                  if (pendingDemands.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="3" className="text-center py-6 text-gray-500">No pending stock demand found.</td>
+                      </tr>
+                    );
+                  }
+
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="3" className="text-center py-6 text-gray-500">
+                          No pending stock demand matching "<span className="text-gray-700 font-semibold">{demandSearch}</span>"
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filtered.map(d => {
+                    const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
+                    const isGm = d.unit === 'gm' || d.unit === 'ml';
+                    const displayQty = isGm ? totalQty / 1000 : totalQty;
+                    const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : 'pcs';
+
+                    return (
+                      <tr key={d.id} className="table-row">
+                        <td className="p-3 text-gray-900 font-medium">{d.name}</td>
+                        <td
+                          className="p-3 text-right font-bold text-blue-400 cursor-pointer hover:underline hover:text-blue-500 transition-colors"
+                          title="Click to view demand breakdown"
+                          onClick={() => setSelectedDemand(d)}
                         >
-                          Submit Purchase
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {demands.filter(d => !completedDemands.includes(d.id)).length === 0 && (
-                  <tr>
-                    <td colSpan="3" className="text-center py-6 text-gray-500">No pending stock demand found.</td>
-                  </tr>
-                )}
+                          {displayQty} {displayUnit}
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => {
+                              const matchingProduct = products.find(p => p.id === d.id);
+                              const sellingPrice = matchingProduct ? (isGm ? matchingProduct.selling_price_per_gm * 1000 : matchingProduct.selling_price_per_gm) : "";
+                              setPurchaseForm({
+                                product_id: d.id,
+                                quantity: isGm ? totalQty : displayQty,
+                                total_price: "",
+                                selling_price_per_kg: sellingPrice || ""
+                              });
+                            }}
+                            className="btn-primary py-1 px-3 text-xs"
+                          >
+                            Submit Purchase
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -1403,32 +1535,59 @@ export default function AdminProducts() {
       {/* ─── TAB 3: STOCK & INVENTORY SUMMARY ────────────────────────── */}
       {activeTab === "stock" && (
         <div className="card">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-            <h3 className="font-semibold text-gray-900">Current Stock Levels</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                className="input py-1 text-sm"
-                value={stockStartDate}
-                onChange={e => setStockStartDate(e.target.value)}
-              />
-              <span className="text-gray-500">to</span>
-              <input
-                type="date"
-                className="input py-1 text-sm"
-                value={stockEndDate}
-                onChange={e => setStockEndDate(e.target.value)}
-              />
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 gap-4 pb-3 border-b border-gray-100">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-base">Current Stock Levels</h3>
+              <p className="text-gray-500 text-xs mt-0.5">Real-time inventory levels, purchased & sold quantities</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Stock Inventory Search */}
+              <div className="relative min-w-[200px] max-w-xs">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={stockSearch}
+                  onChange={(e) => setStockSearch(e.target.value)}
+                  placeholder="Search stock by name, ID, category..."
+                  className="w-full pl-10 pr-8 py-1.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+                />
+                {stockSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setStockSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-200">
+                <input
+                  type="date"
+                  className="input py-1 px-2 text-sm bg-white border-0"
+                  value={stockStartDate}
+                  onChange={e => setStockStartDate(e.target.value)}
+                />
+                <span className="text-gray-400 text-xs">to</span>
+                <input
+                  type="date"
+                  className="input py-1 px-2 text-sm bg-white border-0"
+                  value={stockEndDate}
+                  onChange={e => setStockEndDate(e.target.value)}
+                />
+              </div>
               <button
                 onClick={fetchStockSummary}
-                className="btn-primary py-1 px-3 text-sm ml-2"
+                className="btn-primary py-1.5 px-3.5 text-sm"
               >
                 Filter
               </button>
               <button
                 type="button"
                 onClick={handleExportStockSummaryToExcel}
-                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium px-3 py-1.5 text-sm rounded-xl transition-all shadow-sm cursor-pointer ml-1"
+                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium px-3.5 py-1.5 text-sm rounded-xl transition-all shadow-sm cursor-pointer"
                 title="Export Stock Levels to Excel"
               >
                 <Download size={15} />
@@ -1452,39 +1611,66 @@ export default function AdminProducts() {
                 </tr>
               </thead>
               <tbody>
-                {stockSummary.filter(p => p.category !== 'water').map(p => {
-                  const currentStockVal = parseFloat(p.current_stock || 0);
-                  const isLow = currentStockVal <= (p.unit === 'gm' ? 2000 : 2); // Less than 2kg or 2 pieces is low stock
+                {(() => {
+                  const baseList = stockSummary.filter(p => (p.category || '').toLowerCase().trim() !== 'water');
+                  const q = stockSearch.trim().toLowerCase();
+                  const filtered = baseList.filter(p => {
+                    if (!q) return true;
+                    return (
+                      (p.name || '').toLowerCase().includes(q) ||
+                      String(p.id).includes(q) ||
+                      (p.category || '').toLowerCase().includes(q) ||
+                      (p.unit || '').toLowerCase().includes(q)
+                    );
+                  });
 
-                  return (
-                    <tr key={p.id} className="table-row">
-                      <td className="p-3">
-                        <p className="text-gray-900 font-medium">{p.name}</p>
-                        <p className="text-gray-600 text-[10px]">ID: {p.id}</p>
-                      </td>
-                      <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
-                      <td className="p-3 text-right font-medium text-purple-400">{formatQuantity(p.yesterday_purchased_qty, p.unit)}</td>
-                      <td className="p-3 text-right font-medium text-blue-400">{formatQuantity(p.total_purchased_qty, p.unit)}</td>
-                      <td className="p-3 text-right font-medium text-orange-400">{formatQuantity(p.total_sold_qty, p.unit)}</td>
-                      <td className={`p-3 text-right font-bold ${isLow ? 'text-red-600' : 'text-fresh-600'}`}>
-                        {formatQuantity(p.current_stock, p.unit)}
-                        {isLow && <span className="block text-[8px] text-red-500 font-bold uppercase animate-pulse">Low Stock</span>}
-                      </td>
-                      <td className="p-3 text-right text-gray-700 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</td>
-                      <td className="p-3 text-right text-gray-900 font-semibold">{getPricePerKgDisplay(p.selling_price_per_gm, p.unit)}</td>
-                      <td className="p-3 text-center">
-                        <span className={`badge ${currentStockVal > 0 ? "badge-green" : "badge-red"}`}>
-                          {currentStockVal > 0 ? "In Stock" : "Out of Stock"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {stockSummary.filter(p => p.category !== 'water').length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="text-center py-6 text-gray-500">No stock levels found in database.</td>
-                  </tr>
-                )}
+                  if (baseList.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="9" className="text-center py-6 text-gray-500">No stock levels found in database.</td>
+                      </tr>
+                    );
+                  }
+
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="9" className="text-center py-6 text-gray-500">
+                          No stock inventory matching "<span className="text-gray-700 font-semibold">{stockSearch}</span>"
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filtered.map(p => {
+                    const currentStockVal = parseFloat(p.current_stock || 0);
+                    const isLow = currentStockVal <= (p.unit === 'gm' ? 2000 : 2); // Less than 2kg or 2 pieces is low stock
+
+                    return (
+                      <tr key={p.id} className="table-row">
+                        <td className="p-3">
+                          <p className="text-gray-900 font-medium">{p.name}</p>
+                          <p className="text-gray-600 text-[10px]">ID: {p.id}</p>
+                        </td>
+                        <td className="p-3"><span className="badge-blue badge">{p.category}</span></td>
+                        <td className="p-3 text-right font-medium text-purple-400">{formatQuantity(p.yesterday_purchased_qty, p.unit)}</td>
+                        <td className="p-3 text-right font-medium text-blue-400">{formatQuantity(p.total_purchased_qty, p.unit)}</td>
+                        <td className="p-3 text-right font-medium text-orange-400">{formatQuantity(p.total_sold_qty, p.unit)}</td>
+                        <td className={`p-3 text-right font-bold ${isLow ? 'text-red-600' : 'text-fresh-600'}`}>
+                          {formatQuantity(p.current_stock, p.unit)}
+                          {isLow && <span className="block text-[8px] text-red-500 font-bold uppercase animate-pulse">Low Stock</span>}
+                        </td>
+                        <td className="p-3 text-right text-gray-700 font-semibold">{getPricePerKgDisplay(p.purchase_price_per_gm, p.unit)}</td>
+                        <td className="p-3 text-right text-gray-900 font-semibold">{getPricePerKgDisplay(p.selling_price_per_gm, p.unit)}</td>
+                        <td className="p-3 text-center">
+                          <span className={`badge ${currentStockVal > 0 ? "badge-green" : "badge-red"}`}>
+                            {currentStockVal > 0 ? "In Stock" : "Out of Stock"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -1494,32 +1680,59 @@ export default function AdminProducts() {
       {/* ─── TAB 4: PURCHASE HISTORY LOGS ────────────────────────────────── */}
       {activeTab === "logs" && (
         <div className="card">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-            <h3 className="font-semibold text-gray-900">Stock Purchase Transactions Logs</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                className="input py-1 text-sm"
-                value={logStartDate}
-                onChange={e => setLogStartDate(e.target.value)}
-              />
-              <span className="text-gray-500">to</span>
-              <input
-                type="date"
-                className="input py-1 text-sm"
-                value={logEndDate}
-                onChange={e => setLogEndDate(e.target.value)}
-              />
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 gap-4 pb-3 border-b border-gray-100">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-base">Stock Purchase Transactions Logs</h3>
+              <p className="text-gray-500 text-xs mt-0.5">Historical log of all stock and bulk purchase entries</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Purchase Logs Search */}
+              <div className="relative min-w-[200px] max-w-xs">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  placeholder="Search logs by product, ID, category..."
+                  className="w-full pl-10 pr-8 py-1.5 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+                />
+                {logSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setLogSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-200">
+                <input
+                  type="date"
+                  className="input py-1 px-2 text-sm bg-white border-0"
+                  value={logStartDate}
+                  onChange={e => setLogStartDate(e.target.value)}
+                />
+                <span className="text-gray-400 text-xs">to</span>
+                <input
+                  type="date"
+                  className="input py-1 px-2 text-sm bg-white border-0"
+                  value={logEndDate}
+                  onChange={e => setLogEndDate(e.target.value)}
+                />
+              </div>
               <button
                 onClick={fetchPurchaseLogs}
-                className="btn-primary py-1 px-3 text-sm ml-2"
+                className="btn-primary py-1.5 px-3.5 text-sm"
               >
                 Filter
               </button>
               <button
                 type="button"
                 onClick={handleExportPurchaseLogsToExcel}
-                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium px-3 py-1.5 text-sm rounded-xl transition-all shadow-sm cursor-pointer ml-1"
+                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium px-3.5 py-1.5 text-sm rounded-xl transition-all shadow-sm cursor-pointer"
                 title="Export Purchase Logs to Excel"
               >
                 <Download size={15} />
@@ -1554,31 +1767,71 @@ export default function AdminProducts() {
                 </tr>
               </thead>
               <tbody>
-                {purchaseLogs.filter(log => (logCategory === 'water' ? log.Product?.category === 'water' : log.Product?.category !== 'water')).map(log => {
-                  const dateStr = new Date(log.purchase_date).toLocaleString("en-IN", {
-                    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                {(() => {
+                  const baseLogs = purchaseLogs.filter(log =>
+                    logCategory === 'water'
+                      ? (log.Product?.category || '').toLowerCase().trim() === 'water'
+                      : (log.Product?.category || '').toLowerCase().trim() !== 'water'
+                  );
+                  const q = logSearch.trim().toLowerCase();
+                  const filtered = baseLogs.filter(log => {
+                    if (!q) return true;
+                    const prodName = (log.Product?.name || '').toLowerCase();
+                    const prodCat = (log.Product?.category || '').toLowerCase();
+                    const prodUnit = (log.Product?.unit || '').toLowerCase();
+                    const logId = String(log.id);
+                    const prodId = String(log.product_id || log.Product?.id || '');
+                    return (
+                      prodName.includes(q) ||
+                      prodCat.includes(q) ||
+                      prodUnit.includes(q) ||
+                      logId.includes(q) ||
+                      prodId.includes(q)
+                    );
                   });
 
-                  return (
-                    <tr key={log.id} className="table-row">
-                      <td className="p-3 text-gray-600">{dateStr}</td>
-                      <td className="p-3 text-gray-900 font-medium">{log.Product?.name || "Unknown Product"}</td>
-                      <td className="p-3"><span className="badge-blue badge">{log.Product?.category || "—"}</span></td>
-                      <td className="p-3 text-right font-medium text-blue-400">
-                        {formatQuantity(log.quantity, log.Product?.unit)}
-                      </td>
-                      <td className="p-3 text-right text-gray-700">
-                        ₹{parseFloat(log.purchase_price_per_kg).toFixed(2)} / {log.Product?.unit === 'piece' ? 'pc' : 'kg/L'}
-                      </td>
-                      <td className="p-3 text-right font-bold text-gradient">₹{parseFloat(log.total_amount).toFixed(2)}</td>
-                    </tr>
-                  );
-                })}
-                {purchaseLogs.filter(log => (logCategory === 'water' ? log.Product?.category === 'water' : log.Product?.category !== 'water')).length === 0 && (
-                  <tr>
-                    <td colSpan="6" className="text-center py-6 text-gray-500">No purchase logs found. Go to "Log Purchase" to add one.</td>
-                  </tr>
-                )}
+                  if (baseLogs.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="6" className="text-center py-6 text-gray-500">No purchase logs found. Go to "Log Purchase" to add one.</td>
+                      </tr>
+                    );
+                  }
+
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="6" className="text-center py-6 text-gray-500">
+                          No purchase logs matching "<span className="text-gray-700 font-semibold">{logSearch}</span>"
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filtered.map(log => {
+                    const dateStr = new Date(log.purchase_date).toLocaleString("en-IN", {
+                      day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+                    });
+
+                    return (
+                      <tr key={log.id} className="table-row">
+                        <td className="p-3 text-gray-600">{dateStr}</td>
+                        <td className="p-3">
+                          <p className="text-gray-900 font-medium">{log.Product?.name || "Unknown Product"}</p>
+                          <p className="text-gray-500 text-[10px]">Log #{log.id} {log.product_id ? `• Prod #${log.product_id}` : ''}</p>
+                        </td>
+                        <td className="p-3"><span className="badge-blue badge">{log.Product?.category || "—"}</span></td>
+                        <td className="p-3 text-right font-medium text-blue-400">
+                          {formatQuantity(log.quantity, log.Product?.unit)}
+                        </td>
+                        <td className="p-3 text-right text-gray-700">
+                          ₹{parseFloat(log.purchase_price_per_kg).toFixed(2)} / {log.Product?.unit === 'piece' ? 'pc' : 'kg/L'}
+                        </td>
+                        <td className="p-3 text-right font-bold text-gradient">₹{parseFloat(log.total_amount).toFixed(2)}</td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>

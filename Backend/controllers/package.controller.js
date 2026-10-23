@@ -120,8 +120,8 @@ export const getPackages = async (req, res) => {
         const packages = await Package.findAll({
             where,
             include: [
-                { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'status'] }] },
-                { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'status'] }] },
+                { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'status', 'is_package_active'] }] },
+                { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'status', 'is_package_active'] }] },
                 { model: PackageSeasonalConfig, as: 'SeasonalConfig' }
             ]
         });
@@ -147,14 +147,14 @@ export const getPackages = async (req, res) => {
                 delete obj.margin_percent;
                 // Remove item-level prices and inactive products from the response
                 if (obj.FixedItems) {
-                    obj.FixedItems = obj.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => {
+                    obj.FixedItems = obj.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active' && fi.Product.is_package_active !== false).map(fi => {
                         delete fi.Product.purchase_price_per_gm;
                         delete fi.Product.selling_price_per_gm;
                         return fi;
                     });
                 }
                 if (obj.SeasonalPool) {
-                    obj.SeasonalPool = obj.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active');
+                    obj.SeasonalPool = obj.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active' && sp.Product.is_package_active !== false);
                 }
             }
             return obj;

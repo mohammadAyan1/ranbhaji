@@ -1180,11 +1180,11 @@ export default function MySubscriptions() {
                 {isExpanded && (
                   <div className="mt-5 pt-4 border-t border-gray-200 space-y-4 animate-fade-in">
                     {/* Fixed Items */}
-                    {sub.Items?.filter(i => i.is_fixed).length > 0 && (
+                    {sub.Items?.filter(i => i.is_fixed && i.Product?.status === 'active' && i.Product?.is_package_active !== false).length > 0 && (
                       <div>
                         <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Subscription Fixed Items</p>
                         <div className="flex flex-wrap gap-2">
-                          {sub.Items.filter(i => i.is_fixed).map(item => (
+                          {sub.Items.filter(i => i.is_fixed && i.Product?.status === 'active' && i.Product?.is_package_active !== false).map(item => (
                             <span key={item.id} className="bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-lg border border-gray-300 font-medium">
                               {item.Product?.name} ({parseFloat(item.qty_gm)}{item.Product?.unit})
                             </span>
@@ -1203,7 +1203,7 @@ export default function MySubscriptions() {
                               const dateObj = new Date(sched.scheduled_date);
                               const formattedDate = dateObj.toLocaleDateString("en-IN", { weekday: 'short', day: 'numeric', month: 'short' });
 
-                              const fixedProductIds = sub.Items?.filter(i => i.is_fixed).map(i => i.product_id) || [];
+                              const fixedProductIds = sub.Items?.filter(i => i.is_fixed && i.Product?.status === 'active' && i.Product?.is_package_active !== false).map(i => i.product_id) || [];
                               const selections = sched.SeasonalSelections || [];
 
                               const customFixed = selections.filter(sel => fixedProductIds.includes(sel.product_id));
@@ -1240,7 +1240,7 @@ export default function MySubscriptions() {
                                           </span>
                                         ))
                                       ) : (
-                                        sub.Items?.filter(i => i.is_fixed).map(item => (
+                                        sub.Items?.filter(i => i.is_fixed && i.Product?.status === 'active' && i.Product?.is_package_active !== false).map(item => (
                                           <span key={item.id} className="bg-gray-100/60 border border-gray-750 text-gray-600 text-xs px-2 py-0.5 rounded-lg">
                                             {item.Product?.name} ({parseFloat(item.qty_gm)}{item.Product?.unit})
                                           </span>

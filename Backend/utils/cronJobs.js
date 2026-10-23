@@ -382,7 +382,7 @@ const runNightlyJob = async () => {
 
                     for (const item of rawItems) {
                         const product = await Product.findByPk(item.product_id, { transaction: t });
-                        if (product && product.status === 'active') {
+                        if (product && product.status === 'active' && product.is_package_active !== false) {
                             activeItems.push({ ...item, product });
                         } else {
                             disabledItems.push({ ...item, product });
@@ -649,7 +649,7 @@ const notifyDisabledProductsJob = async () => {
         });
 
         for (const sel of selections) {
-            if (sel.Product && sel.Product.status !== 'active') {
+            if (sel.Product && (sel.Product.status !== 'active' || sel.Product.is_package_active === false)) {
                 const schedule = schedules.find(s => s.id === sel.schedule_id);
                 if (schedule && schedule.Subscription) {
                     affectedUsers.add(schedule.Subscription.user_id);

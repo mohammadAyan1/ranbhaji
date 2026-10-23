@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import api from "../../../api/axios";
-import { Filter, User, Package, ShoppingBag, Clock } from "lucide-react";
+import { Search, X, Filter, User, Package, ShoppingBag, Clock } from "lucide-react";
 
 export default function Missing() {
   const [missingLogs, setMissingLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Date Filters
+  // Date & Search Filters
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchMissingLogs = () => {
     setLoading(true);
@@ -30,16 +31,62 @@ export default function Missing() {
     fetchMissingLogs();
   }, [fromDate, toDate]);
 
+  const filteredLogs = missingLogs.filter(log => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const userName = (log.user?.name || "").toLowerCase();
+    const userPhone = (log.user?.phone || "").toLowerCase();
+    const prodName = (log.product?.name || "").toLowerCase();
+    const hindiName = (log.product?.hindi_name || "").toLowerCase();
+    const pkgName = (log.service_info?.packageName || "").toLowerCase();
+    const sourceType = (log.source_type || "").toLowerCase();
+    const missedDate = (log.missed_date || "").toLowerCase();
+    const nextDate = (log.next_schedule_date || "").toLowerCase();
+
+    return (
+      userName.includes(q) ||
+      userPhone.includes(q) ||
+      prodName.includes(q) ||
+      hindiName.includes(q) ||
+      pkgName.includes(q) ||
+      sourceType.includes(q) ||
+      missedDate.includes(q) ||
+      nextDate.includes(q)
+    );
+  });
+
   return (
     <div className="p-6 max-w-7xl mx-auto min-h-screen">
-      {/* Header & Date Pickers */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      {/* Header & Date Pickers & Search */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Missing Items & Orders</h1>
           <p className="text-gray-500 text-sm">Track missing items and full orders</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Live Search Bar */}
+          <div className="relative min-w-[220px] max-w-xs">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search user, package, item..."
+              className="w-full pl-10 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <input 
               type="date" 
@@ -64,6 +111,10 @@ export default function Missing() {
           <div className="p-8 text-center text-gray-400">Loading missing logs...</div>
         ) : missingLogs.length === 0 ? (
           <div className="p-8 text-center text-gray-500 font-medium">No missing items found for the selected dates.</div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 font-medium">
+            No missing items matching "<span className="text-gray-800 font-semibold">{searchQuery}</span>"
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -78,7 +129,7 @@ export default function Missing() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {missingLogs.map((log) => (
+                {filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">

@@ -18,8 +18,26 @@ export default function WaterPage() {
   // Address states
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState("");
-  const [activeBatches, setActiveBatches] = useState([]);
-  const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState("07:00 AM - 09:00 AM");
+  const [customTimeFrom, setCustomTimeFrom] = useState("07:00");
+  const [customTimeTo, setCustomTimeTo] = useState("09:00");
+  const [isCustomTime, setIsCustomTime] = useState(false);
+
+  const formatTime12h = (time24) => {
+    if (!time24) return "";
+    const [h, m] = time24.split(":");
+    let hours = parseInt(h);
+    const suffix = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    return `${hours.toString().padStart(2, "0")}:${m} ${suffix}`;
+  };
+
+  const updateCustomSlot = (from, to) => {
+    if (from && to) {
+      setDeliveryTimeSlot(`${formatTime12h(from)} - ${formatTime12h(to)}`);
+    }
+  };
+
   const [showAddressChoiceModal, setShowAddressChoiceModal] = useState(false);
   const [addressChoiceMode, setAddressChoiceMode] = useState("existing");
   const [showInlineAddressModal, setShowInlineAddressModal] = useState(false);
@@ -121,7 +139,7 @@ export default function WaterPage() {
   const fetchProducts = () => {
     api.get("/products").then(r => {
       const allProducts = r.data.products || [];
-      const waterProds = allProducts.filter(p => p.category === "water" && p.status === "active");
+      const waterProds = allProducts.filter(p => (p.category || '').toLowerCase().trim() === "water" && p.status === "active");
       setProducts(waterProds);
       if (waterProds.length > 0) {
         const first = waterProds[0];
@@ -162,14 +180,6 @@ export default function WaterPage() {
         if (defaultAddr) setSelectedAddressId(defaultAddr.id);
         else if (addrs.length > 0) setSelectedAddressId(addrs[0].id);
       });
-
-    api.get("/user/batches")
-      .then(r => {
-        const b = r.data.batches || [];
-        setActiveBatches(b);
-        if (b.length > 0) setSelectedBatchId(b[0].id);
-      })
-      .catch(() => { });
   }, []);
 
   const getMatchedProduct = () => {
@@ -178,8 +188,11 @@ export default function WaterPage() {
       if (found) return found;
     }
     return products.find(p => {
-      const nameLower = p.name.toLowerCase();
-      return nameLower.includes(form.water_type.toLowerCase()) && nameLower.includes(form.container.toLowerCase());
+      const nameLower = (p.name || '').toLowerCase();
+      const subCatLower = (p.sub_category || '').toLowerCase();
+      const containerLower = (form.container || '').toLowerCase().trim();
+      const typeLower = (form.water_type || '').toLowerCase().trim();
+      return nameLower.includes(typeLower) && (subCatLower.includes(containerLower) || containerLower.includes(subCatLower) || nameLower.includes(containerLower));
     });
   };
 
@@ -255,7 +268,7 @@ export default function WaterPage() {
         type: selectedType,
         payment_method: "wallet",
         address_id: parseInt(selectedAddressId),
-        batch_id: parseInt(selectedBatchId),
+        delivery_time_slot: deliveryTimeSlot.trim(),
         capacity_liters: bottleCapacity,
         bottles_per_delivery: bottlesCount
       });
@@ -303,7 +316,7 @@ export default function WaterPage() {
         type: selectedType,
         payment_method: "razorpay",
         address_id: parseInt(selectedAddressId),
-        batch_id: parseInt(selectedBatchId),
+        delivery_time_slot: deliveryTimeSlot.trim(),
         capacity_liters: bottleCapacity,
         bottles_per_delivery: bottlesCount
       });
@@ -843,24 +856,87 @@ export default function WaterPage() {
                     </select>
                   )}
                 </div>
-                <div>
-                  <label className="label">Delivery Batch</label>
-                  {activeBatches.length === 0 ? (
-                    <div className="flex flex-col gap-2">
-                      <p className="text-yellow-400 text-xs font-semibold">⚠️ No batches found.</p>
-                    </div>
-                  ) : (
-                    <select
-                      className="input text-sm"
-                      value={selectedBatchId}
-                      onChange={e => setSelectedBatchId(e.target.value)}
+                {/* Serving Time Window Selection */}
+                <div className="space-y-2.5 p-3.5 bg-gray-50 border border-gray-200 rounded-2xl">
+                  <div>
+                    <label className="text-gray-800 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-0.5">
+                      <span>⏱</span> Serving Time Window (समय चुनें)
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      Aapko water delivery kis samay ke beech chahiye?
+                    </p>
+                  </div>
+
+                  {/* Preset Chips */}
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      "06:00 AM - 08:00 AM",
+                      "07:00 AM - 09:00 AM",
+                      "08:00 AM - 10:00 AM",
+                      "10:00 AM - 12:00 PM",
+                      "04:00 PM - 06:00 PM",
+                      "06:00 PM - 08:00 PM"
+                    ].map((slot) => (
+                      <button
+                        key={slot}
+                        type="button"
+                        onClick={() => {
+                          setDeliveryTimeSlot(slot);
+                          setIsCustomTime(false);
+                        }}
+                        className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition-all ${
+                          !isCustomTime && deliveryTimeSlot === slot
+                            ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                            : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                        }`}
+                      >
+                        {slot}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomTime(true);
+                        updateCustomSlot(customTimeFrom, customTimeTo);
+                      }}
+                      className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition-all ${
+                        isCustomTime
+                          ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                      }`}
                     >
-                      {activeBatches.map(b => (
-                        <option key={b.id} value={b.id}>
-                          {b.name} ({b.time_range})
-                        </option>
-                      ))}
-                    </select>
+                      ✏️ Custom Time
+                    </button>
+                  </div>
+
+                  {/* Custom Time Pickers */}
+                  {isCustomTime && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="text-[11px] font-semibold text-gray-600 mb-1 block">From Time (से)</label>
+                        <input
+                          type="time"
+                          value={customTimeFrom}
+                          onChange={(e) => {
+                            setCustomTimeFrom(e.target.value);
+                            updateCustomSlot(e.target.value, customTimeTo);
+                          }}
+                          className="input py-1.5 text-xs w-full bg-white border-gray-300 rounded-xl"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-gray-600 mb-1 block">To Time (तक)</label>
+                        <input
+                          type="time"
+                          value={customTimeTo}
+                          onChange={(e) => {
+                            setCustomTimeTo(e.target.value);
+                            updateCustomSlot(customTimeFrom, e.target.value);
+                          }}
+                          className="input py-1.5 text-xs w-full bg-white border-gray-300 rounded-xl"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -922,11 +998,25 @@ export default function WaterPage() {
                   <p className="text-gray-600 text-sm capitalize">{w.bottles_per_delivery || 1} × {w.container} bottle ({parseFloat(w.capacity_liters || 1)}L) · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
 
                   {w.start_date ? (
-                    <p className="text-gray-500 text-xs mt-1.5">
-                      📅 {w.start_date} → {w.end_date} · {w.services_completed}/{w.total_services} deliveries done
-                    </p>
+                    <div className="space-y-1 mt-1.5">
+                      <p className="text-gray-500 text-xs">
+                        📅 {w.start_date} → {w.end_date} · {w.services_completed}/{w.total_services} deliveries done
+                      </p>
+                      {w.delivery_time_slot && (
+                        <p className="text-fresh-600 text-xs font-semibold flex items-center gap-1">
+                          <span>⏱ Delivery Time:</span> {w.delivery_time_slot}
+                        </p>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-yellow-400 text-xs mt-1.5 font-semibold">⚠️ Start date not confirmed yet</p>
+                    <div className="space-y-1 mt-1.5">
+                      <p className="text-yellow-400 text-xs font-semibold">⚠️ Start date not confirmed yet</p>
+                      {w.delivery_time_slot && (
+                        <p className="text-gray-600 text-xs flex items-center gap-1">
+                          <span>⏱ Preferred Time:</span> {w.delivery_time_slot}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1039,25 +1129,87 @@ export default function WaterPage() {
                 </div>
               </label>
 
-              <div className="space-y-1.5 mt-2">
-                <label className="text-gray-600 text-xs font-bold uppercase tracking-wider">⏱ Delivery Batch</label>
-                {activeBatches.length === 0 ? (
-                  <div className="bg-yellow-950/15 border border-yellow-800/30 rounded-xl p-3 text-center">
-                    <p className="text-yellow-400 text-xs font-medium">⚠️ No batches available.</p>
-                  </div>
-                ) : (
-                  <select
-                    className="input py-2 text-sm w-full"
-                    value={selectedBatchId}
-                    onChange={e => setSelectedBatchId(e.target.value)}
+              {/* Preferred Serving Time Selection */}
+              <div className="space-y-3 mt-3 p-4 bg-gray-50 border border-gray-200 rounded-2xl">
+                <div>
+                  <label className="text-gray-800 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <span>⏱</span> Serving Time Window (समय चुनें)
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Aapko water delivery kis samay ke beech chahiye?
+                  </p>
+                </div>
+
+                {/* Preset Chips */}
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "06:00 AM - 08:00 AM",
+                    "07:00 AM - 09:00 AM",
+                    "08:00 AM - 10:00 AM",
+                    "10:00 AM - 12:00 PM",
+                    "04:00 PM - 06:00 PM",
+                    "06:00 PM - 08:00 PM"
+                  ].map((slot) => (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => {
+                        setDeliveryTimeSlot(slot);
+                        setIsCustomTime(false);
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
+                        !isCustomTime && deliveryTimeSlot === slot
+                          ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomTime(true);
+                      updateCustomSlot(customTimeFrom, customTimeTo);
+                    }}
+                    className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
+                      isCustomTime
+                        ? "bg-fresh-600 text-white border-fresh-600 shadow-sm"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                    }`}
                   >
-                    <option value="" disabled>-- Select a batch --</option>
-                    {activeBatches.map(b => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} ({b.time_range})
-                      </option>
-                    ))}
-                  </select>
+                    ✏️ Custom Time
+                  </button>
+                </div>
+
+                {/* Custom Time Pickers */}
+                {isCustomTime && (
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-600 mb-1 block">From Time (से)</label>
+                      <input
+                        type="time"
+                        value={customTimeFrom}
+                        onChange={(e) => {
+                          setCustomTimeFrom(e.target.value);
+                          updateCustomSlot(e.target.value, customTimeTo);
+                        }}
+                        className="input py-2 text-sm w-full bg-white border-gray-300 rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-gray-600 mb-1 block">To Time (तक)</label>
+                      <input
+                        type="time"
+                        value={customTimeTo}
+                        onChange={(e) => {
+                          setCustomTimeTo(e.target.value);
+                          updateCustomSlot(customTimeFrom, e.target.value);
+                        }}
+                        className="input py-2 text-sm w-full bg-white border-gray-300 rounded-xl"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -1073,8 +1225,8 @@ export default function WaterPage() {
                       setMsg("❌ Please add an address first.");
                       return;
                     }
-                    if (!selectedBatchId) {
-                      setMsg("❌ Please select a delivery batch.");
+                    if (!deliveryTimeSlot || !deliveryTimeSlot.trim()) {
+                      setMsg("❌ Please select a delivery time window.");
                       return;
                     }
                     setShowAddressChoiceModal(false);
@@ -1252,9 +1404,9 @@ export default function WaterPage() {
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 font-medium">Batch:</span>
+                      <span className="text-gray-600 font-medium">Time Slot:</span>
                       <span className="text-right font-semibold text-gray-900">
-                        {activeBatches.find(b => b.id === parseInt(selectedBatchId))?.name || "Not selected"}
+                        ⏱ {deliveryTimeSlot}
                       </span>
                     </div>
                   </div>

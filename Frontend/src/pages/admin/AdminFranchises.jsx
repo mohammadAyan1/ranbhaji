@@ -78,25 +78,50 @@ export default function AdminFranchises() {
     setIsModalOpen(true);
   };
 
+  const filteredFranchises = franchises.filter(f => {
+    if (filterStatus !== "all" && f.status !== filterStatus) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase().trim();
+    const name = (f.full_name || "").toLowerCase();
+    const phone = (f.mobile_number || "").toLowerCase();
+    const city = (f.city || "").toLowerCase();
+    const email = (f.email || "").toLowerCase();
+    const cap = (f.investment_capacity || "").toLowerCase();
+    const msg = (f.message || "").toLowerCase();
+
+    return name.includes(q) || phone.includes(q) || city.includes(q) || email.includes(q) || cap.includes(q) || msg.includes(q);
+  });
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center flex-wrap gap-4">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center flex-wrap gap-4">
         <div>
           <h1 className="page-header">Franchise Partners 🏬</h1>
           <p className="page-sub">Manage franchise applications and active partners</p>
         </div>
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <div className="flex items-center gap-3 flex-wrap w-full lg:w-auto">
+          {/* Live Search Bar */}
+          <div className="relative min-w-[220px] max-w-xs w-full sm:w-auto">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input 
               type="text" 
-              placeholder="Search city, name..." 
-              className="input text-sm pl-9 py-2"
+              placeholder="Search name, phone, city..." 
+              className="w-full pl-10 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
           <select 
             className="input text-sm py-2" 
@@ -107,7 +132,7 @@ export default function AdminFranchises() {
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
-          <button onClick={openCreateModal} className="btn-primary text-sm flex items-center gap-2">
+          <button onClick={openCreateModal} className="btn-primary text-sm flex items-center gap-2 whitespace-nowrap">
             <Plus size={16} /> Add Franchise
           </button>
         </div>
@@ -133,44 +158,44 @@ export default function AdminFranchises() {
               </tr>
             </thead>
             <tbody>
-              {franchises.filter(f => 
-                (filterStatus === "all" || f.status === filterStatus) &&
-                (search === "" || 
-                 f.city.toLowerCase().includes(search.toLowerCase()) || 
-                 f.full_name.toLowerCase().includes(search.toLowerCase()) ||
-                 f.mobile_number.includes(search)
-                )
-              ).map(f => (
-                <tr key={f.id} className="table-row">
-                  <td className="p-3">
-                    <p className="font-medium text-gray-900">{f.full_name}</p>
-                    <p className="text-xs text-gray-500">{f.email || "—"}</p>
-                  </td>
-                  <td className="p-3 text-gray-600 font-mono">{f.mobile_number}</td>
-                  <td className="p-3 text-gray-700 font-medium">{f.city}</td>
-                  <td className="p-3 text-gray-700 text-xs">
-                    {f.investment_capacity || "—"}
-                  </td>
-                  <td className="p-3 text-center">
-                    <span className={f.status === "active" ? "badge-green" : "badge-red"}>{f.status}</span>
-                  </td>
-                  <td className="p-3 text-right">
-                    <div className="flex justify-end gap-2 items-center">
-                      <button onClick={() => openEditModal(f)} className="text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1">
-                        Edit
-                      </button>
-                      <button onClick={() => toggleStatus(f)}
-                        className={`text-xs font-medium px-3 py-1 rounded-full border ${f.status === "active" ? "text-red-600 hover:bg-red-50 border-red-200" : "text-fresh-600 hover:bg-fresh-50 border-fresh-200"}`}>
-                        {f.status === "active" ? "Deactivate" : "Approve"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {franchises.length === 0 && (
+              {franchises.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="p-6 text-center text-gray-500">No franchises found.</td>
+                  <td colSpan="6" className="text-center py-8 text-gray-500">No franchises found.</td>
                 </tr>
+              ) : filteredFranchises.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-8 text-gray-500">
+                    No franchises matching "<span className="text-gray-800 font-semibold">{search}</span>"
+                  </td>
+                </tr>
+              ) : (
+                filteredFranchises.map(f => (
+                  <tr key={f.id} className="table-row">
+                    <td className="p-3">
+                      <p className="font-medium text-gray-900">{f.full_name}</p>
+                      <p className="text-xs text-gray-500">{f.email || "—"}</p>
+                    </td>
+                    <td className="p-3 text-gray-600 font-mono">{f.mobile_number}</td>
+                    <td className="p-3 text-gray-700 font-medium">{f.city}</td>
+                    <td className="p-3 text-gray-700 text-xs">
+                      {f.investment_capacity || "—"}
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={f.status === "active" ? "badge-green" : "badge-red"}>{f.status}</span>
+                    </td>
+                    <td className="p-3 text-right">
+                      <div className="flex justify-end gap-2 items-center">
+                        <button onClick={() => openEditModal(f)} className="text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1">
+                          Edit
+                        </button>
+                        <button onClick={() => toggleStatus(f)}
+                          className={`text-xs font-medium px-3 py-1 rounded-full border ${f.status === "active" ? "text-red-600 hover:bg-red-50 border-red-200" : "text-fresh-600 hover:bg-fresh-50 border-fresh-200"}`}>
+                          {f.status === "active" ? "Deactivate" : "Approve"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

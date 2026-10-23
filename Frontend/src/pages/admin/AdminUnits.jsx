@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { Search, X } from "lucide-react";
 import api from "../../api/axios";
 
 export default function AdminUnits() {
   const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", abbreviation: "", status: "active" });
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState("");
@@ -61,6 +63,17 @@ export default function AdminUnits() {
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading units...</div>;
+
+  const filteredUnits = units.filter(u => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (u.name || "").toLowerCase().includes(q) ||
+      (u.abbreviation || "").toLowerCase().includes(q) ||
+      String(u.id).includes(q) ||
+      (u.status || "").toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -127,7 +140,35 @@ export default function AdminUnits() {
 
       {/* Table Card */}
       <div className="card">
-        <h3 className="font-semibold text-gray-900 mb-4 pb-4 border-b border-gray-200">All Units ({units.length})</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold text-gray-900">All Units</h3>
+            <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2.5 py-1 rounded-full">
+              Showing {filteredUnits.length} of {units.length}
+            </span>
+          </div>
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search units by name, abbrev, or ID..."
+              className="w-full pl-10 pr-9 py-2 text-sm bg-gray-50/50 hover:bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -140,7 +181,7 @@ export default function AdminUnits() {
               </tr>
             </thead>
             <tbody>
-              {units.map(u => (
+              {filteredUnits.map(u => (
                 <tr key={u.id} className="table-row">
                   <td className="p-3 text-gray-500">#{u.id}</td>
                   <td className="p-3 font-medium text-gray-900">{u.name}</td>
@@ -159,6 +200,13 @@ export default function AdminUnits() {
               {units.length === 0 && (
                 <tr>
                   <td colSpan="5" className="text-center py-6 text-gray-500">No units found.</td>
+                </tr>
+              )}
+              {units.length > 0 && filteredUnits.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="text-center py-6 text-gray-500">
+                    No units matching "<span className="text-gray-700 font-semibold">{search}</span>"
+                  </td>
                 </tr>
               )}
             </tbody>

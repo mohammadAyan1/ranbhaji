@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { Search, X, ImageOff, Image as ImageIcon } from "lucide-react";
 import api from "../../api/axios";
 
 const TYPES = ["standard", "custom", "yearly"];
@@ -6,6 +7,7 @@ const TYPES = ["standard", "custom", "yearly"];
 export default function AdminPackages() {
   const topRef = useRef(null);
   const [packages, setPackages] = useState([]);
+  const [packageSearch, setPackageSearch] = useState("");
   const [products, setProducts] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +16,14 @@ export default function AdminPackages() {
   const [editing, setEditing] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [isDraftApplied, setIsDraftApplied] = useState(false);
+
+  const getImageUrl = (url) => {
+    if (!url) return "";
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+    const path = url.startsWith("/") ? url : `/${url}`;
+    return `${baseUrl}${path}`;
+  };
 
   // Form state
   const [form, setForm] = useState({
@@ -26,12 +36,22 @@ export default function AdminPackages() {
   const [seasonalQuantities, setSeasonalQuantities] = useState([250, 250, 250]);
   const [drafts, setDrafts] = useState([]);
   const [selectedDraftId, setSelectedDraftId] = useState("");
+  const [categories, setCategories] = useState([]);
 
   // Validation preview
   const [validationResult, setValidationResult] = useState(null);
   const [seasonalFilter, setSeasonalFilter] = useState("all");
   const [sharePackage, setSharePackage] = useState(null);
   const [sharePhone, setSharePhone] = useState("");
+
+  const normalizeCat = (c) => (c || "").trim().toLowerCase().replace(/s$/, "").replace(/_/g, " ");
+
+  const matchCategory = (prodCategory, filterVal) => {
+    if (!filterVal || filterVal === "all") return true;
+    const pCat = (prodCategory || "").trim().toLowerCase();
+    const fCat = filterVal.trim().toLowerCase();
+    return pCat === fCat || normalizeCat(pCat) === normalizeCat(fCat);
+  };
 
   const fetchAll = () => {
     setLoading(true);
@@ -40,11 +60,14 @@ export default function AdminPackages() {
       api.get("/products"),
       api.get("/admin/users"),
       api.get("/calculator/drafts"),
-    ]).then(([p, pr, u, d]) => {
+      api.get("/categories"),
+    ]).then(([p, pr, u, d, c]) => {
       setPackages(p.data.packages || []);
-      setProducts(pr.data.products?.filter(p => p.status === "active") || []);
+      setProducts(pr.data.products?.filter(p => p.status === "active" && (p.category || '').toLowerCase().trim() !== 'water') || []);
       setUsers(u.data.users?.filter(u => u.role === "user") || []);
       setDrafts(d.data.drafts || []);
+      const activeCats = (c.data?.categories || []).filter(cat => cat.status === "active" && (cat.name || '').toLowerCase().trim() !== 'water');
+      setCategories(activeCats);
     }).finally(() => setLoading(false));
   };
   useEffect(fetchAll, []);
@@ -281,6 +304,22 @@ export default function AdminPackages() {
     } catch (err) { setMsg(`❌ ${err.response?.data?.message}`); }
   };
 
+  const filteredPackages = packages.filter(pkg => {
+    const q = packageSearch.trim().toLowerCase();
+    if (!q) return true;
+    const fixedMatch = pkg.FixedItems?.some(fi => fi.Product?.name?.toLowerCase().includes(q));
+    const seasonalMatch = pkg.SeasonalPool?.some(sp => sp.Product?.name?.toLowerCase().includes(q));
+    return (
+      (pkg.name || "").toLowerCase().includes(q) ||
+      (pkg.type || "").toLowerCase().includes(q) ||
+      (pkg.status || "").toLowerCase().includes(q) ||
+      (pkg.creation_source || "").toLowerCase().includes(q) ||
+      String(pkg.id).includes(q) ||
+      fixedMatch ||
+      seasonalMatch
+    );
+  });
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
@@ -429,7 +468,7 @@ export default function AdminPackages() {
                   <img src={URL.createObjectURL(form.image)} alt="Preview" className="h-16 w-16 object-cover rounded-xl border border-gray-200" />
                 )}
                 {!form.image && form.image_url && (
-                  <img src={`${import.meta.env.VITE_API_URL}${form.image_url}`} alt="Preview" className="h-16 w-16 object-cover rounded-xl border border-gray-200" />
+                  <img src={getImageUrl(form.image_url)} alt="Preview" className="h-16 w-16 object-cover rounded-xl border border-gray-200" />
                 )}
               </div>
             </div>
@@ -499,7 +538,7 @@ export default function AdminPackages() {
                     .filter((_, i) => i !== idx)
                     .map(item => parseInt(item.product_id))
                     .filter(id => !isNaN(id));
-                  const filteredRowProducts = products.filter(p => p.category !== "water" && (!fi.filterCategory || (p.category && p.category.toLowerCase().includes(fi.filterCategory.toLowerCase()))));
+                  const filteredRowProducts = products.filter(p => (p.category || '').toLowerCase().trim() !== "water" && matchCategory(p.category, fi.filterCategory));
                   return (
                     <div key={idx} className="flex flex-wrap items-center gap-3 bg-white rounded-xl p-3 border border-gray-300">
                       {/* Category filter */}
@@ -510,10 +549,11 @@ export default function AdminPackages() {
                         disabled={isDraftApplied}
                       >
                         <option value="">All Categories</option>
-                        <option value="vegetable">Vegetables</option>
-                        <option value="fruit">Fruits</option>
-                        <option value="exotic">Exotic Veg</option>
-                        <option value="salad">Salad</option>
+                        {categories.map(cat => (
+                          <option key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </option>
+                        ))}
                       </select>
 
                       {/* Product select */}
@@ -599,22 +639,32 @@ export default function AdminPackages() {
             </div>
             {/* Category filter tabs */}
             <div className="flex flex-wrap gap-2 mb-3 bg-gray-100/40 p-1.5 rounded-xl w-fit border border-gray-200">
-              {["all", "vegetable", "fruit", "exotic", "salad"].map(c => (
+              <button
+                type="button"
+                onClick={() => setSeasonalFilter("all")}
+                className={`px-3 py-1 text-xs font-semibold capitalize rounded-lg transition-all ${seasonalFilter === "all" ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"}`}
+              >
+                All Categories
+              </button>
+              {categories.map(cat => (
                 <button
-                  key={c}
+                  key={cat.id}
                   type="button"
-                  onClick={() => setSeasonalFilter(c)}
-                  className={`px-3 py-1 text-xs font-semibold capitalize rounded-lg transition-all ${seasonalFilter === c ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"
-                    }`}
+                  onClick={() => setSeasonalFilter(cat.name)}
+                  className={`px-3 py-1 text-xs font-semibold capitalize rounded-lg transition-all ${
+                    matchCategory(cat.name, seasonalFilter) && seasonalFilter !== "all"
+                      ? "bg-fresh-600 text-gray-900"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
                 >
-                  {c === "all" ? "All Categories" : c}
+                  {cat.name}
                 </button>
               ))}
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {products
-                .filter(p => p.category !== "water" && (seasonalFilter === "all" || (p.category && p.category.toLowerCase().includes(seasonalFilter.toLowerCase()))))
+                .filter(p => (p.category || '').toLowerCase().trim() !== "water" && matchCategory(p.category, seasonalFilter))
                 .map(p => {
                   const inPool = seasonalPool.some(sp => (typeof sp === 'object' ? sp.product_id : sp) === p.id);
                   const inFixed = fixedItems.some(fi => parseInt(fi.product_id) === p.id);
@@ -654,40 +704,108 @@ export default function AdminPackages() {
 
       {/* ─── PACKAGES LIST ──────────────────────────────────────────── */}
       <div className="space-y-4">
-        <h3 className="font-semibold text-gray-900 text-lg">All Packages ({packages.length})</h3>
+        {/* Header & Search Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3">
+            <h3 className="font-bold text-gray-900 text-lg">All Packages</h3>
+            <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2.5 py-1 rounded-full">
+              Showing {filteredPackages.length} of {packages.length}
+            </span>
+          </div>
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={packageSearch}
+              onChange={(e) => setPackageSearch(e.target.value)}
+              placeholder="Search packages by name, type, status, or item..."
+              className="w-full pl-10 pr-9 py-2 text-sm bg-gray-50/50 hover:bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {packageSearch && (
+              <button
+                type="button"
+                onClick={() => setPackageSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {packages.length === 0 ? (
           <div className="card text-center py-12 text-gray-500">
             <p className="text-4xl mb-3">📦</p>
             <p>No packages created yet. Click "Create Package" to add one.</p>
           </div>
+        ) : filteredPackages.length === 0 ? (
+          <div className="card text-center py-12 text-gray-500">
+            <p className="text-3xl mb-2">🔍</p>
+            <p className="text-gray-700 font-medium">No packages matching "<span className="font-semibold">{packageSearch}</span>"</p>
+            <button onClick={() => setPackageSearch("")} className="btn-secondary text-xs mt-3">
+              Clear Search
+            </button>
+          </div>
         ) : (
-          packages.map(pkg => (
+          filteredPackages.map(pkg => (
             <div key={pkg.id} className={`card ${pkg.status === "inactive" ? "opacity-50" : ""}`}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-lg font-bold text-gray-900">{pkg.name}</h3>
-                    <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
-                    <span className={pkg.status === "active" ? "badge-green badge" : "badge-red badge"}>{pkg.status}</span>
-                    {pkg.creation_source === 'draft_margin_calculator' && (
-                      <span className="badge bg-purple-100 text-purple-700 border-purple-200">Margin Calculator</span>
-                    )}
-                    {pkg.creation_source === 'draft_price_calculator' && (
-                      <span className="badge bg-indigo-100 text-indigo-700 border-indigo-200">Price Calculator</span>
-                    )}
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  {/* Package Image or Broken Image indicator */}
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 flex-shrink-0 flex items-center justify-center relative shadow-sm">
+                    {pkg.image_url ? (
+                      <img
+                        src={getImageUrl(pkg.image_url)}
+                        alt={pkg.name}
+                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          const fallback = e.currentTarget.parentElement?.querySelector(".broken-image-fallback");
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`broken-image-fallback flex-col items-center justify-center w-full h-full bg-gray-50 p-2 text-center ${
+                        pkg.image_url ? "hidden" : "flex"
+                      }`}
+                      title={pkg.image_url ? "Broken image link" : "No image uploaded for this package"}
+                    >
+                      <ImageOff className="w-6 h-6 text-gray-400 mb-1" />
+                      <span className="text-[10px] font-semibold text-gray-400 leading-tight">
+                        {pkg.image_url ? "Broken Img" : "No Image"}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-gray-600 text-sm">
-                    {pkg.num_persons_max
-                      ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
-                      : `${pkg.num_persons} persons`
-                    } · {pkg.services_per_month} deliveries/month · <span className="text-gray-900 font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%
-                  </p>
-                  <p className="text-gray-500 text-xs mt-1">
-                    Raw Per-service: ₹{(parseFloat(pkg.price) / pkg.services_per_month).toFixed(2)} ·
-                    Visible Budget: ₹{((parseFloat(pkg.price) / pkg.services_per_month) / (1 + (pkg.margin_percent || 0) / 100)).toFixed(2)}
-                  </p>
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <h3 className="text-lg font-bold text-gray-900">{pkg.name}</h3>
+                      <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
+                      <span className={pkg.status === "active" ? "badge-green badge" : "badge-red badge"}>{pkg.status}</span>
+                      {pkg.creation_source === 'draft_margin_calculator' && (
+                        <span className="badge bg-purple-100 text-purple-700 border-purple-200">Margin Calculator</span>
+                      )}
+                      {pkg.creation_source === 'draft_price_calculator' && (
+                        <span className="badge bg-indigo-100 text-indigo-700 border-indigo-200">Price Calculator</span>
+                      )}
+                    </div>
+                    <p className="text-gray-600 text-sm">
+                      {pkg.num_persons_max
+                        ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
+                        : `${pkg.num_persons} persons`
+                      } · {pkg.services_per_month} deliveries/month · <span className="text-gray-900 font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%
+                    </p>
+                    <p className="text-gray-500 text-xs mt-1">
+                      Raw Per-service: ₹{(parseFloat(pkg.price) / pkg.services_per_month).toFixed(2)} ·
+                      Visible Budget: ₹{((parseFloat(pkg.price) / pkg.services_per_month) / (1 + (pkg.margin_percent || 0) / 100)).toFixed(2)}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex gap-2 flex-wrap">
+
+                <div className="flex gap-2 flex-wrap flex-shrink-0 self-start">
                   {/* <button onClick={() => setSharePackage(pkg)} className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-200 transition-colors flex items-center gap-1">
                     💬 Share
                   </button> */}

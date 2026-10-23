@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../../api/axios";
-import { Search, Filter, AlertCircle, CheckCircle, Package, User } from "lucide-react";
+import { Search, X, Filter, AlertCircle, CheckCircle, Package, User } from "lucide-react";
 
 export default function BatchAssign() {
   const [orders, setOrders] = useState([]);
@@ -12,6 +12,7 @@ export default function BatchAssign() {
   const [selectedBatchFilter, setSelectedBatchFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Selection
   const [selectedOrders, setSelectedOrders] = useState([]);
@@ -39,9 +40,31 @@ export default function BatchAssign() {
     fetchOrders();
   }, [selectedBatchFilter, fromDate, toDate]);
 
+  const filteredOrders = orders.filter(o => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const userName = (o.user?.name || "").toLowerCase();
+    const userPhone = (o.user?.phone || "").toLowerCase();
+    const desc = (o.description || "").toLowerCase(); // Contains Package name or items
+    const batchName = (o.batch?.name || (o.batch_id ? "" : "unassigned")).toLowerCase();
+    const orderId = String(o.order_id || "");
+    const orderType = (o.type || "").toLowerCase();
+    const timeSlot = (o.delivery_time_slot || "").toLowerCase();
+
+    return (
+      userName.includes(q) ||
+      userPhone.includes(q) ||
+      desc.includes(q) ||
+      batchName.includes(q) ||
+      orderId.includes(q) ||
+      orderType.includes(q) ||
+      timeSlot.includes(q)
+    );
+  });
+
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedOrders(orders.map(o => ({ type: o.type, id: o.order_id })));
+      setSelectedOrders(filteredOrders.map(o => ({ type: o.type, id: o.order_id })));
     } else {
       setSelectedOrders([]);
     }
@@ -80,13 +103,35 @@ export default function BatchAssign() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Batch Assign</h1>
           <p className="text-gray-500 text-sm mt-1">Assign today's retail orders and subscriptions to processing batches.</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Live Search Bar */}
+          <div className="relative min-w-[220px] max-w-xs">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search user, package, batch..."
+              className="w-full pl-10 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <input 
               type="date" 
@@ -159,6 +204,10 @@ export default function BatchAssign() {
           <div className="p-12 text-center text-gray-400 font-medium">Loading orders...</div>
         ) : orders.length === 0 ? (
           <div className="p-12 text-center text-gray-400 font-medium">No orders found for this filter.</div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="p-12 text-center text-gray-500 font-medium">
+            No orders matching "<span className="text-gray-800 font-semibold">{searchQuery}</span>"
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -167,9 +216,9 @@ export default function BatchAssign() {
                   <th className="px-6 py-4 w-10">
                     <input 
                       type="checkbox" 
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       onChange={handleSelectAll}
-                      checked={orders.length > 0 && selectedOrders.length === orders.length}
+                      checked={filteredOrders.length > 0 && filteredOrders.every(o => selectedOrders.some(sel => sel.type === o.type && sel.id === o.order_id))}
                     />
                   </th>
                   <th className="px-6 py-4">Order Details</th>
@@ -179,14 +228,14 @@ export default function BatchAssign() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {orders.map((o) => {
+                {filteredOrders.map((o) => {
                   const isSelected = selectedOrders.some(sel => sel.type === o.type && sel.id === o.order_id);
                   return (
                     <tr key={o.id} className={`hover:bg-gray-50/50 transition-colors ${isSelected ? "bg-blue-50/30" : ""}`}>
                       <td className="px-6 py-4">
                         <input 
                           type="checkbox" 
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                           checked={isSelected}
                           onChange={(e) => handleSelectOrder(o, e.target.checked)}
                         />
@@ -212,7 +261,10 @@ export default function BatchAssign() {
                           <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
                             <User size={12} className="text-gray-500" />
                           </div>
-                          <span className="text-sm font-medium text-gray-700">{o.user?.name || "Unknown"}</span>
+                          <div>
+                            <span className="text-sm font-medium text-gray-700 block">{o.user?.name || "Unknown"}</span>
+                            {o.user?.phone && <span className="text-xs text-gray-400 block">{o.user.phone}</span>}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">

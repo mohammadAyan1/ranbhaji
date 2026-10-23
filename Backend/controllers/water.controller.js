@@ -8,11 +8,11 @@ import { generateWaterDeliveryDates, generateDeliveryDates } from "../utils/sche
 export const subscribeWater = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { water_type, container, frequency, type, payment_method, address_id, batch_id, capacity_liters, bottles_per_delivery, product_id } = req.body;
+        const { water_type, container, frequency, type, payment_method, address_id, batch_id, capacity_liters, bottles_per_delivery, product_id, delivery_time_slot } = req.body;
 
-        if (!water_type || !container || !frequency || !batch_id) {
+        if (!water_type || !container || !frequency) {
             await t.rollback();
-            return res.status(400).json({ success: false, message: "water_type, container, frequency, and batch_id are required" });
+            return res.status(400).json({ success: false, message: "water_type, container, and frequency are required" });
         }
 
         const subType = type || 'monthly'; // 'monthly' or 'yearly'
@@ -28,18 +28,31 @@ export const subscribeWater = async (req, res) => {
 
         // Find matched water product from admin products to get the price
         const products = await Product.findAll({
-            where: { category: 'water', status: 'active' }
+            where: {
+                [Op.and]: [
+                    sequelize.where(sequelize.fn('LOWER', sequelize.col('category')), 'water'),
+                    { status: 'active' }
+                ]
+            }
         });
 
         let matchedProduct = null;
         if (product_id) {
             matchedProduct = products.find(p => p.id === parseInt(product_id));
+            if (!matchedProduct) {
+                const byId = await Product.findByPk(product_id);
+                if (byId && byId.status === 'active') matchedProduct = byId;
+            }
         }
         if (!matchedProduct) {
             matchedProduct = products.find(p => {
-                const nameLower = p.name.toLowerCase();
-                const subCategoryLower = (p.sub_category || '').toLowerCase();
-                return nameLower.includes(water_type.trim().toLowerCase()) && subCategoryLower.trim() === container.trim().toLowerCase();
+                const nameLower = (p.name || '').toLowerCase();
+                const subCategoryLower = (p.sub_category || '').toLowerCase().trim();
+                const containerLower = (container || '').trim().toLowerCase();
+                const waterTypeLower = (water_type || '').trim().toLowerCase();
+                const matchType = nameLower.includes(waterTypeLower);
+                const matchContainer = subCategoryLower.includes(containerLower) || containerLower.includes(subCategoryLower) || nameLower.includes(containerLower);
+                return matchType && matchContainer;
             });
         }
 
@@ -121,7 +134,8 @@ export const subscribeWater = async (req, res) => {
             total_services,
             services_completed: 0,
             address_id: finalAddressId,
-            batch_id,
+            delivery_time_slot: delivery_time_slot || null,
+            batch_id: batch_id || null,
             capacity_liters: product_capacity,
             bottles_per_delivery: bottles_count
         }, { transaction: t });
@@ -263,7 +277,8 @@ export const confirmWaterStartDate = async (req, res) => {
             water_subscription_id,
             scheduled_date: date,
             status: 'pending',
-            batch_id: sub.batch_id
+            batch_id: sub.batch_id || null,
+            delivery_time_slot: sub.delivery_time_slot || null
         }));
 
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
@@ -441,7 +456,8 @@ const pauseWaterSubscriptionInternal = async (sub, from_date, to_date, days, pau
             water_subscription_id: sub.id,
             scheduled_date: date,
             status: 'pending',
-            batch_id: sub.batch_id
+            batch_id: sub.batch_id || null,
+            delivery_time_slot: sub.delivery_time_slot || null
         }));
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
         if (newDates.length > 0) {
@@ -650,7 +666,8 @@ export const restartWaterSubscription = async (req, res) => {
             water_subscription_id: sub.id,
             scheduled_date: date,
             status: 'pending',
-            batch_id: sub.batch_id
+            batch_id: sub.batch_id || null,
+            delivery_time_slot: sub.delivery_time_slot || null
         }));
 
         await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });

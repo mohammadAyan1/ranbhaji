@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import api from "../../../api/axios";
-import { Edit2, Trash2, Plus, AlertCircle, X, AlignLeft } from "lucide-react";
+import { Edit2, Trash2, Plus, AlertCircle, X, AlignLeft, Search } from "lucide-react";
 
 export default function AdminSubCategories() {
   const [subCategories, setSubCategories] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", category_id: "", description: "", status: "active" });
   const [editing, setEditing] = useState(null);
   const [msg, setMsg] = useState("");
@@ -92,6 +93,19 @@ export default function AdminSubCategories() {
     return cat ? cat.name : "Uncategorized";
   };
 
+  const filteredSubCategories = subCategories.filter((sc) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    const parentName = getCategoryName(sc.category_id).toLowerCase();
+    return (
+      (sc.name || "").toLowerCase().includes(q) ||
+      parentName.includes(q) ||
+      (sc.description || "").toLowerCase().includes(q) ||
+      String(sc.id).includes(q) ||
+      (sc.status || "").toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -116,10 +130,41 @@ export default function AdminSubCategories() {
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Search Bar Toolbar */}
+        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/40">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search sub-categories by name, parent category, or ID..."
+              className="w-full pl-10 pr-9 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+          <div className="text-xs font-medium text-gray-500">
+            Showing <span className="font-bold text-gray-800">{filteredSubCategories.length}</span> of {subCategories.length} sub-categories
+          </div>
+        </div>
+
         {loading ? (
           <div className="p-12 text-center text-gray-400 font-medium">Loading sub-categories...</div>
         ) : subCategories.length === 0 ? (
           <div className="p-12 text-center text-gray-400 font-medium">No sub-categories found. Create one above!</div>
+        ) : filteredSubCategories.length === 0 ? (
+          <div className="p-12 text-center text-gray-400 font-medium">
+            No sub-categories matching "<span className="text-gray-700 font-semibold">{search}</span>"
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -134,7 +179,7 @@ export default function AdminSubCategories() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {subCategories.map(c => (
+                {filteredSubCategories.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-6 py-4 text-sm font-medium text-gray-500">#{c.id}</td>
                     <td className="px-6 py-4 font-semibold text-gray-900 flex items-center gap-2">
@@ -155,7 +200,7 @@ export default function AdminSubCategories() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-2">
                         <button 
                           onClick={() => openModalForEdit(c)}
                           className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"

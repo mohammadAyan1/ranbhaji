@@ -2,12 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../../api/axios';
 import useAuthStore from '../../../store/authStore';
+import { Search, X } from 'lucide-react';
 
 export default function ReadyForDeliver() {
   const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState([]);
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [date, setDate] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("date") === "today") return new Date().toISOString().split('T')[0];
@@ -130,14 +132,69 @@ export default function ReadyForDeliver() {
     return u.batch_id != null || u.addresses.some(a => a.batch_id != null);
   });
 
+  const filteredAssignedUsers = assignedUsers.filter(u => {
+    // Status filter
+    if (statusFilter === 'pending' && !u.addresses.some(a => a.status === 'pending')) return false;
+    if (statusFilter === 'ready' && !u.addresses.some(a => a.status === 'ready' || a.status === 'ready_for_delivery')) return false;
+
+    // Search query filter
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const userName = (u.user?.name || "").toLowerCase();
+    const userPhone = (u.user?.phone || "").toLowerCase();
+    const timeSlot = (u.delivery_time_slot || "").toLowerCase();
+    
+    // Batch names from user or addresses
+    const userBatchName = (u.batch_id ? batches.find(b => b.id === u.batch_id)?.name || "" : "").toLowerCase();
+    const addressBatchNames = u.addresses.map(a => a.batch_id ? (batches.find(b => b.id === a.batch_id)?.name || "") : "").join(" ").toLowerCase();
+    
+    // Package / Items
+    const itemsText = u.addresses.flatMap(a => (a.items || []).map(i => `${i.name || ''} ${i.hindi_name || ''}`)).join(" ").toLowerCase();
+    const addressesText = u.addresses.map(a => a.address || "").join(" ").toLowerCase();
+    const hasPackageText = u.hasPackage ? "package yes" : "no";
+
+    return (
+      userName.includes(q) ||
+      userPhone.includes(q) ||
+      timeSlot.includes(q) ||
+      userBatchName.includes(q) ||
+      addressBatchNames.includes(q) ||
+      itemsText.includes(q) ||
+      addressesText.includes(q) ||
+      hasPackageText.includes(q)
+    );
+  });
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Ready For Delivery (Packaging)</h2>
           <p className="text-gray-500 text-sm">Verify and pack batch-assigned orders</p>
         </div>
-        <div className="w-full sm:w-auto flex gap-3">
+        <div className="w-full lg:w-auto flex flex-wrap items-center gap-3">
+          {/* Live Search Bar */}
+          <div className="relative min-w-[220px] max-w-xs">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search user, batch, items..."
+              className="w-full pl-10 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -162,6 +219,10 @@ export default function ReadyForDeliver() {
         <div className="bg-white p-8 text-center text-gray-500 font-medium rounded-2xl border border-gray-100">
           No batch-assigned orders found for this date. Go to 'Batch Assign' to assign batches first.
         </div>
+      ) : filteredAssignedUsers.length === 0 ? (
+        <div className="bg-white p-8 text-center text-gray-500 font-medium rounded-2xl border border-gray-100">
+          No orders matching "<span className="text-gray-800 font-semibold">{searchQuery}</span>"
+        </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
@@ -177,12 +238,7 @@ export default function ReadyForDeliver() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
-                {assignedUsers.filter(u => {
-                  if (statusFilter === 'all') return true;
-                  if (statusFilter === 'pending') return u.addresses.some(a => a.status === 'pending');
-                  if (statusFilter === 'ready') return u.addresses.some(a => a.status === 'ready' || a.status === 'ready_for_delivery');
-                  return true;
-                }).map((u) => (
+                {filteredAssignedUsers.map((u) => (
                   <React.Fragment key={u.user.id}>
                     <tr className="hover:bg-gray-50/50 transition-colors">
                       <td className="p-4 text-gray-400 cursor-pointer" onClick={() => toggleRow(u.user.id)}>

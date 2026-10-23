@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Search } from "lucide-react";
 import api from "../../api/axios";
 
 export default function AdminUsers() {
@@ -11,6 +11,7 @@ export default function AdminUsers() {
   const [msg, setMsg] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -91,16 +92,52 @@ export default function AdminUsers() {
     }
   };
 
+  const filteredUsers = users.filter(u => {
+    if (filterRole !== "all" && u.role !== filterRole) return false;
+    if (filterStatus !== "all" && u.status !== filterStatus) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const name = (u.name || "").toLowerCase();
+    const phone = (u.phone || "").toLowerCase();
+    const email = (u.email || "").toLowerCase();
+    const role = (u.role || "").toLowerCase();
+    const id = String(u.id || "");
+
+    return name.includes(q) || phone.includes(q) || email.includes(q) || role.includes(q) || id.includes(q);
+  });
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="page-header">User Management 👥</h1>
           <p className="page-sub">View and manage all platform users</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          {/* Live Search Bar */}
+          <div className="relative min-w-[220px] max-w-xs w-full sm:w-auto">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search user, phone, email..."
+              className="w-full pl-10 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
           <select 
             className="input text-sm py-2" 
             value={filterRole} 
@@ -120,7 +157,7 @@ export default function AdminUsers() {
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
-          <button onClick={() => setIsModalOpen(true)} className="btn-primary text-sm flex items-center gap-2">
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary text-sm flex items-center gap-2 whitespace-nowrap">
             <Plus size={16} /> Add User
           </button>
         </div>
@@ -150,10 +187,18 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody>
-              {users.filter(u => 
-                (filterRole === "all" || u.role === filterRole) && 
-                (filterStatus === "all" || u.status === filterStatus)
-              ).map(u => (
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan="10" className="text-center py-8 text-gray-500">No users found in database.</td>
+                </tr>
+              ) : filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan="10" className="text-center py-8 text-gray-500">
+                    No users matching "<span className="text-gray-800 font-semibold">{searchQuery}</span>"
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map(u => (
                 <tr key={u.id} className="table-row">
                   <td className="p-3 font-medium">
                     <button 
@@ -221,7 +266,7 @@ export default function AdminUsers() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+import { Search, X } from "lucide-react";
 
 export default function AdminUserAddresses() {
   const [users, setUsers] = useState([]);
   const [allZones, setAllZones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -63,18 +65,60 @@ export default function AdminUserAddresses() {
     }
   };
 
+  const filteredUsers = users.filter(u => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const name = (u.name || "").toLowerCase();
+    const phone = (u.phone || "").toLowerCase();
+    const role = (u.role || "").toLowerCase();
+    const addresses = u.Addresses || [];
+    const addrMatches = addresses.some(a => 
+      (a.address_line || "").toLowerCase().includes(q) ||
+      (a.city || "").toLowerCase().includes(q) ||
+      String(a.pincode || "").includes(q) ||
+      (a.landmark || "").toLowerCase().includes(q) ||
+      (a.zone || "").toLowerCase().includes(q)
+    );
+
+    return name.includes(q) || phone.includes(q) || role.includes(q) || addrMatches;
+  });
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in relative">
-      <div className="flex justify-between items-center flex-wrap gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="page-header">User Addresses 📍</h1>
           <p className="page-sub">View all users and their registered addresses</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary text-sm">
-          ➕ Create Address for User
-        </button>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* Live Search Bar */}
+          <div className="relative min-w-[220px] max-w-xs w-full sm:w-auto">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search user, phone, address, zone..."
+              className="w-full pl-10 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <button onClick={() => setShowModal(true)} className="btn-primary text-sm whitespace-nowrap">
+            ➕ Create Address for User
+          </button>
+        </div>
       </div>
 
       {msg && (
@@ -168,92 +212,104 @@ export default function AdminUserAddresses() {
               </tr>
             </thead>
             <tbody>
-              {users.map(u => {
-                const addresses = u.Addresses || [];
-                
-                return (
-                  <tr key={u.id} className="table-row">
-                    <td className="p-3 text-gray-900 font-medium align-top">{u.name}</td>
-                    <td className="p-3 text-gray-600 align-top">{u.phone}</td>
-                    <td className="p-3 align-top">
-                      <span className={`badge ${u.role === "admin" ? "badge-red" : u.role === "delivery" ? "badge-blue" : "badge-green"}`}>{u.role}</span>
-                    </td>
-                    <td className="p-3 text-gray-700 align-top">
-                      {addresses.length === 0 ? (
-                        <span className="text-gray-500 italic">No addresses found</span>
-                      ) : (
-                        <ul className="space-y-2">
-                          {addresses.map(addr => (
-                            <li key={addr.id} className="pb-3 border-b border-gray-200 last:border-0 last:pb-0 relative">
-                              <p className="font-medium text-gray-900 pr-12">{addr.address_line}</p>
-                              <p className="text-xs text-gray-600">{addr.city} - {addr.pincode}</p>
-                              {addr.landmark && <p className="text-xs text-gray-500">Landmark: {addr.landmark}</p>}
-                              
-                              <div className="mt-2">
-                                  {editZoneId === addr.id ? (
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8 text-gray-500">No users found in database.</td>
+                </tr>
+              ) : filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8 text-gray-500">
+                    No users or addresses matching "<span className="text-gray-800 font-semibold">{searchQuery}</span>"
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map(u => {
+                  const addresses = u.Addresses || [];
+                  
+                  return (
+                    <tr key={u.id} className="table-row">
+                      <td className="p-3 text-gray-900 font-medium align-top">{u.name}</td>
+                      <td className="p-3 text-gray-600 align-top">{u.phone}</td>
+                      <td className="p-3 align-top">
+                        <span className={`badge ${u.role === "admin" ? "badge-red" : u.role === "delivery" ? "badge-blue" : "badge-green"}`}>{u.role}</span>
+                      </td>
+                      <td className="p-3 text-gray-700 align-top">
+                        {addresses.length === 0 ? (
+                          <span className="text-gray-500 italic">No addresses found</span>
+                        ) : (
+                          <ul className="space-y-2">
+                            {addresses.map(addr => (
+                              <li key={addr.id} className="pb-3 border-b border-gray-200 last:border-0 last:pb-0 relative">
+                                <p className="font-medium text-gray-900 pr-12">{addr.address_line}</p>
+                                <p className="text-xs text-gray-600">{addr.city} - {addr.pincode}</p>
+                                {addr.landmark && <p className="text-xs text-gray-500">Landmark: {addr.landmark}</p>}
+                                
+                                <div className="mt-2">
+                                    {editZoneId === addr.id ? (
+                                        <div className="flex items-center gap-2">
+                                            <select 
+                                                className="input text-xs py-1 px-2 w-32 min-h-0" 
+                                                value={editZoneValue} 
+                                                onChange={e => setEditZoneValue(e.target.value)}
+                                            >
+                                              <option value="">-- Select --</option>
+                                              {allZones.map(z => (
+                                                <option key={z.id} value={z.name}>{z.name}</option>
+                                              ))}
+                                            </select>
+                                            <button onClick={() => handleUpdateZone(addr.id)} className="btn-primary py-1 px-2 text-xs">Save</button>
+                                            <button onClick={() => setEditZoneId(null)} className="btn-secondary py-1 px-2 text-xs">Cancel</button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            {addr.zone ? (
+                                                <span className="text-xs font-bold text-fresh-600 bg-fresh-50 px-2 py-0.5 rounded border border-fresh-200">Zone: {addr.zone}</span>
+                                            ) : (
+                                                <span className="text-xs text-gray-400 italic">No Zone Assigned</span>
+                                            )}
+                                            <button onClick={() => { setEditZoneId(addr.id); setEditZoneValue(addr.zone || ""); }} className="text-xs text-blue-600 hover:underline">
+                                                Edit Zone
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {addr.is_default && <span className="text-[10px] bg-fresh-100 text-fresh-600 px-2 py-0.5 rounded-full mt-1 inline-block absolute top-0 right-0">Default</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                      <td className="p-3 text-gray-600 align-top">
+                        {addresses.length === 0 ? (
+                          "—"
+                        ) : (
+                          <ul className="space-y-2">
+                            {addresses.map(addr => (
+                              <li key={addr.id} className="pb-2 border-b border-gray-200 last:border-0 last:pb-0">
+                                  {addr.latitude && addr.longitude ? (
                                       <div className="flex items-center gap-2">
-                                          <select 
-                                              className="input text-xs py-1 px-2 w-32 min-h-0" 
-                                              value={editZoneValue} 
-                                              onChange={e => setEditZoneValue(e.target.value)}
+                                          <a 
+                                              href={`https://www.google.com/maps/search/?api=1&query=${addr.latitude},${addr.longitude}`} 
+                                              target="_blank" 
+                                              rel="noreferrer"
+                                              className="text-fresh-600 hover:underline"
                                           >
-                                            <option value="">-- Select --</option>
-                                            {allZones.map(z => (
-                                              <option key={z.id} value={z.name}>{z.name}</option>
-                                            ))}
-                                          </select>
-                                          <button onClick={() => handleUpdateZone(addr.id)} className="btn-primary py-1 px-2 text-xs">Save</button>
-                                          <button onClick={() => setEditZoneId(null)} className="btn-secondary py-1 px-2 text-xs">Cancel</button>
+                                              {addr.latitude}, {addr.longitude}
+                                          </a>
                                       </div>
                                   ) : (
-                                      <div className="flex items-center gap-2">
-                                          {addr.zone ? (
-                                              <span className="text-xs font-bold text-fresh-600 bg-fresh-50 px-2 py-0.5 rounded border border-fresh-200">Zone: {addr.zone}</span>
-                                          ) : (
-                                              <span className="text-xs text-gray-400 italic">No Zone Assigned</span>
-                                          )}
-                                          <button onClick={() => { setEditZoneId(addr.id); setEditZoneValue(addr.zone || ""); }} className="text-xs text-blue-600 hover:underline">
-                                              Edit Zone
-                                          </button>
-                                      </div>
+                                      <span className="text-gray-500">Not set</span>
                                   )}
-                              </div>
-
-                              {addr.is_default && <span className="text-[10px] bg-fresh-100 text-fresh-600 px-2 py-0.5 rounded-full mt-1 inline-block absolute top-0 right-0">Default</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                    <td className="p-3 text-gray-600 align-top">
-                      {addresses.length === 0 ? (
-                        "—"
-                      ) : (
-                        <ul className="space-y-2">
-                          {addresses.map(addr => (
-                            <li key={addr.id} className="pb-2 border-b border-gray-200 last:border-0 last:pb-0">
-                                {addr.latitude && addr.longitude ? (
-                                    <div className="flex items-center gap-2">
-                                        <a 
-                                            href={`https://www.google.com/maps/search/?api=1&query=${addr.latitude},${addr.longitude}`} 
-                                            target="_blank" 
-                                            rel="noreferrer"
-                                            className="text-fresh-600 hover:underline"
-                                        >
-                                            {addr.latitude}, {addr.longitude}
-                                        </a>
-                                    </div>
-                                ) : (
-                                    <span className="text-gray-500">Not set</span>
-                                )}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -163,7 +163,7 @@ export const subscribe = async (req, res) => {
         }, { transaction: t });
 
         // Create subscription items (fixed)
-        const activeFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active');
+        const activeFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active' && fi.Product.is_package_active !== false);
         const fixedItemRows = activeFixedItems.map(fi => ({
             subscription_id: subscription.id,
             product_id: fi.product_id,
@@ -328,7 +328,7 @@ export const getMySubscriptions = async (req, res) => {
             where: { user_id: req.user.id },
             include: [
                 { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] },
-                { model: SubscriptionItem, as: 'Items', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }] },
+                { model: SubscriptionItem, as: 'Items', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'status', 'is_package_active'] }] },
                 {
                     model: DeliverySchedule,
                     as: 'Schedules',
@@ -336,7 +336,7 @@ export const getMySubscriptions = async (req, res) => {
                         {
                             model: ScheduleSeasonalSelection,
                             as: 'SeasonalSelections',
-                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
+                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status', 'is_package_active'] }]
                         }
                     ]
                 }
@@ -774,13 +774,13 @@ export const getSeasonalOptions = async (req, res) => {
                 {
                     model: SubscriptionItem,
                     as: 'Items',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status', 'is_package_active'] }]
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status', 'is_package_active'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status', 'is_package_active'] }] }
                     ]
                 }
             ]
@@ -788,7 +788,7 @@ export const getSeasonalOptions = async (req, res) => {
         if (!subscription) return res.status(404).json({ success: false, message: "Subscription not found" });
 
         const pkg = subscription.Package;
-        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active').map(sp => {
+        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active' && sp.Product.is_package_active !== false).map(sp => {
             const spData = sp.toJSON ? sp.toJSON() : { ...sp };
             const effectivePrice = sp.purchase_price_per_gm != null
                 ? parseFloat(sp.purchase_price_per_gm)
@@ -806,8 +806,8 @@ export const getSeasonalOptions = async (req, res) => {
         const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) / (1 + parseFloat(pkg.margin_percent || 0) / 100);
 
         // Extract fixed items from subscription (if present) or fallback to package fixed items
-        const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active');
-        const activePkgFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active');
+        const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active' && i.Product.is_package_active !== false);
+        const activePkgFixedItems = pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active' && fi.Product.is_package_active !== false);
 
         const fixed_items = subFixedItems.length > 0
             ? subFixedItems.map(i => {
@@ -1028,13 +1028,13 @@ export const getUpcomingSelections = async (req, res) => {
                 {
                     model: SubscriptionItem,
                     as: 'Items',
-                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'min_retail_qty', 'is_qty_double'] }]
+                    include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'min_retail_qty', 'is_qty_double', 'status', 'is_package_active'] }]
                 },
                 {
                     model: Package, include: [
-                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status', 'min_retail_qty', 'is_qty_double'] }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status', 'min_retail_qty', 'is_qty_double', 'is_package_active'] }] },
                         { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
-                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status', 'min_retail_qty', 'is_qty_double'] }] }
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'hindi_name', 'status', 'min_retail_qty', 'is_qty_double', 'is_package_active'] }] }
                     ]
                 }
             ]
@@ -1049,7 +1049,7 @@ export const getUpcomingSelections = async (req, res) => {
             return res.status(400).json({ success: false, message: "This package does not support seasonal selections" });
         }
 
-        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active').map(sp => {
+        const pool = pkg.SeasonalPool.filter(sp => sp.Product && sp.Product.status === 'active' && sp.Product.is_package_active !== false).map(sp => {
             const spData = sp.toJSON ? sp.toJSON() : { ...sp };
             const effectivePrice = sp.purchase_price_per_gm != null
                 ? parseFloat(sp.purchase_price_per_gm)
@@ -1065,7 +1065,7 @@ export const getUpcomingSelections = async (req, res) => {
         const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) / (1 + parseFloat(pkg.margin_percent || 0) / 100);
 
         // Extract fixed items from subscription (if present) or fallback to package fixed items
-        const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active');
+        const subFixedItems = subscription.Items.filter(i => i.is_fixed && i.Product && i.Product.status === 'active' && i.Product.is_package_active !== false);
         const fixed_items = subFixedItems.length > 0
             ? subFixedItems.map(i => {
                 const pkgFi = pkg.FixedItems.find(pfi => pfi.product_id === i.product_id);
@@ -1076,7 +1076,7 @@ export const getUpcomingSelections = async (req, res) => {
                     purchase_price_per_gm: pkgFi?.purchase_price_per_gm != null ? pkgFi.purchase_price_per_gm : i.Product.purchase_price_per_gm
                 };
             })
-            : pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active').map(fi => ({
+            : pkg.FixedItems.filter(fi => fi.Product && fi.Product.status === 'active' && fi.Product.is_package_active !== false).map(fi => ({
                 product_id: fi.product_id,
                 qty_gm: fi.default_qty_gm,
                 Product: fi.Product,
@@ -1094,7 +1094,7 @@ export const getUpcomingSelections = async (req, res) => {
         const schedules = await DeliverySchedule.findAll({
             where: {
                 subscription_id: subscription.id,
-                status: 'pending',
+                // status: 'pending',
                 is_locked: false
             },
             order: [['scheduled_date', 'ASC']],

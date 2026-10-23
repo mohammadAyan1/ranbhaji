@@ -50,18 +50,31 @@ export default function PackageCalculator() {
   // Drafts filtering & search state
   const [draftSearch, setDraftSearch] = useState("");
   const [draftFilterType, setDraftFilterType] = useState("all");
+  const [categories, setCategories] = useState([]);
+
+  const normalizeCat = (c) => (c || "").trim().toLowerCase().replace(/s$/, "").replace(/_/g, " ");
+
+  const matchCategory = (prodCategory, filterVal) => {
+    if (!filterVal || filterVal === "all") return true;
+    const pCat = (prodCategory || "").trim().toLowerCase();
+    const fCat = filterVal.trim().toLowerCase();
+    return pCat === fCat || normalizeCat(pCat) === normalizeCat(fCat);
+  };
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
       api.get("/products"),
       api.get("/admin/users"),
-      api.get("/calculator/drafts")
+      api.get("/calculator/drafts"),
+      api.get("/categories")
     ])
-    .then(([prodRes, userRes, draftRes]) => {
-      setProducts(prodRes.data.products?.filter(p => p.status === "active") || []);
+    .then(([prodRes, userRes, draftRes, catRes]) => {
+      setProducts(prodRes.data.products?.filter(p => p.status === "active" && (p.category || '').toLowerCase().trim() !== 'water') || []);
       setUsers(userRes.data.users?.filter(u => u.role === "user") || []);
       setDrafts(draftRes.data.drafts || []);
+      const activeCats = (catRes.data?.categories || []).filter(cat => cat.status === "active" && (cat.name || '').toLowerCase().trim() !== 'water');
+      setCategories(activeCats);
     })
     .catch((err) => {
       showMsg(`❌ Failed to load data: ${err.message}`, "error");
@@ -192,7 +205,8 @@ export default function PackageCalculator() {
   const handleSelectAllRemainingSeasonal = () => {
     const fixedProductIds = fixedItems.map(fi => parseInt(fi.product_id)).filter(Boolean);
     const available = products.filter(p => {
-      const matchesFilter = !seasonalCategoryFilter || (p.category && p.category.toLowerCase().includes(seasonalCategoryFilter.toLowerCase()));
+      const isWater = (p.category || '').toLowerCase().trim() === 'water';
+      const matchesFilter = !isWater && matchCategory(p.category, seasonalCategoryFilter);
       return matchesFilter && !fixedProductIds.includes(p.id);
     }).map(p => p.id);
 
@@ -331,6 +345,27 @@ export default function PackageCalculator() {
       showMsg(`❌ Failed to save draft: ${err.response?.data?.message || err.message}`, "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [deletingDraftId, setDeletingDraftId] = useState(null);
+
+  const handleDeleteDraft = async (draft) => {
+    if (!window.confirm(`Kya aap draft "${draft.name}" ko delete karna chahte hain?`)) {
+      return;
+    }
+    setDeletingDraftId(draft.id);
+    try {
+      await api.delete(`/calculator/drafts/${draft.id}`);
+      showMsg(`✅ Draft "${draft.name}" successfully delete ho gaya!`, "success");
+      if (editingDraftId === draft.id) {
+        clearCalculator();
+      }
+      setDrafts(prev => prev.filter(d => d.id !== draft.id));
+    } catch (err) {
+      showMsg(`❌ Draft delete nahi ho paya: ${err.response?.data?.message || err.message}`, "error");
+    } finally {
+      setDeletingDraftId(null);
     }
   };
 
@@ -560,10 +595,11 @@ export default function PackageCalculator() {
               onChange={(e) => setFixedCategoryFilter(e.target.value)}
             >
               <option value="">Filter by Category (All)</option>
-              <option value="vegetable">Vegetables</option>
-              <option value="fruit">Fruits</option>
-              <option value="exotic">Exotic Veg</option>
-              <option value="salad">Salad</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -576,7 +612,8 @@ export default function PackageCalculator() {
 
             const rowProducts = products.filter(
               (p) => {
-                const matchesFilter = !fixedCategoryFilter || (p.category && p.category.toLowerCase().includes(fixedCategoryFilter.toLowerCase()));
+                const isWater = (p.category || '').toLowerCase().trim() === 'water';
+                const matchesFilter = !isWater && matchCategory(p.category, fixedCategoryFilter);
                 return matchesFilter && !seasonalPool.includes(p.id) && !selectedInOtherRows.includes(p.id);
               }
             );
@@ -753,20 +790,18 @@ export default function PackageCalculator() {
               onChange={(e) => setSeasonalCategoryFilter(e.target.value)}
             >
               <option value="">Filter by Category (All)</option>
-              <option value="vegetable">Vegetables</option>
-              <option value="fruit">Fruits</option>
-              <option value="exotic">Exotic Veg</option>
-              <option value="salad">Salad</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mt-4">
           {products
-            .filter(p => {
-              const matchesFilter = !seasonalCategoryFilter || (p.category && p.category.toLowerCase().includes(seasonalCategoryFilter.toLowerCase()));
-              return matchesFilter;
-            })
+            .filter(p => (p.category || '').toLowerCase().trim() !== 'water' && matchCategory(p.category, seasonalCategoryFilter))
             .map(p => {
               const inPool = seasonalPool.includes(p.id);
               const inFixed = fixedItems.some(fi => parseInt(fi.product_id) === p.id);
@@ -927,7 +962,7 @@ export default function PackageCalculator() {
                 <div className="flex gap-2">
                   <button 
                     onClick={() => loadDraftIntoForm(draft)}
-                    className="btn-secondary text-xs py-1.5 px-3 flex-1"
+                    className="btn-secondary text-xs py-1.5 px-3 flex-1 flex items-center justify-center gap-1"
                   >
                     ✏️ Edit
                   </button>
@@ -936,6 +971,16 @@ export default function PackageCalculator() {
                       💬 Share
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDraft(draft)}
+                    disabled={deletingDraftId === draft.id}
+                    className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 px-3 py-1.5 rounded-xl text-xs font-medium border border-red-200 hover:border-red-300 transition-colors flex items-center justify-center gap-1"
+                    title="Delete Draft"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deletingDraftId === draft.id ? "..." : "Delete"}</span>
+                  </button>
                 </div>
               </div>
             ))}

@@ -8,7 +8,7 @@ import { syncBatchDemand } from './workerTask.controller.js';
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, drying_time_per_piece_seconds, drying_time_per_25g_seconds, margin_percentage, water_capacity_liters, is_qty_double, discount_percentage } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, drying_time_per_piece_seconds, drying_time_per_25g_seconds, margin_percentage, water_capacity_liters, is_qty_double, discount_percentage, is_package_active } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
@@ -36,7 +36,8 @@ export const createProduct = async (req, res) => {
             drying_time_per_piece_seconds: drying_time_per_piece_seconds || 0,
             drying_time_per_25g_seconds: drying_time_per_25g_seconds || 0,
             is_qty_double: is_qty_double === 'true' || is_qty_double === true,
-            discount_percentage: discount_percentage || 0
+            discount_percentage: discount_percentage || 0,
+            is_package_active: is_package_active !== undefined ? (is_package_active === 'true' || is_package_active === true || is_package_active === 1 || is_package_active === '1') : true
         });
 
 
@@ -52,7 +53,11 @@ export const getProducts = async (req, res) => {
     try {
         const { category, status } = req.query;
         const where = {};
-        if (category) where.category = category;
+        if (category) {
+            where[Op.and] = [
+                sequelize.where(sequelize.fn('LOWER', sequelize.col('Product.category')), category.trim().toLowerCase())
+            ];
+        }
         if (status) where.status = status;
         // Non-admins only see active products, and never see prices
         const isAdmin = req.user?.role === 'admin';
@@ -124,6 +129,10 @@ export const updateProduct = async (req, res) => {
             updateData.discount_percentage = parseFloat(updateData.discount_percentage) || 0;
         }
 
+        if (updateData.is_package_active !== undefined) {
+            updateData.is_package_active = updateData.is_package_active === 'true' || updateData.is_package_active === true || updateData.is_package_active === 1 || updateData.is_package_active === '1';
+        }
+
         if (req.file) {
             // New image uploaded, set new image url
             updateData.image_url = `/uploads/${req.file.filename}`;
@@ -139,9 +148,28 @@ export const updateProduct = async (req, res) => {
 
         await product.update(updateData);
 
-
-
         res.status(200).json({ success: true, product });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PATCH /api/products/:id/package-status  (admin)
+export const togglePackageStatus = async (req, res) => {
+    try {
+        const product = await Product.findByPk(req.params.id);
+        if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+
+        const is_package_active = req.body.is_package_active !== undefined
+            ? (req.body.is_package_active === true || req.body.is_package_active === 'true' || req.body.is_package_active === 1 || req.body.is_package_active === '1')
+            : !product.is_package_active;
+
+        await product.update({ is_package_active });
+        res.status(200).json({
+            success: true,
+            message: `Product ${product.name} package availability updated to ${is_package_active ? 'ON' : 'OFF'}`,
+            product
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

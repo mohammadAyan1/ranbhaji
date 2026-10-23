@@ -81,6 +81,7 @@ const Product = sequelize.define('Product', {
   min_retail_qty: { type: DataTypes.DECIMAL(10, 2), allowNull: true, defaultValue: 0 },
   default_margin_percentage: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  is_package_active: { type: DataTypes.BOOLEAN, defaultValue: true },
   total_purchased_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   total_sold_qty: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   current_stock: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
@@ -259,6 +260,7 @@ const WaterSubscription = sequelize.define('WaterSubscription', {
   services_completed: { type: DataTypes.INTEGER, defaultValue: 0 },
   total_services: { type: DataTypes.INTEGER, defaultValue: 0 },
   address_id: { type: DataTypes.INTEGER, allowNull: true },
+  delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true },
   batch_id: { type: DataTypes.INTEGER, allowNull: true }
 }, { tableName: 'water_subscriptions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 

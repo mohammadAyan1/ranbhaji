@@ -35,11 +35,26 @@ export default function MarginCalculator() {
   // Saving state
   const [draftName, setDraftName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  const normalizeCat = (c) => (c || "").trim().toLowerCase().replace(/s$/, "").replace(/_/g, " ");
+
+  const matchCategory = (prodCategory, filterVal) => {
+    if (!filterVal || filterVal === "all") return true;
+    const pCat = (prodCategory || "").trim().toLowerCase();
+    const fCat = filterVal.trim().toLowerCase();
+    return pCat === fCat || normalizeCat(pCat) === normalizeCat(fCat);
+  };
 
   useEffect(() => {
-    api.get("/products")
-      .then((res) => {
-        setProducts(res.data.products?.filter(p => p.status === "active") || []);
+    Promise.all([
+      api.get("/products"),
+      api.get("/categories")
+    ])
+      .then(([res, catRes]) => {
+        setProducts(res.data.products?.filter(p => p.status === "active" && (p.category || '').toLowerCase().trim() !== 'water') || []);
+        const activeCats = (catRes.data?.categories || []).filter(cat => cat.status === "active" && (cat.name || '').toLowerCase().trim() !== 'water');
+        setCategories(activeCats);
       })
       .catch((err) => {
         showMsg(`❌ Failed to load products: ${err.message}`, "error");
@@ -391,10 +406,11 @@ export default function MarginCalculator() {
               onChange={(e) => setFixedCategoryFilter(e.target.value)}
             >
               <option value="">Filter by Category (All)</option>
-              <option value="vegetable">Vegetables</option>
-              <option value="fruit">Fruits</option>
-              <option value="exotic">Exotic Veg</option>
-              <option value="salad">Salad</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -404,7 +420,8 @@ export default function MarginCalculator() {
             const selectedSeasonalIds = seasonalItems.map(item => parseInt(item.product_id)).filter(id => !isNaN(id));
             const rowProducts = products.filter(
               (p) => {
-                const matchesFilter = !fixedCategoryFilter || (p.category && p.category.toLowerCase().includes(fixedCategoryFilter.toLowerCase()));
+                const isWater = (p.category || '').toLowerCase().trim() === 'water';
+                const matchesFilter = !isWater && matchCategory(p.category, fixedCategoryFilter);
                 return matchesFilter && !selectedSeasonalIds.includes(p.id);
               }
             );
@@ -516,10 +533,11 @@ export default function MarginCalculator() {
               onChange={(e) => setSeasonalCategoryFilter(e.target.value)}
             >
               <option value="">Filter by Category (All)</option>
-              <option value="vegetable">Vegetables</option>
-              <option value="fruit">Fruits</option>
-              <option value="exotic">Exotic Veg</option>
-              <option value="salad">Salad</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -529,7 +547,8 @@ export default function MarginCalculator() {
             const selectedFixedIds = fixedItems.map(item => parseInt(item.product_id)).filter(id => !isNaN(id));
             const rowProducts = products.filter(
               (p) => {
-                const matchesFilter = !seasonalCategoryFilter || (p.category && p.category.toLowerCase().includes(seasonalCategoryFilter.toLowerCase()));
+                const isWater = (p.category || '').toLowerCase().trim() === 'water';
+                const matchesFilter = !isWater && matchCategory(p.category, seasonalCategoryFilter);
                 return matchesFilter && !selectedFixedIds.includes(p.id);
               }
             );

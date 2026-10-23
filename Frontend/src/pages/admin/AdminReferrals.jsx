@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Search, X } from "lucide-react";
 import api from "../../api/axios";
 
 export default function AdminReferrals() {
@@ -6,6 +7,7 @@ export default function AdminReferrals() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("salesmen"); // "salesmen" or "users"
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -27,13 +29,64 @@ export default function AdminReferrals() {
     }
   };
 
+  const filteredSalesmen = salesmen.filter(sm => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const smName = (sm.salesman?.name || "").toLowerCase();
+    const smPhone = (sm.salesman?.phone || "").toLowerCase();
+    const smEmail = (sm.salesman?.email || "").toLowerCase();
+    const matchedUsers = (sm.referred_users || []).some(ru =>
+      (ru.user?.name || "").toLowerCase().includes(q) ||
+      (ru.user?.phone || "").toLowerCase().includes(q)
+    );
+    return smName.includes(q) || smPhone.includes(q) || smEmail.includes(q) || matchedUsers;
+  });
+
+  const filteredUsers = users.filter(u => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const refName = (u.referrer?.name || "").toLowerCase();
+    const refPhone = (u.referrer?.phone || "").toLowerCase();
+    const refEmail = (u.referrer?.email || "").toLowerCase();
+    const matchedUsers = (u.referred_users || []).some(ru =>
+      (ru.user?.name || "").toLowerCase().includes(q) ||
+      (ru.user?.phone || "").toLowerCase().includes(q)
+    );
+    return refName.includes(q) || refPhone.includes(q) || refEmail.includes(q) || matchedUsers;
+  });
+
   if (loading) {
     return <div className="flex justify-center p-8"><div className="w-8 h-8 border-4 border-fresh-500/20 border-t-fresh-500 rounded-full animate-spin"></div></div>;
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Referral Dashboard</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Referral Dashboard</h1>
+          <p className="text-sm text-gray-500">Track and manage salesman and user referral performance</p>
+        </div>
+        <div className="relative min-w-[240px] max-w-xs w-full sm:w-auto">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search referral, phone..."
+            className="w-full pl-10 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-gray-800 placeholder-gray-400 shadow-sm"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="flex space-x-4 border-b border-gray-200">
@@ -41,19 +94,23 @@ export default function AdminReferrals() {
           className={`pb-2 px-4 font-medium transition-colors ${activeTab === 'salesmen' ? 'text-fresh-600 border-b-2 border-fresh-600' : 'text-gray-500 hover:text-gray-700'}`}
           onClick={() => setActiveTab("salesmen")}
         >
-          Salesmen Referrals
+          Salesmen Referrals {salesmen.length > 0 && `(${filteredSalesmen.length})`}
         </button>
         <button
           className={`pb-2 px-4 font-medium transition-colors ${activeTab === 'users' ? 'text-fresh-600 border-b-2 border-fresh-600' : 'text-gray-500 hover:text-gray-700'}`}
           onClick={() => setActiveTab("users")}
         >
-          User Referrals
+          User Referrals {users.length > 0 && `(${filteredUsers.length})`}
         </button>
       </div>
 
       {activeTab === "salesmen" && (
         <div className="space-y-4">
-          {salesmen.length === 0 ? <p className="text-gray-500">No salesman referrals found.</p> : salesmen.map(sm => (
+          {filteredSalesmen.length === 0 ? (
+            <p className="text-gray-500 py-6 text-center">
+              {searchQuery.trim() ? `No salesman referrals matching "${searchQuery}".` : "No salesman referrals found."}
+            </p>
+          ) : filteredSalesmen.map(sm => (
             <div key={sm.salesman.id} className="bg-white p-6 rounded-xl border shadow-sm">
               <div className="flex justify-between items-center mb-4 border-b pb-4">
                 <div>
@@ -86,7 +143,11 @@ export default function AdminReferrals() {
 
       {activeTab === "users" && (
         <div className="space-y-4">
-          {users.length === 0 ? <p className="text-gray-500">No user referrals found.</p> : users.map(u => (
+          {filteredUsers.length === 0 ? (
+            <p className="text-gray-500 py-6 text-center">
+              {searchQuery.trim() ? `No user referrals matching "${searchQuery}".` : "No user referrals found."}
+            </p>
+          ) : filteredUsers.map(u => (
             <div key={u.referrer.id} className="bg-white p-6 rounded-xl border shadow-sm">
               <div className="flex justify-between items-center mb-4 border-b pb-4">
                 <div>
