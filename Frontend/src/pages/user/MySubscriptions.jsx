@@ -374,7 +374,7 @@ export default function MySubscriptions() {
 
   const activeTotalCost = activeFixedCost + activeSeasonalCost;
   const activeActualLimit = Math.min(schedulesPerServiceAmount, walletBalance);
-  const activeRemainingBudget = activeActualLimit - activeTotalCost;
+  const activeRemainingBudget = Math.max(0, (activeActualLimit + 0.04) - activeTotalCost);
   const isActiveOverBudget = (activeTotalCost - activeActualLimit) > 0.05;
   const activeSelectedCount = Object.values(selectedScheduleItems).filter(v => parseFloat(v) > 0).length;
   const activeRemovedFixedCount = Object.values(editingScheduleFixedItems).filter(qty => parseFloat(qty || 0) === 0).length;
@@ -401,7 +401,7 @@ export default function MySubscriptions() {
 
   const totalCost = fixedCost + seasonalCost;
   const actualLimit = Math.min(perServiceAmount, walletBalance);
-  const remainingBudget = actualLimit - totalCost;
+  const remainingBudget = Math.max(0, (actualLimit + 0.04) - totalCost);
   const isOverBudget = (totalCost - actualLimit) > 0.05;
 
   const updateFixedQty = (productId, value) => {

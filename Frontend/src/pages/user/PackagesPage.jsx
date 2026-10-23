@@ -383,7 +383,7 @@ export default function PackagesPage() {
   }, 0);
 
   const totalCost = fixedCost + seasonalCost;
-  const remainingBudget = perServiceAmount - totalCost;
+  const remainingBudget = Math.max(0, (perServiceAmount + 0.04) - totalCost);
   const isOverBudget = (totalCost - perServiceAmount) > 0.05;
 
   const updateFixedQty = (productId, value) => {

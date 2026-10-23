@@ -134,3 +134,28 @@ Seasonal Pool Simulation header ke paas do convenient action buttons add karenge
 2. **1-Gram Suggestion Verification:** Remaining budget me exact grams ka "💡 ...g add kar sakte ho" button visible ho raha hai.
 3. **Fixed Deduplication Verification:** Fixed row 1 me product select karne par row 2 me wo product search list me nahi dikh raha.
 4. **Seasonal Select All Verification:** "Select All Remaining" button par click karne se sare products green ho rahe hain aur unselect karne par easily deselect ho rahe hain.
+
+---
+
+## 💡 4. Deep-Dive: 399g Par Potato me 1g Suggestion Aaya, Par Seasonal Me Kyu Nahi Aaya Tha?
+
+### Mathematical Reality:
+1. **Product Prices per Gram:**
+   - **Potato:** ₹15/kg = **₹0.015 / gm (1.5 paise per gram)**.
+   - **Seasonal (Fenugreek / Raw Papaya):** ₹51.46/kg = **₹0.0515 / gm (5.15 paise per gram)**.
+2. **Remaining Budget at 399g:**
+   - Package per delivery base budget = **₹99.99**.
+   - Fixed cost (all 9 items) = **₹56.25**.
+   - Seasonal cost at 450g + 399g (849g) = `849 × 0.0515 =` **₹43.7235**.
+   - Total Cost = `56.25 + 43.7235 =` **₹99.9735**.
+   - Strict Remaining Budget = `99.99 - 99.9735 =` **₹0.0165 (yaani sirf 1.65 paise)**!
+3. **Suggestion Check Formula:**
+   - **Potato:** `1.65 paise / 1.5 paise = 1.1 gram` ➔ `Math.floor(1.1) = 1` ➔ **Potato me 1g afford ho sakta tha!**
+   - **Seasonal:** `1.65 paise / 5.15 paise = 0.32 gram` ➔ `Math.floor(0.32) = 0` ➔ **1.65 paise me 1 gram seasonal sabji nahi aa sakti thi!**
+4. **Lekin User Hath Se 1g Badha Raha Tha Toh Badh Kyu Raha Tha?**
+   - Kyuki humne budget tolerance `0.05` (5 paise) allow kiya hua tha taaki 3.5 paise ke difference se limit exceed ka error na aaye.
+5. **Final Fix Applied:**
+   - Ab suggestion calculation me bhi `+0.04` ka buffer shamil kar diya hai:
+     `const activeRemainingBudget = Math.max(0, (activeActualLimit + 0.04) - activeTotalCost);`
+   - Isse 399g par available budget `1.65 paise + 4 paise = 5.65 paise` count hoga, aur Seasonal me bhi turant **`💡 1g add kar sakte ho`** button dikhayi dega! Aur jaise hi 400g hoga, button gayab ho jayega aur koi error nahi aayega!
+
