@@ -495,6 +495,7 @@ export const getUserAnalytics = async (req, res) => {
         res.status(200).json({
             success: true,
             user,
+            waterDiscounts,
             analytics: {
                 packages: packageData,
                 retailHistory: retailHistory,

@@ -83,6 +83,18 @@ export default function AdminUserHistory() {
     }
   }, [location.state]);
 
+  const fetchFreshWaterDiscounts = async (userId = selectedUserId) => {
+    if (!userId) return;
+    try {
+      const res = await api.get(`/admin/user-analytics/users/${userId}/water-discounts`);
+      if (res.data?.discounts) {
+        setWaterDiscounts(res.data.discounts);
+      }
+    } catch (e) {
+      console.error("Failed to fetch fresh water discounts", e);
+    }
+  };
+
   // Fetch specific user analytics when a user is selected
   useEffect(() => {
     if (!selectedUserId) {
@@ -94,14 +106,16 @@ export default function AdminUserHistory() {
       setLoading(true);
       setMsg("");
       try {
-        const [res, transRes] = await Promise.all([
+        const [res, transRes, waterDiscRes] = await Promise.all([
           api.get(`/admin/user-analytics/${selectedUserId}`),
-          api.get(`/admin/users/${selectedUserId}/wallet/transactions`)
+          api.get(`/admin/users/${selectedUserId}/wallet/transactions`),
+          api.get(`/admin/user-analytics/users/${selectedUserId}/water-discounts`).catch(() => null)
         ]);
         setAnalytics(res.data.analytics);
         setCurrentUserInfo(res.data.user);
         setDiscountPercent(res.data.user?.discount_percentage ?? "0");
-        setWaterDiscounts(res.data.waterDiscounts || []);
+        const discounts = waterDiscRes?.data?.discounts || res.data.waterDiscounts || [];
+        setWaterDiscounts(discounts);
         setWalletTransactions(transRes.data.transactions);
       } catch (err) {
         setMsg(`❌ Failed to load analytics for user: ${err.response?.data?.message || err.message}`);
@@ -156,6 +170,7 @@ export default function AdminUserHistory() {
       setActionMsg(`✅ Water discount (${percent}% for "${prodName}" at ${bottles} bottle(s)) created successfully!`);
     } catch (err) {
       setWaterDiscountError(err.response?.data?.message || err.message);
+      fetchFreshWaterDiscounts();
     } finally {
       setSavingWaterDiscount(false);
     }
@@ -327,6 +342,7 @@ export default function AdminUserHistory() {
               const firstId = waterProducts.length > 0 ? waterProducts[0].id.toString() : "";
               setWaterDiscountForm({ product_id: firstId, discount_percentage: "", bottles_count: "1" });
               setShowWaterDiscountModal(true);
+              fetchFreshWaterDiscounts();
             }} 
             className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100 transition-colors shadow-2xs"
           >
@@ -365,8 +381,10 @@ export default function AdminUserHistory() {
               <button
                 onClick={() => {
                   setWaterDiscountError("");
-                  setWaterDiscountForm({ discount_percentage: "", bottles_count: "1" });
+                  const firstId = waterProducts.length > 0 ? waterProducts[0].id.toString() : "";
+                  setWaterDiscountForm({ product_id: firstId, discount_percentage: "", bottles_count: "1" });
                   setShowWaterDiscountModal(true);
+                  fetchFreshWaterDiscounts();
                 }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition-all hover:scale-105 cursor-pointer ${
                   waterDiscounts.length > 0
