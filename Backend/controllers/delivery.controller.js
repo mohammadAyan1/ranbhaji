@@ -9,6 +9,38 @@ import {
 } from "../models/index.js";
 import path from "path";
 
+export const ensureNotSunday = (dateStr) => {
+    if (!dateStr) return dateStr;
+    const parts = dateStr.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (d.getDay() === 0) { // 0 is Sunday
+        d.setDate(d.getDate() + 1); // Move to Monday
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+    return dateStr;
+};
+
+export const getNextDayNotSunday = (baseDateStr) => {
+    let d;
+    if (baseDateStr) {
+        const parts = baseDateStr.split('-').map(Number);
+        d = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else {
+        d = new Date();
+    }
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() === 0) { // Sunday -> move to Monday
+        d.setDate(d.getDate() + 1);
+    }
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+
 // GET /api/today-deliveries  (delivery role)
 export const getTodayDeliveries = async (req, res) => {
     try {
@@ -721,7 +753,7 @@ export const reviewReturn = async (req, res) => {
                     }, { transaction: t });
                 }
 
-                const nextDateStr = reschedule_date || new Date().toISOString().split('T')[0];
+                const nextDateStr = reschedule_date ? ensureNotSunday(reschedule_date) : getNextDayNotSunday();
 
                 let nextSchedule = await DeliverySchedule.findOne({
                     where: {
@@ -1487,117 +1519,56 @@ export const getAllOrdersForDate = async (req, res) => {
             return `${addr.address_line}${addr.landmark ? ', ' + addr.landmark : ''}, ${addr.city} - ${addr.pincode}`;
         };
 
-        const usersMap = {};
+        const ordersList = [];
 
-        const getOrInitUser = (user, status) => {
-            if (!user) return null;
-            if (!usersMap[user.id]) {
-                usersMap[user.id] = {
-                    user: user,
-                    hasPackage: false,
-                    is_returned_serving: false,
-                    status: status,
-                    delivery_time_slot: null,
-                    addressesMap: {}, // To group by address string
-                    // Also keep total map for the overall summary view
-                    totalItemsMap: {},
-                    allScheduleIds: [],
-                    allRetailOrderIds: [],
-                    commonBatchId: null // Optional common batch if all match
-                };
-            }
-            return usersMap[user.id];
-        };
-
-        const getOrInitAddressGroup = (uMap, addrStr, batchId, status, deliveryBoyId, timeSlot = null) => {
-            if (!uMap.addressesMap[addrStr]) {
-                uMap.addressesMap[addrStr] = {
-                    addressText: addrStr,
-                    batch_id: batchId,
-                    delivery_time_slot: timeSlot || null,
-                    delivery_boy_id: deliveryBoyId,
-                    status: status, // Add status to track if it's ready_for_delivery
-                    is_returned_serving: false,
-                    scheduleIds: [],
-                    retailOrderIds: [],
-                    itemsMap: {}
-                };
-            }
-            if (timeSlot && !uMap.addressesMap[addrStr].delivery_time_slot) {
-                uMap.addressesMap[addrStr].delivery_time_slot = timeSlot;
-            }
-            if (batchId && !uMap.addressesMap[addrStr].batch_id) {
-                uMap.addressesMap[addrStr].batch_id = batchId;
-            }
-            if (deliveryBoyId && !uMap.addressesMap[addrStr].delivery_boy_id) {
-                uMap.addressesMap[addrStr].delivery_boy_id = deliveryBoyId;
-            }
-            if (status === 'ready_for_delivery') {
-                uMap.addressesMap[addrStr].status = 'ready_for_delivery';
-            }
-            return uMap.addressesMap[addrStr];
-        };
-
-        const addItem = (uMap, addrGrp, product, qty, source, packedQty = null, userId = null) => {
-            if (!product) return;
-            // Add to Address Group
-            if (!addrGrp.itemsMap[product.id]) {
-                addrGrp.itemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit, packedQty: 0, isPackedSet: false, missedQty: 0, returnedQty: 0 };
-                if (source === 'package' && userId && carryLogMap[`${userId}_${product.id}`]) {
-                    addrGrp.itemsMap[product.id].missedQty = carryLogMap[`${userId}_${product.id}`].missed;
-                    addrGrp.itemsMap[product.id].returnedQty = carryLogMap[`${userId}_${product.id}`].returned;
-                }
-            }
-            if (source === 'package') addrGrp.itemsMap[product.id].packageQty += qty;
-            else addrGrp.itemsMap[product.id].retailQty += qty;
-
-            if (packedQty !== null && packedQty !== undefined) {
-                addrGrp.itemsMap[product.id].packedQty += packedQty;
-                addrGrp.itemsMap[product.id].isPackedSet = true;
-            }
-
-            // Add to User Totals
-            if (!uMap.totalItemsMap[product.id]) {
-                uMap.totalItemsMap[product.id] = { product, packageQty: 0, retailQty: 0, unit: product.unit, missedQty: 0, returnedQty: 0 };
-                if (source === 'package' && userId && carryLogMap[`${userId}_${product.id}`]) {
-                    uMap.totalItemsMap[product.id].missedQty = carryLogMap[`${userId}_${product.id}`].missed;
-                    uMap.totalItemsMap[product.id].returnedQty = carryLogMap[`${userId}_${product.id}`].returned;
-                }
-            }
-            if (source === 'package') uMap.totalItemsMap[product.id].packageQty += qty;
-            else uMap.totalItemsMap[product.id].retailQty += qty;
-        };
-
-        // Process Schedules
+        // Process Schedules (Each schedule is a separate order entry)
         for (const s of schedules) {
             let user = null;
             let address = null;
 
             if (s.Subscription) {
                 user = s.Subscription.User;
-                address = s.Subscription.Address || defaultAddressMap[user.id];
+                address = s.Subscription.Address || defaultAddressMap[user?.id];
             } else if (s.WaterSubscription) {
                 user = s.WaterSubscription.User;
-                address = s.WaterSubscription.Address || defaultAddressMap[user.id];
+                address = s.WaterSubscription.Address || defaultAddressMap[user?.id];
             }
-
-            const uMap = getOrInitUser(user, s.status);
-            if (!uMap) continue;
+            if (!user) continue;
 
             const slot = s.delivery_time_slot || s.Subscription?.delivery_time_slot || null;
-            if (slot && !uMap.delivery_time_slot) {
-                uMap.delivery_time_slot = slot;
-            }
-
-            uMap.hasPackage = true;
-            uMap.allScheduleIds.push(s.id);
-            if (s.is_returned_serving) uMap.is_returned_serving = true;
-            if (!uMap.commonBatchId && s.batch_id) uMap.commonBatchId = s.batch_id;
-
             const addrStr = formatAddress(address);
-            const addrGrp = getOrInitAddressGroup(uMap, addrStr, s.batch_id, s.status, s.delivery_boy_id, slot);
-            addrGrp.scheduleIds.push(s.id);
-            if (s.is_returned_serving) addrGrp.is_returned_serving = true;
+            const itemsMap = {};
+
+            const addSchedItem = (product, qty, source, packedQty = null) => {
+                if (!product) return;
+                if (!itemsMap[product.id]) {
+                    itemsMap[product.id] = {
+                        id: product.id,
+                        name: product.name,
+                        hindi_name: product.hindi_name,
+                        unit: product.unit,
+                        packageQty: 0,
+                        retailQty: 0,
+                        totalQty: 0,
+                        packedQty: 0,
+                        isPackedSet: false,
+                        missedQty: 0,
+                        returnedQty: 0
+                    };
+                    if (source === 'package' && user && carryLogMap[`${user.id}_${product.id}`]) {
+                        itemsMap[product.id].missedQty = carryLogMap[`${user.id}_${product.id}`].missed;
+                        itemsMap[product.id].returnedQty = carryLogMap[`${user.id}_${product.id}`].returned;
+                    }
+                }
+                if (source === 'package') itemsMap[product.id].packageQty += qty;
+                else itemsMap[product.id].retailQty += qty;
+                itemsMap[product.id].totalQty += qty;
+
+                if (packedQty !== null && packedQty !== undefined) {
+                    itemsMap[product.id].packedQty += packedQty;
+                    itemsMap[product.id].isPackedSet = true;
+                }
+            };
 
             const dbItems = s.DeliveryItems || [];
             if (dbItems.length > 0) {
@@ -1605,7 +1576,7 @@ export const getAllOrdersForDate = async (req, res) => {
                 for (const item of dbItems) {
                     if (!uniqueMap[item.product_id]) {
                         uniqueMap[item.product_id] = true;
-                        if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', item.packed_qty !== null ? parseFloat(item.packed_qty) : null, user ? user.id : null);
+                        if (item.Product) addSchedItem(item.Product, parseFloat(item.qty_gm || 0), 'package', item.packed_qty !== null ? parseFloat(item.packed_qty) : null);
                     } else {
                         await item.destroy().catch(e => console.error(e));
                     }
@@ -1621,7 +1592,7 @@ export const getAllOrdersForDate = async (req, res) => {
                     if (selections.length > 0) {
                         for (const sel of selections) {
                             if (sel.Product) {
-                                addItem(uMap, addrGrp, sel.Product, parseFloat(sel.qty_gm || 0), 'package', null, user ? user.id : null);
+                                addSchedItem(sel.Product, parseFloat(sel.qty_gm || 0), 'package', null);
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: sel.product_id, qty_gm: sel.qty_gm });
                             }
                         }
@@ -1631,7 +1602,7 @@ export const getAllOrdersForDate = async (req, res) => {
                             const missingFixed = fixedItems.filter(f => !selectionProductIds.includes(f.product_id));
                             for (const item of missingFixed) {
                                 if (item.Product) {
-                                    addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
+                                    addSchedItem(item.Product, parseFloat(item.qty_gm || 0), 'package', null);
                                     newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
                                 }
                             }
@@ -1639,14 +1610,14 @@ export const getAllOrdersForDate = async (req, res) => {
                     } else {
                         for (const item of fixedItems) {
                             if (item.Product) {
-                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
+                                addSchedItem(item.Product, parseFloat(item.qty_gm || 0), 'package', null);
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
                             }
                         }
                         const defaultSeasonal = items.filter(item => item.is_seasonal && item.is_active);
                         for (const item of defaultSeasonal) {
                             if (item.Product) {
-                                addItem(uMap, addrGrp, item.Product, parseFloat(item.qty_gm || 0), 'package', null, user ? user.id : null);
+                                addSchedItem(item.Product, parseFloat(item.qty_gm || 0), 'package', null);
                                 newDeliveryItems.push({ schedule_id: s.id, product_id: item.product_id, qty_gm: item.qty_gm });
                             }
                         }
@@ -1659,7 +1630,7 @@ export const getAllOrdersForDate = async (req, res) => {
                     });
                     if (matchedProduct) {
                         const qty = matchedProduct.unit === 'ml' ? 2000 : 1;
-                        addItem(uMap, addrGrp, matchedProduct, qty, 'package', null, user ? user.id : null);
+                        addSchedItem(matchedProduct, qty, 'package', null);
                         newDeliveryItems.push({ schedule_id: s.id, product_id: matchedProduct.id, qty_gm: qty });
                     }
                 }
@@ -1668,76 +1639,102 @@ export const getAllOrdersForDate = async (req, res) => {
                     await DeliveryItem.bulkCreate(newDeliveryItems).catch(err => console.error('Auto-create DeliveryItems error:', err));
                 }
             }
-        }
 
-        // Process Retail Orders
-        for (const r of retailOrders) {
-            const user = r.User;
-            const address = r.Address || defaultAddressMap[user?.id];
-            const uMap = getOrInitUser(user, r.delivery_status);
-            if (!uMap) continue;
-
-            uMap.allRetailOrderIds.push(r.id);
-            if (!uMap.commonBatchId && r.batch_id) uMap.commonBatchId = r.batch_id;
-
-            const addrStr = formatAddress(address);
-            const addrGrp = getOrInitAddressGroup(uMap, addrStr, r.batch_id, r.delivery_status, r.delivery_boy_id);
-            addrGrp.retailOrderIds.push(r.id);
-
-            const items = r.Items || [];
-            for (const item of items) {
-                if (item.Product) addItem(uMap, addrGrp, item.Product, parseFloat(item.quantity || 0), 'retail', item.packed_qty !== null ? parseFloat(item.packed_qty) : null);
-            }
-        }
-
-        const usersList = Object.values(usersMap).map(u => {
-            const totalItems = Object.values(u.totalItemsMap).map(i => ({
-                id: i.product.id,
-                name: i.product.name,
-                hindi_name: i.product.hindi_name,
-                unit: i.unit,
-                packageQty: i.packageQty,
-                retailQty: i.retailQty,
-                totalQty: i.packageQty + i.retailQty,
-                missedQty: i.missedQty,
-                returnedQty: i.returnedQty
+            const totalItems = Object.values(itemsMap).map(i => ({
+                ...i,
+                packedQty: i.isPackedSet ? i.packedQty : i.totalQty
             }));
 
-            const addresses = Object.values(u.addressesMap).map(a => ({
-                address: a.addressText,
-                batch_id: a.batch_id,
-                delivery_time_slot: a.delivery_time_slot || u.delivery_time_slot || null,
-                delivery_boy_id: a.delivery_boy_id,
-                status: a.status,
-                scheduleIds: a.scheduleIds,
-                retailOrderIds: a.retailOrderIds,
-                items: Object.values(a.itemsMap).map(i => ({
-                    id: i.product.id,
-                    name: i.product.name,
-                    hindi_name: i.product.hindi_name,
-                    unit: i.unit,
-                    packageQty: i.packageQty,
-                    retailQty: i.retailQty,
-                    totalQty: i.packageQty + i.retailQty,
-                    packedQty: i.isPackedSet ? i.packedQty : (i.packageQty + i.retailQty),
-                    isPackedSet: i.isPackedSet,
-                    missedQty: i.missedQty,
-                    returnedQty: i.returnedQty
-                }))
-            }));
+            const addresses = [{
+                address: addrStr,
+                batch_id: s.batch_id,
+                delivery_time_slot: slot,
+                delivery_boy_id: s.delivery_boy_id,
+                status: s.status,
+                scheduleIds: [s.id],
+                retailOrderIds: [],
+                items: totalItems
+            }];
 
-            return {
-                user: u.user,
-                hasPackage: u.hasPackage,
-                status: u.status,
-                batch_id: u.commonBatchId, // Overall batch if we want to default it
-                delivery_time_slot: u.delivery_time_slot || null,
-                allScheduleIds: u.allScheduleIds,
-                allRetailOrderIds: u.allRetailOrderIds,
+            ordersList.push({
+                uniqueId: `sched_${s.id}`,
+                order_id: s.id,
+                order_type: s.Subscription ? 'subscription' : 'water',
+                order_number: s.Subscription ? `SUB-${s.id}` : `WATER-${s.id}`,
+                user: user,
+                hasPackage: !!s.Subscription,
+                is_returned_serving: !!s.is_returned_serving,
+                status: s.status,
+                batch_id: s.batch_id,
+                delivery_time_slot: slot,
+                delivery_boy_id: s.delivery_boy_id,
+                allScheduleIds: [s.id],
+                allRetailOrderIds: [],
                 totalItems: totalItems,
                 addresses: addresses
-            };
-        });
+            });
+        }
+
+        // Process Retail Orders (Each retail order is a separate order entry)
+        for (const r of retailOrders) {
+            const user = r.User;
+            if (!user) continue;
+            const address = r.Address || defaultAddressMap[user?.id];
+            const addrStr = formatAddress(address);
+
+            const itemsMap = {};
+            const items = r.Items || [];
+            for (const item of items) {
+                if (!item.Product) continue;
+                const qty = parseFloat(item.quantity || 0);
+                const pQty = item.packed_qty !== null && item.packed_qty !== undefined ? parseFloat(item.packed_qty) : null;
+                itemsMap[item.Product.id] = {
+                    id: item.Product.id,
+                    name: item.Product.name,
+                    hindi_name: item.Product.hindi_name,
+                    unit: item.Product.unit,
+                    packageQty: 0,
+                    retailQty: qty,
+                    totalQty: qty,
+                    packedQty: pQty !== null ? pQty : qty,
+                    isPackedSet: pQty !== null,
+                    missedQty: 0,
+                    returnedQty: 0
+                };
+            }
+
+            const totalItems = Object.values(itemsMap);
+            const addresses = [{
+                address: addrStr,
+                batch_id: r.batch_id,
+                delivery_time_slot: r.delivery_time_slot || null,
+                delivery_boy_id: r.delivery_boy_id,
+                status: r.delivery_status,
+                scheduleIds: [],
+                retailOrderIds: [r.id],
+                items: totalItems
+            }];
+
+            ordersList.push({
+                uniqueId: `retail_${r.id}`,
+                order_id: r.id,
+                order_type: 'retail',
+                order_number: r.order_number || `RO-${r.id}`,
+                user: user,
+                hasPackage: false,
+                is_returned_serving: false,
+                status: r.delivery_status,
+                batch_id: r.batch_id,
+                delivery_time_slot: r.delivery_time_slot || null,
+                delivery_boy_id: r.delivery_boy_id,
+                allScheduleIds: [],
+                allRetailOrderIds: [r.id],
+                totalItems: totalItems,
+                addresses: addresses
+            });
+        }
+
+        const usersList = ordersList;
 
         res.status(200).json({ success: true, users: usersList, date: dateStr });
     } catch (error) {
@@ -2342,9 +2339,7 @@ export const adminReturnItem = async (req, res) => {
         // Carry-over logic for next day
         if (item.DeliverySchedule?.Subscription) {
             const schedule = item.DeliverySchedule;
-            const tomorrow = new Date(schedule.scheduled_date);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const nextDateStr = tomorrow.toISOString().split('T')[0];
+            const nextDateStr = getNextDayNotSunday(schedule.scheduled_date);
 
             let nextSchedule = await DeliverySchedule.findOne({
                 where: {
@@ -2522,10 +2517,10 @@ export const adminReturnOrder = async (req, res) => {
             const gap_days = Math.round(30 / schedule.Subscription.Package.services_per_month);
             let nextDate = new Date(lastSchedule.scheduled_date);
             nextDate.setDate(nextDate.getDate() + gap_days);
-            if (nextDate.getUTCDay() === 0) nextDate.setUTCDate(nextDate.getUTCDate() - 1);
+            const nextDateStr = ensureNotSunday(nextDate.toISOString().split('T')[0]);
             const newSchedule = await DeliverySchedule.create({
                 subscription_id: schedule.subscription_id,
-                scheduled_date: nextDate.toISOString().split('T')[0],
+                scheduled_date: nextDateStr,
                 status: 'pending',
                 is_returned_serving: true
             }, { transaction: t });

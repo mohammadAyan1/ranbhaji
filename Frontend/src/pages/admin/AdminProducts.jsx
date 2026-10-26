@@ -4,6 +4,7 @@ import api from "../../api/axios";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Download, Search, X } from "lucide-react";
 import * as XLSX from "xlsx";
+import useAuthStore from "../../store/authStore";
 
 const UNITS = ["gm", "ml", "piece"];
 
@@ -17,10 +18,12 @@ const emptyForm = {
 };
 
 const showKgToggle = (category, unit) =>
-  category !== "water" && unit === "gm";
+  (category || "").toLowerCase().trim() !== "water" && (unit || "").toLowerCase().trim() === "gm";
 
 export default function AdminProducts() {
   const topRef = useRef(null);
+  const { token, user: currentUser } = useAuthStore();
+  const isAdmin = !!(token && currentUser?.role === "admin");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
@@ -39,14 +42,24 @@ export default function AdminProducts() {
   // Tabs: "catalog" | "purchase" | "stock" | "logs"
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("tab") || "catalog";
+    const requested = params.get("tab");
+    if (!isAdmin) return "purchase";
+    return requested || "catalog";
   });
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab");
-    if (tab) setActiveTab(tab);
-  }, [location.search]);
+    if (!isAdmin) {
+      if (tab && tab !== "purchase") {
+        navigate("/login", { replace: true });
+      } else {
+        setActiveTab("purchase");
+      }
+    } else if (tab) {
+      setActiveTab(tab);
+    }
+  }, [location.search, isAdmin, navigate]);
 
   // Purchase Entry Form State
   const [demands, setDemands] = useState([]);
@@ -213,30 +226,40 @@ export default function AdminProducts() {
 
   useEffect(() => {
     fetchProducts();
-    fetchPurchaseLogs();
-    fetchStockSummary();
     fetchDemands();
-    fetchUnits();
-    fetchCategories();
-    fetchSubCategories();
-  }, []);
+    if (isAdmin) {
+      fetchPurchaseLogs();
+      fetchStockSummary();
+      fetchUnits();
+      fetchCategories();
+      fetchSubCategories();
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (activeTab === "logs") fetchPurchaseLogs();
-    if (activeTab === "stock") fetchStockSummary();
-    if (activeTab === "catalog") fetchProducts();
+    if (isAdmin && activeTab === "logs") fetchPurchaseLogs();
+    if (isAdmin && activeTab === "stock") fetchStockSummary();
+    if (isAdmin && activeTab === "catalog") fetchProducts();
     if (activeTab === "purchase") fetchDemands();
-  }, [activeTab, demandDate]);
+  }, [activeTab, demandDate, isAdmin]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab");
-    if (tab && tab !== activeTab) {
-      setActiveTab(tab);
-    } else if (!tab && activeTab !== "catalog") {
-      setActiveTab("catalog");
+    if (!isAdmin) {
+      if (tab && tab !== "purchase") {
+        navigate("/login", { replace: true });
+      } else if (activeTab !== "purchase") {
+        setActiveTab("purchase");
+      }
+    } else {
+      if (tab && tab !== activeTab) {
+        setActiveTab(tab);
+      } else if (!tab && activeTab !== "catalog") {
+        setActiveTab("catalog");
+      }
     }
-  }, [location.search]);
+  }, [location.search, isAdmin, activeTab, navigate]);
 
   // Catalog Form Change
   const handleFormChange = (field, value) => {
@@ -498,29 +521,37 @@ export default function AdminProducts() {
 
   const profit = marginPercentage;
 
-  const isWater = form.category === "water";
-  const isPiece = form.unit === "piece";
+  const isWater = (form.category || "").toLowerCase().trim() === "water";
+  const isPiece = (form.unit || "").toLowerCase().trim() === "piece" || (form.unit || "").toLowerCase().trim() === "pc";
   const priceLabel = isWater
-    ? "Price per Bottle (₹)"
+    ? "Price per Bottle / Ltr (₹)"
     : isPiece
       ? "Price per Piece (₹)"
-      : `Price / ${priceUnit === "kg" ? "kg" : "gm"} (₹)`;
+      : (form.unit && form.unit !== "gm" ? `Price / ${form.unit} (₹)` : `Price / ${priceUnit === "kg" ? "kg" : "gm"} (₹)`);
 
   // Helper for displaying quantity per unit (kg or count)
   const formatQuantity = (qtyInBase, unit) => {
     const qty = parseFloat(qtyInBase || 0);
-    if (unit === 'gm' || unit === 'ml') {
-      return `${(qty / 1000).toFixed(2)} ${unit === 'gm' ? 'kg' : 'L'}`;
+    const u = (unit || '').toLowerCase().trim();
+    if (u === 'gm' || u === 'g') {
+      return `${(qty / 1000).toFixed(2)} kg`;
     }
-    return `${qty.toFixed(0)} pcs`;
+    if (u === 'ml') {
+      return `${(qty / 1000).toFixed(2)} L`;
+    }
+    return `${qty.toFixed(0)} ${unit || 'pcs'}`;
   };
 
   const getPricePerKgDisplay = (pricePerBase, unit) => {
     const prc = parseFloat(pricePerBase || 0);
-    if (unit === 'gm' || unit === 'ml') {
-      return `₹${(prc * 1000).toFixed(2)} / ${unit === 'gm' ? 'kg' : 'L'}`;
+    const u = (unit || '').toLowerCase().trim();
+    if (u === 'gm' || u === 'g') {
+      return `₹${(prc * 1000).toFixed(2)} / kg`;
     }
-    return `₹${prc.toFixed(2)} / pc`;
+    if (u === 'ml') {
+      return `₹${(prc * 1000).toFixed(2)} / L`;
+    }
+    return `₹${prc.toFixed(2)} / ${unit || 'pc'}`;
   };
 
   // Export Stock Demands to Excel
@@ -545,10 +576,22 @@ export default function AdminProducts() {
       const pkgQty = d.total_package_qty || 0;
       const rtlQty = d.total_retail_qty || 0;
       const totalQty = pkgQty + rtlQty;
-      const isGm = d.unit === 'gm' || d.unit === 'ml';
+      const unitLower = (d.unit || "").toLowerCase().trim();
 
-      const displayQty = isGm ? parseFloat((totalQty / 1000).toFixed(3)) : totalQty;
-      const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : (d.unit || 'pcs');
+      // Show weight products in grams (gm) as requested
+      let displayQty = totalQty;
+      let displayUnit = d.unit || "pcs";
+
+      if (unitLower === "gm" || unitLower === "g") {
+        displayQty = totalQty;
+        displayUnit = "gm";
+      } else if (unitLower === "kg") {
+        displayQty = totalQty * 1000;
+        displayUnit = "gm";
+      } else if (unitLower === "ml") {
+        displayQty = totalQty;
+        displayUnit = "ml";
+      }
 
       const matchingProduct = products.find(p => p.id === d.id);
 
@@ -579,11 +622,11 @@ export default function AdminProducts() {
     const q = stockSearch.trim().toLowerCase();
     const itemsToExport = q
       ? nonWater.filter(p =>
-          (p.name || '').toLowerCase().includes(q) ||
-          String(p.id).includes(q) ||
-          (p.category || '').toLowerCase().includes(q) ||
-          (p.unit || '').toLowerCase().includes(q)
-        )
+        (p.name || '').toLowerCase().includes(q) ||
+        String(p.id).includes(q) ||
+        (p.category || '').toLowerCase().includes(q) ||
+        (p.unit || '').toLowerCase().includes(q)
+      )
       : nonWater;
 
     if (itemsToExport.length === 0) {
@@ -631,19 +674,19 @@ export default function AdminProducts() {
     const q = logSearch.trim().toLowerCase();
     const itemsToExport = q
       ? filtered.filter(log => {
-          const prodName = (log.Product?.name || '').toLowerCase();
-          const prodCat = (log.Product?.category || '').toLowerCase();
-          const prodUnit = (log.Product?.unit || '').toLowerCase();
-          const logId = String(log.id);
-          const prodId = String(log.product_id || log.Product?.id || '');
-          return (
-            prodName.includes(q) ||
-            prodCat.includes(q) ||
-            prodUnit.includes(q) ||
-            logId.includes(q) ||
-            prodId.includes(q)
-          );
-        })
+        const prodName = (log.Product?.name || '').toLowerCase();
+        const prodCat = (log.Product?.category || '').toLowerCase();
+        const prodUnit = (log.Product?.unit || '').toLowerCase();
+        const logId = String(log.id);
+        const prodId = String(log.product_id || log.Product?.id || '');
+        return (
+          prodName.includes(q) ||
+          prodCat.includes(q) ||
+          prodUnit.includes(q) ||
+          logId.includes(q) ||
+          prodId.includes(q)
+        );
+      })
       : filtered;
 
     if (itemsToExport.length === 0) {
@@ -700,7 +743,7 @@ export default function AdminProducts() {
             // { id: "retail_pricing", label: "Retail Pricing", icon: "🏷️" },
             { id: "stock", label: "Stock Inventory", icon: "📦" },
             { id: "logs", label: "Purchase Logs", icon: "📋" }
-          ].map(tab => (
+          ].filter(tab => isAdmin || tab.id === "purchase").map(tab => (
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setMsg(""); navigate(`?tab=${tab.id}`, { replace: true }); }}
@@ -1196,11 +1239,10 @@ export default function AdminProducts() {
                             type="button"
                             onClick={() => handleTogglePackageStatus(p)}
                             title={`Click to turn ${p.is_package_active === false ? "ON" : "OFF"} Package availability`}
-                            className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider transition-all shadow-sm ${
-                              p.is_package_active !== false
-                                ? "bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
-                                : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-300"
-                            }`}
+                            className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider transition-all shadow-sm ${p.is_package_active !== false
+                              ? "bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200"
+                              : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-300"
+                              }`}
                           >
                             {p.is_package_active !== false ? "📦 In Package: ON" : "🚫 In Package: OFF"}
                           </button>

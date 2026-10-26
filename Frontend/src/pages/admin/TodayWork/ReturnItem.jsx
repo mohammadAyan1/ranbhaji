@@ -88,6 +88,9 @@ export default function ReturnItem() {
     setIsRescheduled(true);
     const tmrw = new Date();
     tmrw.setDate(tmrw.getDate() + 1);
+    if (tmrw.getDay() === 0) {
+      tmrw.setDate(tmrw.getDate() + 1);
+    }
     setRescheduleDate(tmrw.toISOString().split('T')[0]);
     setIsWaste(false);
     setAddToStock(true);

@@ -7,7 +7,7 @@ import {
     assignDeliveryBoy, getDeliveryBoyHistory, adminReturnItem, boyReturnItem,
     adminReturnOrder, boyReturnOrder, getTodayIncoming
 } from "../controllers/delivery.controller.js";
-import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
+import { requireAuth, requireRole, optionalAuth } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
 
 const router = express.Router();
@@ -22,7 +22,7 @@ router.get("/delivery-history", requireAuth, requireRole(["user"]), getDeliveryH
 router.get("/today-incoming", requireAuth, requireRole(["user"]), getTodayIncoming);
 router.get("/admin/deliveries", requireAuth, requireRole(["admin"]), getCompletedDeliveries);
 router.get("/admin/returns", requireAuth, requireRole(["admin"]), getReturns);
-router.get("/admin/demands", requireAuth, requireRole(["admin"]), getProductDemands);
+router.get("/admin/demands", optionalAuth, getProductDemands);
 router.get("/admin/seasonal-selections", requireAuth, requireRole(["admin"]), getAdminSeasonalSelections);
 router.get("/admin/orders", requireAuth, requireRole(["admin"]), getAllOrdersForDate);
 router.put("/admin/orders/assign-batch", requireAuth, requireRole(["admin"]), assignBatch);

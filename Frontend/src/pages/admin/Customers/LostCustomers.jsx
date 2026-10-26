@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import api from "../../../api/axios";
-import { Users, Phone, Calendar, Wallet, Search } from "lucide-react";
+import { Users, Phone, Calendar, Wallet, Search, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
 
 export default function LostCustomers() {
   const [customers, setCustomers] = useState([]);
@@ -24,6 +25,36 @@ export default function LostCustomers() {
     return nameMatch || phoneMatch;
   });
 
+  const handleExportToExcel = () => {
+    const list = filteredCustomers.length > 0 ? filteredCustomers : customers;
+    if (!list || list.length === 0) {
+      alert("No customer data available to export.");
+      return;
+    }
+    const data = list.map((c, idx) => ({
+      "S.No.": idx + 1,
+      "Customer ID": c.id,
+      "Name": c.name || "Unknown",
+      "Phone": c.phone || "—",
+      "Wallet Balance (₹)": parseFloat(c.wallet_balance || 0).toFixed(2),
+      "Joined On": c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 14 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 16 }
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Lost Customers");
+    const today = new Date().toISOString().split("T")[0];
+    XLSX.writeFile(workbook, `Lost_Customers_${today}.xlsx`);
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-gray-100 gap-4">
@@ -31,7 +62,7 @@ export default function LostCustomers() {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Lost Customers</h1>
           <p className="text-gray-500 text-sm mt-1">Customers with 0 active package and 0 retail orders.</p>
         </div>
-        <div className="flex items-center gap-4 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -42,7 +73,15 @@ export default function LostCustomers() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="bg-red-50 text-red-700 px-4 py-2 rounded-xl font-bold border border-red-100 whitespace-nowrap">
+          <button
+            onClick={handleExportToExcel}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-xs shrink-0 cursor-pointer"
+            title="Download Excel"
+          >
+            <Download size={15} />
+            <span>Export to Excel</span>
+          </button>
+          <div className="bg-red-50 text-red-700 px-3.5 py-2 rounded-xl font-bold text-xs border border-red-100 whitespace-nowrap">
             Total: {filteredCustomers.length}
           </div>
         </div>

@@ -80,17 +80,17 @@ export default function AssignDeliveryBoy() {
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedUserIds(filteredReadyUsers.map(u => u.user.id));
+      setSelectedUserIds(filteredReadyUsers.map(u => u.uniqueId || u.user.id));
     } else {
       setSelectedUserIds([]);
     }
   };
 
-  const handleSelectUser = (userId) => {
-    if (selectedUserIds.includes(userId)) {
-      setSelectedUserIds(selectedUserIds.filter(id => id !== userId));
+  const handleSelectUser = (orderKey) => {
+    if (selectedUserIds.includes(orderKey)) {
+      setSelectedUserIds(selectedUserIds.filter(id => id !== orderKey));
     } else {
-      setSelectedUserIds([...selectedUserIds, userId]);
+      setSelectedUserIds([...selectedUserIds, orderKey]);
     }
   };
 
@@ -105,7 +105,8 @@ export default function AssignDeliveryBoy() {
     let allRetailOrderIds = [];
 
     readyUsers.forEach(u => {
-      if (selectedUserIds.includes(u.user.id)) {
+      const orderKey = u.uniqueId || u.user.id;
+      if (selectedUserIds.includes(orderKey)) {
         u.addresses.forEach(addr => {
           if (addr.status === 'ready_for_delivery' && addr.delivery_boy_id == null) {
             allScheduleIds = [...allScheduleIds, ...(addr.scheduleIds || [])];
@@ -134,8 +135,8 @@ export default function AssignDeliveryBoy() {
     }
   };
 
-  const toggleRow = (userId) => {
-    setExpandedId(expandedId === userId ? null : userId);
+  const toggleRow = (orderKey) => {
+    setExpandedId(expandedId === orderKey ? null : orderKey);
   };
 
   const formatQuantity = (qty, unit) => {
@@ -257,7 +258,7 @@ export default function AssignDeliveryBoy() {
                     <input 
                       type="checkbox" 
                       onChange={handleSelectAll} 
-                      checked={filteredReadyUsers.length > 0 && filteredReadyUsers.every(u => selectedUserIds.includes(u.user.id))}
+                      checked={filteredReadyUsers.length > 0 && filteredReadyUsers.every(u => selectedUserIds.includes(u.uniqueId || u.user.id))}
                       className="rounded border-gray-300 text-fresh-600 focus:ring-fresh-500 cursor-pointer w-4 h-4"
                     />
                   </th>
@@ -270,30 +271,44 @@ export default function AssignDeliveryBoy() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
-                {filteredReadyUsers.map((u) => (
-                  <React.Fragment key={u.user.id}>
+                {filteredReadyUsers.map((u) => {
+                  const orderKey = u.uniqueId || `${u.user.id}-${u.order_number || ''}`;
+                  return (
+                  <React.Fragment key={orderKey}>
                     <tr className="hover:bg-gray-50/50 transition-colors">
                       <td className="p-4 text-center">
                         <input 
                           type="checkbox" 
-                          checked={selectedUserIds.includes(u.user.id)}
-                          onChange={() => handleSelectUser(u.user.id)}
+                          checked={selectedUserIds.includes(orderKey)}
+                          onChange={() => handleSelectUser(orderKey)}
                           className="rounded border-gray-300 text-fresh-600 focus:ring-fresh-500 cursor-pointer w-4 h-4"
                         />
                       </td>
-                      <td className="p-4 text-gray-400 cursor-pointer text-center" onClick={() => toggleRow(u.user.id)}>
-                        {expandedId === u.user.id ? '▼' : '▶'}
+                      <td className="p-4 text-gray-400 cursor-pointer text-center" onClick={() => toggleRow(orderKey)}>
+                        {expandedId === orderKey ? '▼' : '▶'}
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
-                        <div className="font-semibold text-gray-900">{u.user.name}</div>
-                        <div className="text-xs text-gray-500">{u.user.phone}</div>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-gray-900">{u.user.name}</span>
+                          {u.order_number && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 font-mono font-bold">
+                              #{u.order_number}
+                            </span>
+                          )}
+                          {u.order_type && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${u.order_type === 'Subscription' ? 'bg-purple-50 text-purple-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                              {u.order_type}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">{u.user.phone}</div>
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
                         <span className={`px-2.5 py-1 text-xs rounded-md font-medium ${u.hasPackage ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
                           {u.hasPackage ? 'Yes' : 'No'}
                         </span>
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
                         {u.delivery_time_slot ? (
                           <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
                             ⏱ {u.delivery_time_slot}
@@ -302,7 +317,7 @@ export default function AssignDeliveryBoy() {
                           <span className="text-gray-400 text-xs italic">—</span>
                         )}
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
                         <span className="bg-gray-100 px-2.5 py-1 rounded-md text-xs font-medium text-gray-700">
                           {u.totalItems.length} items
                         </span>
@@ -314,7 +329,7 @@ export default function AssignDeliveryBoy() {
                       </td>
                     </tr>
 
-                    {expandedId === u.user.id && (
+                    {expandedId === orderKey && (
                       <tr className="bg-gray-50/30">
                         <td colSpan="7" className="p-0 border-l-2 border-fresh-500">
                           <div className="p-6">
@@ -411,7 +426,8 @@ export default function AssignDeliveryBoy() {
                       </tr>
                     )}
                   </React.Fragment>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

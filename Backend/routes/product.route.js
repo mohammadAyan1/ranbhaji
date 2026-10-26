@@ -10,12 +10,12 @@ router.get("/", optionalAuth, getProducts);
 router.post("/", requireAuth, requireRole(["admin"]), upload.single("image"), createProduct);
 router.put("/:id", requireAuth, requireRole(["admin"]), upload.single("image"), updateProduct);
 router.patch("/:id/package-status", requireAuth, requireRole(["admin"]), togglePackageStatus);
-router.put("/:id/retail-price", requireAuth, requireRole(["admin"]), updateRetailPrice);
+router.put("/:id/retail-price", optionalAuth, updateRetailPrice);
 router.get("/:id/purchase-history", requireAuth, requireRole(["admin"]), getProductPurchaseHistory);
 router.delete("/:id", requireAuth, requireRole(["admin"]), deleteProduct);
 
 // Purchase & Stock routes
-router.post("/purchase", requireAuth, requireRole(["admin"]), createPurchase);
+router.post("/purchase", optionalAuth, createPurchase);
 router.get("/purchases", requireAuth, requireRole(["admin"]), getPurchases);
 router.get("/stock-summary", requireAuth, requireRole(["admin"]), getStockSummary);
 

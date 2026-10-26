@@ -142,6 +142,7 @@ function App() {
         <Route element={<ProtectedRoute roles={["admin"]}><Layout /></ProtectedRoute>}>
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/products" element={<AdminProducts />} />
+          <Route path="/log-purchase" element={<AdminProducts />} />
           <Route path="/admin/packages" element={<AdminPackages />} />
           <Route path="/admin/production" element={<AdminProduction />} />
           <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />

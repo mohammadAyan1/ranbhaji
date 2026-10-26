@@ -68,25 +68,25 @@ export default function ReadyForDeliver() {
     fetchOrders();
   }, [date]);
 
-  const handlePackedQtyChange = (userId, addressIdx, itemId, val) => {
+  const handlePackedQtyChange = (orderKey, addressIdx, itemId, val) => {
     setPackedQuantities(prev => ({
       ...prev,
-      [`${userId}-${addressIdx}-${itemId}`]: val
+      [`${orderKey}-${addressIdx}-${itemId}`]: val
     }));
   };
 
-  const handleCheckChange = (userId, addressIdx, itemId, checked) => {
+  const handleCheckChange = (orderKey, addressIdx, itemId, checked) => {
     setUncheckedItems(prev => ({
       ...prev,
-      [`${userId}-${addressIdx}-${itemId}`]: !checked
+      [`${orderKey}-${addressIdx}-${itemId}`]: !checked
     }));
   };
 
-  const handleMarkReady = async (userId, addressIdx, itemsList, scheduleIds, retailOrderIds) => {
+  const handleMarkReady = async (orderKey, addressIdx, itemsList, scheduleIds, retailOrderIds) => {
     try {
       const itemsPayload = itemsList.map(item => {
-        const isUnchecked = uncheckedItems[`${userId}-${addressIdx}-${item.id}`];
-        const packedQty = packedQuantities[`${userId}-${addressIdx}-${item.id}`] ?? item.packedQty ?? 0;
+        const isUnchecked = uncheckedItems[`${orderKey}-${addressIdx}-${item.id}`];
+        const packedQty = packedQuantities[`${orderKey}-${addressIdx}-${item.id}`] ?? item.packedQty ?? 0;
         return {
           id: item.id,
           packedQty: packedQty,
@@ -112,8 +112,8 @@ export default function ReadyForDeliver() {
     }
   };
 
-  const toggleRow = (userId) => {
-    setExpandedId(expandedId === userId ? null : userId);
+  const toggleRow = (orderKey) => {
+    setExpandedId(expandedId === orderKey ? null : orderKey);
   };
 
   const formatQuantity = (qty, unit) => {
@@ -169,7 +169,7 @@ export default function ReadyForDeliver() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Ready For Delivery (Packaging)</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Dispatch</h2>
           <p className="text-gray-500 text-sm">Verify and pack batch-assigned orders</p>
         </div>
         <div className="w-full lg:w-auto flex flex-wrap items-center gap-3">
@@ -238,22 +238,36 @@ export default function ReadyForDeliver() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
-                {filteredAssignedUsers.map((u) => (
-                  <React.Fragment key={u.user.id}>
+                {filteredAssignedUsers.map((u) => {
+                  const orderKey = u.uniqueId || `${u.user.id}-${u.order_number || ''}`;
+                  return (
+                  <React.Fragment key={orderKey}>
                     <tr className="hover:bg-gray-50/50 transition-colors">
-                      <td className="p-4 text-gray-400 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
-                        {expandedId === u.user.id ? '▼' : '▶'}
+                      <td className="p-4 text-gray-400 cursor-pointer" onClick={() => toggleRow(orderKey)}>
+                        {expandedId === orderKey ? '▼' : '▶'}
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
-                        <div className="font-semibold text-gray-900">{u.user.name}</div>
-                        <div className="text-xs text-gray-500">{u.user.phone}</div>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-gray-900">{u.user.name}</span>
+                          {u.order_number && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 font-mono font-bold">
+                              #{u.order_number}
+                            </span>
+                          )}
+                          {u.order_type && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${u.order_type === 'Subscription' ? 'bg-purple-50 text-purple-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                              {u.order_type}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">{u.user.phone}</div>
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
                         <span className={`px-2.5 py-1 text-xs rounded-md font-medium ${u.hasPackage ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-600'}`}>
                           {u.hasPackage ? 'Yes' : 'No'}
                         </span>
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
                         {u.delivery_time_slot ? (
                           <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
                             ⏱ {u.delivery_time_slot}
@@ -262,7 +276,7 @@ export default function ReadyForDeliver() {
                           <span className="text-gray-400 text-xs italic">—</span>
                         )}
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(u.user.id)}>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
                         <span className="bg-gray-100 px-2.5 py-1 rounded-md text-xs font-medium text-gray-700">
                           {u.totalItems.length} items
                         </span>
@@ -274,7 +288,7 @@ export default function ReadyForDeliver() {
                       </td>
                     </tr>
 
-                    {expandedId === u.user.id && (
+                    {expandedId === orderKey && (
                       <tr className="bg-gray-50/30">
                         <td colSpan="6" className="p-0 border-l-2 border-fresh-500">
                           <div className="p-6">
@@ -327,13 +341,13 @@ export default function ReadyForDeliver() {
                                           </thead>
                                           <tbody className="divide-y divide-gray-50">
                                             {addrGrp.items.map((item, i) => (
-                                              <tr key={i} className={`hover:bg-gray-50 transition-colors text-gray-700 ${uncheckedItems[`${u.user.id}-${idx}-${item.id}`] ? 'opacity-50 line-through' : ''}`}>
+                                              <tr key={i} className={`hover:bg-gray-50 transition-colors text-gray-700 ${uncheckedItems[`${orderKey}-${idx}-${item.id}`] ? 'opacity-50 line-through' : ''}`}>
                                                 <td className="p-3 pl-4">
                                                   <input
                                                     type="checkbox"
                                                     className="w-4 h-4 text-fresh-500 bg-gray-100 border-gray-300 rounded focus:ring-fresh-500 cursor-pointer"
-                                                    checked={!uncheckedItems[`${u.user.id}-${idx}-${item.id}`]}
-                                                    onChange={(e) => handleCheckChange(u.user.id, idx, item.id, e.target.checked)}
+                                                    checked={!uncheckedItems[`${orderKey}-${idx}-${item.id}`]}
+                                                    onChange={(e) => handleCheckChange(orderKey, idx, item.id, e.target.checked)}
                                                   />
                                                 </td>
                                                 <td className="p-3 font-medium text-gray-900">
@@ -352,12 +366,12 @@ export default function ReadyForDeliver() {
                                                   <input
                                                     type="number"
                                                     className="input-field py-1 px-2 text-sm w-20 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-fresh-500"
-                                                    value={packedQuantities[`${u.user.id}-${idx}-${item.id}`] ?? (item.packedQty || 0)}
-                                                    onChange={(e) => handlePackedQtyChange(u.user.id, idx, item.id, e.target.value)}
+                                                    value={packedQuantities[`${orderKey}-${idx}-${item.id}`] ?? (item.packedQty || 0)}
+                                                    onChange={(e) => handlePackedQtyChange(orderKey, idx, item.id, e.target.value)}
                                                   />
                                                   <button
                                                     title="Auto-fill total required"
-                                                    onClick={() => handlePackedQtyChange(u.user.id, idx, item.id, item.totalQty)}
+                                                    onClick={() => handlePackedQtyChange(orderKey, idx, item.id, item.totalQty)}
                                                     className="bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md px-2 py-1 text-xs font-medium transition-colors border border-blue-100"
                                                   >
                                                     Fill
@@ -372,7 +386,7 @@ export default function ReadyForDeliver() {
 
                                     <div className="mt-5 flex justify-end">
                                       <button
-                                        onClick={() => handleMarkReady(u.user.id, idx, addrGrp.items, addrGrp.scheduleIds, addrGrp.retailOrderIds)}
+                                        onClick={() => handleMarkReady(orderKey, idx, addrGrp.items, addrGrp.scheduleIds, addrGrp.retailOrderIds)}
                                         className="btn-primary py-2 px-6 text-sm font-semibold"
                                       >
                                         {addrGrp.status === 'ready_for_delivery' ? 'Update Ready for Delivery' : 'Mark Ready for Delivery'}
@@ -387,7 +401,8 @@ export default function ReadyForDeliver() {
                       </tr>
                     )}
                   </React.Fragment>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
