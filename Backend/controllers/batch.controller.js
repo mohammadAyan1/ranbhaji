@@ -312,6 +312,13 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
         }
     });
 
+    Object.defineProperty(demandMap, 'totalBuckets', {
+        value: sortedUserIds.length,
+        enumerable: false,
+        writable: true,
+        configurable: true
+    });
+
     batchDemandCache.set(cacheKey, { data: demandMap, timestamp: Date.now() });
     return demandMap;
 };

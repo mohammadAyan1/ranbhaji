@@ -18,6 +18,7 @@ const WorkerDashboard = () => {
     const [loading, setLoading] = useState(false);
     const [dryingModeSelection, setDryingModeSelection] = useState('machine');
     const [taskBuckets, setTaskBuckets] = useState([]);
+    const [totalBatchBuckets, setTotalBatchBuckets] = useState(0);
     const currentTaskRef = useRef(null);
 
     const timerRef = useRef(null);
@@ -167,10 +168,12 @@ const WorkerDashboard = () => {
             getTaskBuckets(currentTask.id).then(res => {
                 if (res.success) {
                     setTaskBuckets(res.buckets || []);
+                    setTotalBatchBuckets(res.totalBuckets || res.total_buckets || (res.buckets || []).length);
                 }
             }).catch(console.error);
         } else {
             setTaskBuckets([]);
+            setTotalBatchBuckets(0);
         }
     }, [currentTask?.id, currentTask?.stage]);
 
@@ -460,13 +463,18 @@ const WorkerDashboard = () => {
                                 )}
                                 {currentTask.stage === 'BUCKET_ARRANGE' ? (
                                     <div className="w-full max-w-md bg-green-50 border border-green-200 p-4 rounded-lg mt-4 mb-4">
-                                        <h3 className="font-bold text-green-800 mb-2">User Bucket List (Demands)</h3>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h3 className="font-bold text-green-800">User Bucket List</h3>
+                                            <span className="text-xs bg-green-200 text-green-900 font-bold px-2 py-1 rounded-md">
+                                                {taskBuckets.length} of {totalBatchBuckets || taskBuckets.length} Total Buckets
+                                            </span>
+                                        </div>
                                         {taskBuckets.length > 0 ? (
                                             <ul className="list-none pl-2 text-left text-sm text-green-900 font-medium space-y-2">
                                                 {taskBuckets.map((bucket, idx) => (
                                                     <li key={idx} className="flex items-center">
-                                                        <span className="font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded-full mr-2 min-w-[30px] text-center">
-                                                            #{idx + 1}
+                                                        <span className="font-bold text-green-800 bg-green-200 px-2 py-0.5 rounded-full mr-2 min-w-[35px] text-center">
+                                                            #{bucket.sortId || idx + 1}
                                                         </span>
                                                         <span>{bucket.userName}: {bucket.quantity}g</span>
                                                     </li>

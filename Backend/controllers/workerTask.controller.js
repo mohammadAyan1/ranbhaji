@@ -912,7 +912,28 @@ export const getTaskBuckets = async (req, res) => {
                 .sort((a, b) => a.sortId - b.sortId);
         }
 
-        res.status(200).json({ success: true, buckets });
+        // Total buckets in this batch for today (total active orders/customers in batch)
+        let totalBuckets = demandMap?.totalBuckets || 0;
+        if (!totalBuckets && demandMap) {
+            let maxSortId = 0;
+            const uniqueUsers = new Set();
+            Object.values(demandMap).forEach(prod => {
+                if (prod && prod.usersMap) {
+                    Object.values(prod.usersMap).forEach(u => {
+                        if (u.userName) uniqueUsers.add(u.userName);
+                        if (u.sortId && u.sortId > maxSortId) maxSortId = u.sortId;
+                    });
+                }
+            });
+            totalBuckets = Math.max(uniqueUsers.size, maxSortId, buckets.length);
+        }
+
+        res.status(200).json({
+            success: true,
+            totalBuckets,
+            total_buckets: totalBuckets,
+            buckets
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
