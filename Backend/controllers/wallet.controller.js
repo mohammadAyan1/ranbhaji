@@ -1,5 +1,5 @@
 import { sequelize } from "../confiq/db.js";
-import { User, WalletTransaction, CreditLog, Subscription, DeliverySchedule, Package, WaterSubscription, Address } from "../models/index.js";
+import { User, WalletTransaction, CreditLog, Subscription, DeliverySchedule, Package, WaterSubscription, Address, Product } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcryptjs";
 
@@ -142,7 +142,7 @@ export const getUserSubscriptions = async (req, res) => {
             attributes: { exclude: ['password_hash'] },
             include: [
                 { model: Subscription, include: [{ model: Package }, { model: Address }] },
-                { model: WaterSubscription, include: [{ model: Address }] }
+                { model: WaterSubscription, include: [{ model: Address }, { model: Product, as: 'Product' }] }
             ]
         });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });

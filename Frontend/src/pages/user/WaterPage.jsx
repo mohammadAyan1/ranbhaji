@@ -1033,9 +1033,19 @@ export default function WaterPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-lg font-bold text-gray-900 capitalize">{w.water_type} Water</h3>
-                    <span className={`badge ${statusBadge(w.status)}`}>{w.status}</span>
-                    <span className="badge badge-gray capitalize">{w.type}</span>
+                    {w.Product?.image_url && (
+                      <img src={w.Product.image_url} alt={w.product_name || w.water_type} className="w-10 h-10 object-cover rounded-lg border border-gray-200" />
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-lg font-bold text-gray-900">{w.product_name || w.Product?.name || `${w.water_type} Water`}</h3>
+                        <span className={`badge ${statusBadge(w.status)}`}>{w.status}</span>
+                        <span className="badge badge-gray capitalize">{w.type}</span>
+                      </div>
+                      {w.Product?.hindi_name && (
+                        <p className="text-xs text-gray-500 font-medium">{w.Product.hindi_name}</p>
+                      )}
+                    </div>
                   </div>
                   <p className="text-gray-600 text-sm capitalize">{w.bottles_per_delivery || 1} × {w.container} bottle ({parseFloat(w.capacity_liters || 1)}L) · {w.frequency} · ₹{w.price_per_bottle}/bottle</p>
 

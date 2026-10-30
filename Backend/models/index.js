@@ -246,6 +246,7 @@ const PauseLog = sequelize.define('PauseLog', {
 // 13. WATER_SUBSCRIPTIONS
 const WaterSubscription = sequelize.define('WaterSubscription', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  product_id: { type: DataTypes.INTEGER, allowNull: true },
   water_type: { type: DataTypes.ENUM('health', 'miracle') },
   container: { type: DataTypes.ENUM('glass', 'plastic') },
   capacity_liters: { type: DataTypes.DECIMAL(10, 2), defaultValue: 2 },
@@ -407,6 +408,8 @@ WaterSubscription.hasMany(PauseLog, { foreignKey: 'water_subscription_id' });
 // WaterSubscriptions
 WaterSubscription.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(WaterSubscription, { foreignKey: 'user_id' });
+WaterSubscription.belongsTo(Product, { foreignKey: 'product_id', as: 'Product' });
+Product.hasMany(WaterSubscription, { foreignKey: 'product_id', as: 'WaterSubscriptions' });
 
 // UserWaterDiscounts
 UserWaterDiscount.belongsTo(User, { foreignKey: 'user_id' });

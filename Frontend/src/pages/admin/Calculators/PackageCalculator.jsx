@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Trash2, Search, X } from "lucide-react";
 import api from "../../../api/axios";
 
 export default function PackageCalculator() {
+  const formTopRef = useRef(null);
   const [products, setProducts] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -119,14 +120,14 @@ export default function PackageCalculator() {
     }
     const draft = shareDraft;
     let text = `Hello! Check out our *${draft.name}* package draft at Rambhaji.\n\n`;
-    text += `*Type:* ${draft.packageType || 'custom'}\n`;
+    text += `*Type:* ${draft.draft_type || draft.packageType || 'custom'}\n`;
     text += `*Persons:* ${draft.num_persons}${draft.num_persons_max ? `-${draft.num_persons_max}` : ''}\n`;
     text += `*Deliveries per month:* ${draft.services_per_month}\n`;
     text += `*Price:* ₹${parseFloat(draft.calculated_price).toFixed(2)}/month\n\n`;
     
     const fixedItems = draft.Items?.filter(i => i.is_fixed) || [];
     if (fixedItems.length > 0) {
-      text += `*Fixed Items:*\n`;
+      text += `*Fixed Items (Included in every delivery):*\n`;
       fixedItems.forEach(fi => {
         const p = products.find(prod => prod.id === fi.product_id);
         text += `- ${p?.name || 'Product'} (${fi.qty_gm}g)\n`;
@@ -135,12 +136,36 @@ export default function PackageCalculator() {
     }
     
     const seasonalItems = draft.Items?.filter(i => i.is_seasonal) || [];
-    if (seasonalItems.length > 0) {
-      text += `*Seasonal Pool (Pick ${draft.max_seasonal_count || 0}):*\n`;
-      seasonalItems.forEach(si => {
-        const p = products.find(prod => prod.id === si.product_id);
-        text += `- ${p?.name || 'Product'}\n`;
-      });
+    let seasonalQtys = draft.seasonal_quantities;
+    if (typeof seasonalQtys === 'string') {
+      try { seasonalQtys = JSON.parse(seasonalQtys); } catch (e) {}
+    }
+
+    const pickCount = draft.max_seasonal_count || (Array.isArray(seasonalQtys) ? seasonalQtys.length : 0);
+
+    if (seasonalItems.length > 0 || (Array.isArray(seasonalQtys) && seasonalQtys.length > 0)) {
+      text += `*Seasonal Items (Pick ${pickCount} items per delivery):*\n`;
+
+      if (Array.isArray(seasonalQtys) && seasonalQtys.length > 0) {
+        const totalGm = seasonalQtys.reduce((sum, q) => sum + (parseFloat(q) || 0), 0);
+        const allEqual = seasonalQtys.length > 1 && seasonalQtys.every(q => q === seasonalQtys[0]);
+        if (allEqual) {
+          text += `*Quantity:* ${seasonalQtys[0]}g each (Total: ${totalGm}g)\n`;
+        } else if (seasonalQtys.length === 1) {
+          text += `*Quantity:* ${seasonalQtys[0]}g\n`;
+        } else {
+          text += `*Quantity:* ${seasonalQtys.map((q, idx) => `Pick ${idx + 1}: ${q}g`).join(' | ')} (Total: ${totalGm}g)\n`;
+        }
+      }
+
+      if (seasonalItems.length > 0) {
+        text += `*Available Seasonal Options:*\n`;
+        seasonalItems.forEach(si => {
+          const p = products.find(prod => prod.id === si.product_id);
+          text += `- ${p?.name || 'Product'}\n`;
+        });
+      }
+      text += `\n`;
     }
     
     const url = `https://wa.me/91${sharePhone}?text=${encodeURIComponent(text)}`;
@@ -266,7 +291,18 @@ export default function PackageCalculator() {
     // Seasonal Pool mapping
     const draftSeasonal = draft.Items?.filter(i => i.is_seasonal).map(i => i.product_id) || [];
     setSeasonalPool(draftSeasonal);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Smooth scroll to top of form
+    setTimeout(() => {
+      if (formTopRef.current) {
+        formTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      const scrollParent = formTopRef.current?.closest('.overflow-auto') || formTopRef.current?.closest('main');
+      if (scrollParent) {
+        scrollParent.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
   };
 
   // Save Draft package simulation
@@ -382,7 +418,7 @@ export default function PackageCalculator() {
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading products...</div>;
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
+    <div ref={formTopRef} className="space-y-6 animate-fade-in pb-12">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="page-header">Package Calculator 🧮</h1>
@@ -401,6 +437,21 @@ export default function PackageCalculator() {
             : "bg-red-900/30 text-red-600 border-red-700/50"
           }`}>
           {msg}
+        </div>
+      )}
+
+      {editingDraftId && (
+        <div className="bg-fresh-50 border border-fresh-300 text-fresh-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between shadow-xs animate-fade-in">
+          <span className="font-semibold flex items-center gap-2">
+            ✏️ Currently Editing Draft: <span className="underline text-fresh-900">{draftName || "Draft #" + editingDraftId}</span>
+          </span>
+          <button
+            type="button"
+            onClick={clearCalculator}
+            className="text-xs text-red-600 hover:text-red-700 font-bold bg-white px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors shadow-xs"
+          >
+            Cancel Edit
+          </button>
         </div>
       )}
 

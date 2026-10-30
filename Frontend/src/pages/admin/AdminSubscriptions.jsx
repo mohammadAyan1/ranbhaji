@@ -23,7 +23,7 @@ export default function AdminSubscriptions() {
             ...w, 
             User: u, 
             isWater: true, 
-            Package: { name: `${w.water_type} Water (${w.container})` } 
+            Package: { name: w.Product?.name || w.product_name || `${w.water_type} Water (${w.container})` } 
           }));
         } catch (_) {}
       }));

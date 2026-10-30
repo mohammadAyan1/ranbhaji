@@ -68,7 +68,8 @@ export const getTodayDeliveries = async (req, res) => {
                     model: WaterSubscription,
                     include: [
                         { model: User, attributes: ['id', 'name', 'phone'] },
-                        { model: Address }
+                        { model: Address },
+                        { model: Product, as: 'Product' }
                     ]
                 }
             ]
@@ -107,7 +108,7 @@ export const getTodayDeliveries = async (req, res) => {
                 }
             } else if (sched.WaterSubscription) {
                 user = sched.WaterSubscription.User;
-                package_name = `${sched.WaterSubscription.water_type} Water (${sched.WaterSubscription.container})`;
+                package_name = sched.WaterSubscription.Product ? sched.WaterSubscription.Product.name : `${sched.WaterSubscription.water_type} Water (${sched.WaterSubscription.container})`;
                 if (sched.WaterSubscription.Address) {
                     const addr = sched.WaterSubscription.Address;
                     address_id = addr.id;
@@ -977,7 +978,30 @@ export const getCompletedDeliveries = async (req, res) => {
             delivery.delivery_time_slot = delivery.delivery_time_slot || delivery.Subscription?.delivery_time_slot || null;
         }
 
-        res.status(200).json({ success: true, deliveries: deliveriesData });
+        // Fetch all distinct delivery boys who have completed at least one delivery
+        const deliveredBoysRaw = await DeliverySchedule.findAll({
+            where: { status: 'delivered', delivery_boy_id: { [Op.ne]: null } },
+            attributes: [[sequelize.fn('DISTINCT', sequelize.col('delivery_boy_id')), 'delivery_boy_id']],
+            raw: true
+        });
+        const deliveredBoyIds = deliveredBoysRaw.map(r => r.delivery_boy_id).filter(Boolean);
+
+        let deliveryBoys = [];
+        if (deliveredBoyIds.length > 0) {
+            deliveryBoys = await User.findAll({
+                where: { id: deliveredBoyIds },
+                attributes: ['id', 'name', 'phone'],
+                order: [['name', 'ASC']]
+            });
+        } else {
+            deliveryBoys = await User.findAll({
+                where: { role: 'delivery' },
+                attributes: ['id', 'name', 'phone'],
+                order: [['name', 'ASC']]
+            });
+        }
+
+        res.status(200).json({ success: true, deliveries: deliveriesData, deliveryBoys });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

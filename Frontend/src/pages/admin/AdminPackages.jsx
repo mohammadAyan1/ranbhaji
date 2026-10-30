@@ -93,10 +93,33 @@ export default function AdminPackages() {
     }
 
     if (pkg.SeasonalPool?.length > 0) {
-      text += `*Seasonal Pool (Pick ${pkg.SeasonalConfig?.max_select_count || 0}):*\n`;
+      const pickCount = pkg.SeasonalConfig?.max_select_count || 0;
+      text += `*Seasonal Items (Pick ${pickCount} items per delivery):*\n`;
+
+      let seasonalQtys = pkg.SeasonalConfig?.seasonal_quantities;
+      if (typeof seasonalQtys === 'string') {
+        try { seasonalQtys = JSON.parse(seasonalQtys); } catch (e) {}
+      }
+
+      if (Array.isArray(seasonalQtys) && seasonalQtys.length > 0) {
+        const totalGm = seasonalQtys.reduce((sum, q) => sum + (parseFloat(q) || 0), 0);
+        const allEqual = seasonalQtys.length > 1 && seasonalQtys.every(q => q === seasonalQtys[0]);
+        if (allEqual) {
+          text += `*Quantity:* ${seasonalQtys[0]}g each (Total: ${totalGm}g)\n`;
+        } else if (seasonalQtys.length === 1) {
+          text += `*Quantity:* ${seasonalQtys[0]}g\n`;
+        } else {
+          text += `*Quantity:* ${seasonalQtys.map((q, idx) => `Pick ${idx + 1}: ${q}g`).join(' | ')} (Total: ${totalGm}g)\n`;
+        }
+      } else if (pkg.SeasonalConfig?.default_seasonal_qty_gm) {
+        text += `*Quantity:* ${pkg.SeasonalConfig.default_seasonal_qty_gm}g each\n`;
+      }
+
+      text += `*Available Seasonal Options:*\n`;
       pkg.SeasonalPool.forEach(sp => {
         text += `- ${sp.Product?.name}\n`;
       });
+      text += `\n`;
     }
 
     const url = `https://wa.me/91${sharePhone}?text=${encodeURIComponent(text)}`;

@@ -3,6 +3,8 @@ import api from "../../api/axios";
 
 export default function AdminDeliveries() {
   const [deliveries, setDeliveries] = useState([]);
+  const [deliveryBoys, setDeliveryBoys] = useState([]);
+  const [selectedDeliveryBoy, setSelectedDeliveryBoy] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState(null); // for zoom view modal
 
@@ -26,18 +28,42 @@ export default function AdminDeliveries() {
   // Accordion State
   const [expandedId, setExpandedId] = useState(null);
 
-  const fetchDeliveries = () => {
+  const fetchDeliveries = (overrides = {}) => {
     setLoading(true);
+    const activeOrderId = overrides.orderId !== undefined ? overrides.orderId : orderId;
+    const activeFromDate = overrides.fromDate !== undefined ? overrides.fromDate : fromDate;
+    const activeToDate = overrides.toDate !== undefined ? overrides.toDate : toDate;
+    const activeAllTime = overrides.allTime !== undefined ? overrides.allTime : allTime;
+    const activeDeliveryBoy = overrides.deliveryBoyId !== undefined ? overrides.deliveryBoyId : selectedDeliveryBoy;
+
     let params = {};
-    if (orderId) params.order_id = orderId;
-    if (fromDate && toDate) {
-      params.from_date = fromDate;
-      params.to_date = toDate;
+    if (activeOrderId) params.order_id = activeOrderId;
+    if (activeFromDate && activeToDate) {
+      params.from_date = activeFromDate;
+      params.to_date = activeToDate;
     }
-    if (allTime) params.all_time = true;
+    if (activeAllTime) params.all_time = true;
+    if (activeDeliveryBoy) params.delivery_boy_id = activeDeliveryBoy;
 
     api.get("/admin/deliveries", { params })
-      .then(r => setDeliveries(r.data.deliveries || []))
+      .then(r => {
+        setDeliveries(r.data.deliveries || []);
+        if (r.data.deliveryBoys && r.data.deliveryBoys.length > 0) {
+          setDeliveryBoys(r.data.deliveryBoys);
+        } else {
+          // Fallback: extract distinct delivery boys from loaded deliveries
+          const distinct = {};
+          (r.data.deliveries || []).forEach(d => {
+            if (d.DeliveryBoy && d.DeliveryBoy.id) {
+              distinct[d.DeliveryBoy.id] = d.DeliveryBoy;
+            }
+          });
+          const list = Object.values(distinct);
+          if (list.length > 0) {
+            setDeliveryBoys(prev => prev.length > 0 ? prev : list);
+          }
+        }
+      })
       .catch(err => setMsg(`❌ Failed to fetch deliveries: ${err.message}`))
       .finally(() => setLoading(false));
   };
@@ -45,6 +71,25 @@ export default function AdminDeliveries() {
   useEffect(() => {
     fetchDeliveries();
   }, []);
+
+  const handleDeliveryBoyChange = (e) => {
+    const boyId = e.target.value;
+    setSelectedDeliveryBoy(boyId);
+    fetchDeliveries({ deliveryBoyId: boyId });
+  };
+
+  const handleToggleAllTime = () => {
+    const nextVal = !allTime;
+    setAllTime(nextVal);
+    if (nextVal) {
+      setOrderId("");
+      setFromDate("");
+      setToDate("");
+      fetchDeliveries({ allTime: true, orderId: "", fromDate: "", toDate: "" });
+    } else {
+      fetchDeliveries({ allTime: false });
+    }
+  };
 
   useEffect(() => {
     if (!selectedPhoto) return;
@@ -98,8 +143,6 @@ export default function AdminDeliveries() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading delivery logs...</div>;
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -108,29 +151,63 @@ export default function AdminDeliveries() {
       </div>
 
       <div className="card p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           <div>
             <label className="label">Order ID</label>
-            <input type="text" className="input" placeholder="e.g. 102" value={orderId} onChange={e => setOrderId(e.target.value)} />
+            <input 
+              type="text" 
+              className="input" 
+              placeholder="e.g. 102" 
+              value={orderId} 
+              onChange={e => setOrderId(e.target.value)} 
+            />
+          </div>
+          <div>
+            <label className="label">Delivery Boy</label>
+            <select
+              className="input cursor-pointer"
+              value={selectedDeliveryBoy}
+              onChange={handleDeliveryBoyChange}
+            >
+              <option value="">All Delivery Boys</option>
+              {deliveryBoys.map(boy => (
+                <option key={boy.id} value={boy.id}>
+                  {boy.name} {boy.phone ? `(${boy.phone})` : ""}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="label">From Date</label>
-            <input type="date" className="input" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={allTime || orderId} />
+            <input 
+              type="date" 
+              className="input" 
+              value={fromDate} 
+              onChange={e => setFromDate(e.target.value)} 
+              disabled={allTime || orderId} 
+            />
           </div>
           <div>
             <label className="label">To Date</label>
-            <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
+            <input 
+              type="date" 
+              className="input" 
+              value={toDate} 
+              onChange={e => setToDate(e.target.value)} 
+              disabled={allTime || orderId} 
+            />
           </div>
           <div className="flex gap-2">
-            <button className="btn-primary flex-1" onClick={fetchDeliveries}>Filter</button>
+            <button 
+              className="btn-primary flex-1" 
+              onClick={() => fetchDeliveries()}
+              disabled={loading}
+            >
+              Filter
+            </button>
             <button
-              className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`}
-              onClick={() => {
-                setAllTime(!allTime);
-                setOrderId("");
-                setFromDate("");
-                setToDate("");
-              }}
+              className={`btn flex-1 transition-colors ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              onClick={handleToggleAllTime}
             >
               {allTime ? "All Time: ON" : "All Time"}
             </button>
@@ -174,7 +251,15 @@ export default function AdminDeliveries() {
 
       {/* Table */}
       <div className="card">
-        {deliveries.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-500 font-medium">
+            <svg className="animate-spin h-6 w-6 mr-3 text-fresh-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Loading deliveries...
+          </div>
+        ) : deliveries.length === 0 ? (
           <p className="text-center text-gray-500 py-12">No completed deliveries found.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -193,7 +278,7 @@ export default function AdminDeliveries() {
                 {deliveries.map(d => {
                   const customer = d.Subscription?.User || d.WaterSubscription?.User || {};
                   const packageName = d.Subscription?.Package?.name ||
-                    (d.WaterSubscription ? `${d.WaterSubscription.water_type} Water (${d.WaterSubscription.container})` : "Water Plan");
+                    (d.WaterSubscription ? (d.WaterSubscription.Product?.name || d.WaterSubscription.product_name || `${d.WaterSubscription.water_type} Water (${d.WaterSubscription.container})`) : "Water Plan");
 
                   const formattedDate = d.actual_delivery_date
                     ? new Date(d.actual_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })

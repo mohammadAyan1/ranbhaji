@@ -643,18 +643,30 @@ export const startProcess = async (req, res) => {
 // API: GET /api/production/detailed-worker-logs
 export const getDetailedWorkerLogs = async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const { from_date, to_date, worker_name } = req.query;
 
-        const todayStart = new Date(today + 'T00:00:00.000Z');
+        let whereClause = {};
 
-        // Fetch all active tasks from today or pending/running tasks
+        if (from_date && to_date) {
+            whereClause[Op.or] = [
+                { created_at: { [Op.between]: [`${from_date} 00:00:00`, `${to_date} 23:59:59`] } },
+                { started_at: { [Op.between]: [`${from_date} 00:00:00`, `${to_date} 23:59:59`] } }
+            ];
+        } else if (from_date) {
+            whereClause[Op.or] = [
+                { created_at: { [Op.gte]: `${from_date} 00:00:00` } },
+                { started_at: { [Op.gte]: `${from_date} 00:00:00` } }
+            ];
+        } else if (to_date) {
+            whereClause[Op.or] = [
+                { created_at: { [Op.lte]: `${to_date} 23:59:59` } },
+                { started_at: { [Op.lte]: `${to_date} 23:59:59` } }
+            ];
+        }
+
+        // Fetch all tasks matching the date filter
         const tasks = await BatchProductTask.findAll({
-            where: {
-                [Op.or]: [
-                    { created_at: { [Op.gte]: todayStart } },
-                    { status: { [Op.ne]: 'DONE' } } // Assuming you want ongoing tasks regardless of date
-                ]
-            },
+            where: whereClause,
             include: [
                 {
                     model: Product,
@@ -676,20 +688,23 @@ export const getDetailedWorkerLogs = async (req, res) => {
                     attributes: ['name']
                 }
             ],
-            order: [['started_at', 'DESC']]
+            order: [['created_at', 'DESC'], ['started_at', 'DESC']]
         });
 
         const logs = [];
 
         tasks.forEach(task => {
             task.worker_assignments.forEach(assignment => {
-                // Determine Role: The first worker assigned is usually the initiator
-                // Actually, let's just see if their joined_at is close to started_at
                 const isInitiator = Math.abs(new Date(assignment.joined_at).getTime() - new Date(task.started_at).getTime()) < 5000;
+                const workerName = assignment.worker ? assignment.worker.name : 'Unknown';
+
+                // Change 1: "Bucket_Arrange ki jagha busket_arrange kar do"
+                const stageName = (task.stage || '').toUpperCase() === 'BUCKET_ARRANGE' ? 'busket_arrange' : task.stage;
 
                 logs.push({
-                    worker_name: assignment.worker ? assignment.worker.name : 'Unknown',
-                    task: `${task.Product ? task.Product.name : 'Unknown'} - ${task.stage}`,
+                    worker_name: workerName,
+                    worker_id: assignment.worker_id,
+                    task: `${task.Product ? task.Product.name : 'Unknown'} - ${stageName}`,
                     status: task.status,
                     assigned_at: assignment.joined_at,
                     started_at: task.started_at,
@@ -701,10 +716,18 @@ export const getDetailedWorkerLogs = async (req, res) => {
             });
         });
 
-        // Sort logs by most recently assigned
-        logs.sort((a, b) => new Date(b.assigned_at) - new Date(a.assigned_at));
+        // Sort logs by most recently assigned or started
+        logs.sort((a, b) => new Date(b.assigned_at || b.started_at || 0) - new Date(a.assigned_at || a.started_at || 0));
 
-        res.status(200).json({ success: true, logs });
+        // Extract all unique worker names present in the fetched date range
+        const workers = [...new Set(logs.map(l => l.worker_name).filter(Boolean))].sort();
+
+        // If worker_name filter is applied
+        const filteredLogs = (worker_name && worker_name !== 'all')
+            ? logs.filter(l => l.worker_name.toLowerCase() === worker_name.toLowerCase())
+            : logs;
+
+        res.status(200).json({ success: true, logs: filteredLogs, allLogs: logs, workers });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

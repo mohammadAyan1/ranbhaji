@@ -257,7 +257,7 @@ export const getUserAnalytics = async (req, res) => {
         // 2. Fetch Water Subscriptions
         const waterSubscriptions = await WaterSubscription.findAll({
             where: { user_id: userId },
-            include: [{ model: Batch }]
+            include: [{ model: Batch }, { model: Product, as: 'Product' }]
         });
 
         // 2.5. Fetch Water Discounts
@@ -604,7 +604,10 @@ export const getCustomerProfile = async (req, res) => {
         const subIds = subscriptions.map(s => s.id);
         const waterSubscriptions = await WaterSubscription.findAll({
             where: { user_id: id },
-            include: [{ model: DeliverySchedule, as: 'Schedules', attributes: ['scheduled_date', 'status'] }],
+            include: [
+                { model: DeliverySchedule, as: 'Schedules', attributes: ['scheduled_date', 'status'] },
+                { model: Product, as: 'Product' }
+            ],
             order: [['created_at', 'DESC']]
         });
 

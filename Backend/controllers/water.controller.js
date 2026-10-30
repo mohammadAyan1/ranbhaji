@@ -152,6 +152,7 @@ export const subscribeWater = async (req, res) => {
 
         const water = await WaterSubscription.create({
             user_id: req.user.id,
+            product_id: matchedProduct.id,
             water_type,
             container: parsedContainer,
             frequency,
@@ -177,6 +178,9 @@ export const subscribeWater = async (req, res) => {
             success: true,
             message: "Water subscription purchased! Please select a start date.",
             water_subscription_id: water.id,
+            product_id: matchedProduct.id,
+            product_name: matchedProduct.name,
+            product: matchedProduct,
             amount_charged: amount,
             discount_percentage: applied_discount_percentage,
             discount_amount,
@@ -193,9 +197,64 @@ export const getWaterSubscriptions = async (req, res) => {
     try {
         const waters = await WaterSubscription.findAll({
             where: { user_id: req.user.id },
-            include: [{ model: DeliverySchedule, as: 'Schedules' }]
+            include: [
+                { model: DeliverySchedule, as: 'Schedules' },
+                {
+                    model: Product,
+                    as: 'Product',
+                    attributes: [
+                        'id', 'name', 'hindi_name', 'image_url', 'category', 'sub_category',
+                        'description', 'purchase_price_per_gm', 'selling_price_per_gm',
+                        'unit', 'unit_id', 'water_capacity_liters', 'status'
+                    ]
+                }
+            ],
+            order: [['created_at', 'DESC']]
         });
-        res.status(200).json({ success: true, water_subscriptions: waters });
+
+        // Fallback matching in case any historical subscription has an unlinked Product
+        let allWaterProducts = null;
+
+        const formattedWaters = await Promise.all(waters.map(async (w) => {
+            const wJson = w.toJSON ? w.toJSON() : { ...w };
+            let prod = wJson.Product;
+
+            if (!prod) {
+                if (!allWaterProducts) {
+                    allWaterProducts = await Product.findAll({
+                        where: sequelize.where(sequelize.fn('LOWER', sequelize.col('category')), 'water')
+                    });
+                }
+
+                if (wJson.product_id) {
+                    prod = allWaterProducts.find(p => p.id === wJson.product_id);
+                }
+
+                if (!prod) {
+                    prod = allWaterProducts.find(p => {
+                        const nameLower = (p.name || '').toLowerCase();
+                        const subCatLower = (p.sub_category || '').toLowerCase().trim();
+                        const cLower = (wJson.container || '').toLowerCase().trim();
+                        const tLower = (wJson.water_type || '').toLowerCase().trim();
+                        const matchType = nameLower.includes(tLower);
+                        const matchContainer = subCatLower.includes(cLower) || cLower.includes(subCatLower) || nameLower.includes(cLower);
+                        return matchType && matchContainer;
+                    });
+                }
+            }
+
+            const productName = prod ? prod.name : `${(wJson.water_type || '').toUpperCase()} Water (${wJson.container || ''})`;
+
+            return {
+                ...wJson,
+                product_id: prod ? prod.id : (wJson.product_id || null),
+                product_name: productName,
+                water_name: productName,
+                Product: prod || null
+            };
+        }));
+
+        res.status(200).json({ success: true, water_subscriptions: formattedWaters });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
