@@ -129,16 +129,35 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
         ]
     });
 
-    // Compute global user bucket map for consistent customer sequencing
+    // 2. Fetch Retail Orders
+    const retailOrders = await RetailOrder.findAll({
+        where: { batch_id, delivery_date: date, delivery_status: ['pending', 'ready_for_delivery'] },
+        include: [
+            { model: User },
+            { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
+        ]
+    });
+
+    // Compute global user bucket map for kitchen vegetable packing
+    // Note: Water orders are strictly excluded as water does not undergo kitchen processing (weighing, soaking, cutting, drying, bucket arrange)
     const uniqueUsers = new Set();
     schedules.forEach(schedule => {
-        if (schedule.Subscription && schedule.Subscription.User) uniqueUsers.add(schedule.Subscription.User.id);
-        else if (schedule.WaterSubscription && schedule.WaterSubscription.User) uniqueUsers.add(schedule.WaterSubscription.User.id);
+        if (schedule.Subscription && schedule.Subscription.User) {
+            uniqueUsers.add(schedule.Subscription.User.id);
+        }
     });
+
+    retailOrders.forEach(order => {
+        const hasKitchenItems = (order.Items || []).some(item => (item.Product?.category || '').toLowerCase() !== 'water');
+        if (hasKitchenItems && order.User) {
+            uniqueUsers.add(order.User.id);
+        }
+    });
+
     const sortedUserIds = Array.from(uniqueUsers).sort((a, b) => a - b);
     const userBucketMap = {};
     sortedUserIds.forEach((uid, index) => {
-        userBucketMap[uid] = index + 1; // Global bucket number 1, 2, 3...
+        userBucketMap[uid] = index + 1; // Sequential kitchen bucket numbers: 1, 2, 3...
     });
 
     const demandMap = {};
@@ -292,15 +311,7 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
         }
     });
 
-    // 2. Fetch Retail Orders
-    const retailOrders = await RetailOrder.findAll({
-        where: { batch_id, delivery_date: date, delivery_status: ['pending', 'ready_for_delivery'] },
-        include: [
-            { model: User },
-            { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
-        ]
-    });
-
+    // Process Retail Orders
     retailOrders.forEach(order => {
         const currentUser = order.User;
         if (order.Items) {

@@ -918,6 +918,10 @@ export const getTaskBuckets = async (req, res) => {
             let maxSortId = 0;
             const uniqueUsers = new Set();
             Object.values(demandMap).forEach(prod => {
+                // Ignore water products (water has no kitchen buckets)
+                if ((prod?.product?.category || '').toLowerCase() === 'water' || (prod?.product_name || '').toLowerCase().includes('alkaline')) {
+                    return;
+                }
                 if (prod && prod.usersMap) {
                     Object.values(prod.usersMap).forEach(u => {
                         if (u.userName) uniqueUsers.add(u.userName);
