@@ -47,9 +47,25 @@ export default function DispatchOrders() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/admin/orders?date=${date}`);
+      const { data } = await api.get(`/admin/orders?date=${date}&dispatch=true`);
       if (data.success) {
-        setUsers(data.users);
+        const rawUsers = data.users || [];
+        const processedUsers = rawUsers.map(u => {
+          const filteredAddresses = (u.addresses || []).map(addrGrp => {
+            const completedItems = (addrGrp.items || []).filter(item => item.is_production_completed !== false);
+            return {
+              ...addrGrp,
+              items: completedItems
+            };
+          });
+          const allCompletedItems = filteredAddresses.flatMap(a => a.items);
+          return {
+            ...u,
+            addresses: filteredAddresses,
+            totalItems: allCompletedItems
+          };
+        });
+        setUsers(processedUsers);
       }
     } catch (err) {
       alert('Failed to load orders');

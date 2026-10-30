@@ -38,11 +38,28 @@ export default function ReadyForDeliver() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/admin/orders?date=${date}`);
+      const { data } = await api.get(`/admin/orders?date=${date}&dispatch=true`);
       if (data.success) {
-        setUsers(data.users);
+        const rawUsers = data.users || [];
+        const processedUsers = rawUsers.map(u => {
+          const filteredAddresses = (u.addresses || []).map(addrGrp => {
+            const completedItems = (addrGrp.items || []).filter(item => item.is_production_completed !== false);
+            return {
+              ...addrGrp,
+              items: completedItems
+            };
+          });
+          const allCompletedItems = filteredAddresses.flatMap(a => a.items);
+          return {
+            ...u,
+            addresses: filteredAddresses,
+            totalItems: allCompletedItems
+          };
+        });
+
+        setUsers(processedUsers);
         const initialUnchecked = {};
-        data.users.forEach(u => {
+        processedUsers.forEach(u => {
           u.addresses.forEach((addrGrp, idx) => {
             addrGrp.items.forEach(item => {
               if (item.isPackedSet && parseFloat(item.packedQty) === 0 && parseFloat(item.totalQty) > 0) {
@@ -277,7 +294,7 @@ export default function ReadyForDeliver() {
                         )}
                       </td>
                       <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
-                        <span className="bg-gray-100 px-2.5 py-1 rounded-md text-xs font-medium text-gray-700">
+                        <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${u.totalItems.length > 0 ? 'bg-green-50 text-green-700 border border-green-200 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
                           {u.totalItems.length} items
                         </span>
                       </td>
@@ -326,7 +343,7 @@ export default function ReadyForDeliver() {
                                       </div>
                                     </div>
 
-                                    {addrGrp.items.length > 0 && (
+                                    {addrGrp.items.length > 0 ? (
                                       <div className="overflow-x-auto rounded-lg border border-gray-100">
                                         <table className="w-full text-sm text-left min-w-[500px]">
                                           <thead className="bg-gray-50 text-gray-600 text-xs">
@@ -382,12 +399,22 @@ export default function ReadyForDeliver() {
                                           </tbody>
                                         </table>
                                       </div>
+                                    ) : (
+                                      <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 text-center text-amber-800 text-xs sm:text-sm">
+                                        <span className="font-semibold block mb-0.5">⏳ Production In Progress</span>
+                                        <span>Worker has not completed all 5 states (weighing, soaking, cutting, drying, busket arrange) for products in this order yet.</span>
+                                      </div>
                                     )}
 
                                     <div className="mt-5 flex justify-end">
                                       <button
+                                        disabled={addrGrp.items.length === 0}
                                         onClick={() => handleMarkReady(orderKey, idx, addrGrp.items, addrGrp.scheduleIds, addrGrp.retailOrderIds)}
-                                        className="btn-primary py-2 px-6 text-sm font-semibold"
+                                        className={`py-2 px-6 text-sm font-semibold rounded-xl transition-all ${
+                                          addrGrp.items.length === 0
+                                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                            : "btn-primary"
+                                        }`}
                                       >
                                         {addrGrp.status === 'ready_for_delivery' ? 'Update Ready for Delivery' : 'Mark Ready for Delivery'}
                                       </button>

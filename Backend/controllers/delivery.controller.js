@@ -5,7 +5,7 @@ import {
     WalletTransaction, Notification, WaterSubscription, Package, Address,
     ScheduleSeasonalSelection, PackageSeasonalConfig,
     RetailOrder, RetailOrderItem, Batch, MissedProductLog, ReturnedProductLog,
-    LossLog, PurchaseLog
+    LossLog, PurchaseLog, BatchProductTask
 } from "../models/index.js";
 import path from "path";
 
@@ -1543,6 +1543,69 @@ export const getAllOrdersForDate = async (req, res) => {
             return `${addr.address_line}${addr.landmark ? ', ' + addr.landmark : ''}, ${addr.city} - ${addr.pincode}`;
         };
 
+        const isDispatchMode = req.query.dispatch === 'true' || req.query.dispatch === true;
+
+        // Fetch all batch IDs from schedules and retail orders to check task stages
+        const allBatchIds = new Set();
+        schedules.forEach(s => { if (s.batch_id) allBatchIds.add(s.batch_id); });
+        retailOrders.forEach(r => { if (r.batch_id) allBatchIds.add(r.batch_id); });
+
+        const batchTasksMap = {};
+        if (allBatchIds.size > 0) {
+            const batchTasks = await BatchProductTask.findAll({
+                where: { batch_id: Array.from(allBatchIds) },
+                attributes: ['id', 'batch_id', 'product_id', 'stage', 'status']
+            });
+            for (const t of batchTasks) {
+                const key = `${t.batch_id}_${t.product_id}`;
+                if (!batchTasksMap[key]) batchTasksMap[key] = [];
+                batchTasksMap[key].push(t);
+            }
+        }
+
+        const isProductionCompleted = (batchId, product) => {
+            if (!product) return false;
+            // Water products are bottled goods, no kitchen processing stages needed
+            if ((product.category || '').toLowerCase() === 'water') {
+                return true;
+            }
+            if (!batchId) {
+                return false;
+            }
+            const tasks = batchTasksMap[`${batchId}_${product.id}`] || [];
+            if (tasks.length === 0) {
+                return false;
+            }
+            // 5 stages: WEIGHING, SOAKING, CUTTING, DRYING, BUCKET_ARRANGE
+            // 1. BUCKET_ARRANGE (busket arrange) must exist and be DONE
+            const bucketTask = tasks.find(t => t.stage === 'BUCKET_ARRANGE');
+            if (!bucketTask || bucketTask.status !== 'DONE') {
+                return false;
+            }
+            // 2. WEIGHING must exist and be DONE
+            const weighingTask = tasks.find(t => t.stage === 'WEIGHING');
+            if (!weighingTask || weighingTask.status !== 'DONE') {
+                return false;
+            }
+            // 3. CUTTING must exist and be DONE
+            const cuttingTask = tasks.find(t => t.stage === 'CUTTING');
+            if (!cuttingTask || cuttingTask.status !== 'DONE') {
+                return false;
+            }
+            // 4. If SOAKING exists, it must be DONE
+            const soakingTask = tasks.find(t => t.stage === 'SOAKING');
+            if (soakingTask && soakingTask.status !== 'DONE') {
+                return false;
+            }
+            // 5. If DRYING exists, it must be DONE
+            const dryingTask = tasks.find(t => t.stage === 'DRYING');
+            if (dryingTask && dryingTask.status !== 'DONE') {
+                return false;
+            }
+            // All existing tasks for this batch and product must be DONE
+            return tasks.every(t => t.status === 'DONE');
+        };
+
         const ordersList = [];
 
         // Process Schedules (Each schedule is a separate order entry)
@@ -1565,6 +1628,8 @@ export const getAllOrdersForDate = async (req, res) => {
 
             const addSchedItem = (product, qty, source, packedQty = null) => {
                 if (!product) return;
+                const prodCompleted = isProductionCompleted(s.batch_id, product);
+
                 if (!itemsMap[product.id]) {
                     itemsMap[product.id] = {
                         id: product.id,
@@ -1577,7 +1642,8 @@ export const getAllOrdersForDate = async (req, res) => {
                         packedQty: 0,
                         isPackedSet: false,
                         missedQty: 0,
-                        returnedQty: 0
+                        returnedQty: 0,
+                        is_production_completed: prodCompleted
                     };
                     if (source === 'package' && user && carryLogMap[`${user.id}_${product.id}`]) {
                         itemsMap[product.id].missedQty = carryLogMap[`${user.id}_${product.id}`].missed;
@@ -1664,10 +1730,14 @@ export const getAllOrdersForDate = async (req, res) => {
                 }
             }
 
-            const totalItems = Object.values(itemsMap).map(i => ({
+            let totalItems = Object.values(itemsMap).map(i => ({
                 ...i,
                 packedQty: i.isPackedSet ? i.packedQty : i.totalQty
             }));
+
+            if (isDispatchMode) {
+                totalItems = totalItems.filter(i => i.is_production_completed);
+            }
 
             const addresses = [{
                 address: addrStr,
@@ -1712,6 +1782,8 @@ export const getAllOrdersForDate = async (req, res) => {
                 if (!item.Product) continue;
                 const qty = parseFloat(item.quantity || 0);
                 const pQty = item.packed_qty !== null && item.packed_qty !== undefined ? parseFloat(item.packed_qty) : null;
+                const prodCompleted = isProductionCompleted(r.batch_id, item.Product);
+
                 itemsMap[item.Product.id] = {
                     id: item.Product.id,
                     name: item.Product.name,
@@ -1723,11 +1795,15 @@ export const getAllOrdersForDate = async (req, res) => {
                     packedQty: pQty !== null ? pQty : qty,
                     isPackedSet: pQty !== null,
                     missedQty: 0,
-                    returnedQty: 0
+                    returnedQty: 0,
+                    is_production_completed: prodCompleted
                 };
             }
 
-            const totalItems = Object.values(itemsMap);
+            let totalItems = Object.values(itemsMap);
+            if (isDispatchMode) {
+                totalItems = totalItems.filter(i => i.is_production_completed);
+            }
             const addresses = [{
                 address: addrStr,
                 batch_id: r.batch_id,
