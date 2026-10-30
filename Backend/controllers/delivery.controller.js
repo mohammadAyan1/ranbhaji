@@ -1553,7 +1553,12 @@ export const getAllOrdersForDate = async (req, res) => {
         const batchTasksMap = {};
         if (allBatchIds.size > 0) {
             const batchTasks = await BatchProductTask.findAll({
-                where: { batch_id: Array.from(allBatchIds) },
+                where: {
+                    batch_id: Array.from(allBatchIds),
+                    created_at: {
+                        [Op.between]: [`${dateStr} 00:00:00`, `${dateStr} 23:59:59`]
+                    }
+                },
                 attributes: ['id', 'batch_id', 'product_id', 'stage', 'status']
             });
             for (const t of batchTasks) {

@@ -52,7 +52,7 @@ export default function DispatchOrders() {
         const rawUsers = data.users || [];
         const processedUsers = rawUsers.map(u => {
           const filteredAddresses = (u.addresses || []).map(addrGrp => {
-            const completedItems = (addrGrp.items || []).filter(item => item.is_production_completed !== false);
+            const completedItems = (addrGrp.items || []).filter(item => item.is_production_completed === true);
             return {
               ...addrGrp,
               items: completedItems
