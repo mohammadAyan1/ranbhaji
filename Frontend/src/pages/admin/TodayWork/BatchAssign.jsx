@@ -242,7 +242,13 @@ export default function BatchAssign() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${o.type === 'retail' ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'}`}>
+                          <div className={`p-2 rounded-lg ${
+                            o.type === 'retail'
+                              ? 'bg-green-100 text-green-600'
+                              : o.type === 'water'
+                              ? 'bg-purple-100 text-purple-600'
+                              : 'bg-orange-100 text-orange-600'
+                          }`}>
                             <Package size={18} />
                           </div>
                           <div>
