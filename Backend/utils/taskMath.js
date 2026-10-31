@@ -38,11 +38,29 @@ export const calculateCuttingDuration = (product, quantityGrams) => {
 };
 
 /**
- * Calculate drying time (Default Machine time).
+ * Calculate drying time (Default Machine time, or piece/gram fallback if machine time is 0).
  * Used when initially scheduling or machine mode.
  */
-export const calculateDryingDuration = (product) => {
-    return product.drying_time_seconds || 0;
+export const calculateDryingDuration = (product, quantityGrams = 0) => {
+    if (!product) return 0;
+    if (product.drying_time_seconds && Number(product.drying_time_seconds) > 0) {
+        return Number(product.drying_time_seconds);
+    }
+    // Fallback: If machine drying is 0, check if piece or 25g drying time is set
+    if (product.drying_time_per_piece_seconds && Number(product.drying_time_per_piece_seconds) > 0) {
+        if (quantityGrams > 0 && product.pieces_per_25g) {
+            const totalPieces = (Number(quantityGrams) / 25) * Number(product.pieces_per_25g);
+            return Math.ceil(totalPieces * Number(product.drying_time_per_piece_seconds));
+        }
+        return Number(product.drying_time_per_piece_seconds) * 10 || 30;
+    }
+    if (product.drying_time_per_25g_seconds && Number(product.drying_time_per_25g_seconds) > 0) {
+        if (quantityGrams > 0) {
+            return Math.ceil((Number(quantityGrams) / 25) * Number(product.drying_time_per_25g_seconds));
+        }
+        return Number(product.drying_time_per_25g_seconds) * 10 || 30;
+    }
+    return 0;
 };
 
 /**

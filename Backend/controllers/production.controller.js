@@ -694,8 +694,13 @@ export const getDetailedWorkerLogs = async (req, res) => {
         const logs = [];
 
         tasks.forEach(task => {
+            // Sort assignments by joined_at to identify the first worker (Initiator)
+            const sortedAssignments = [...(task.worker_assignments || [])].sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
+            const initiatorAssignmentId = sortedAssignments.length > 0 ? sortedAssignments[0].id : null;
+
             task.worker_assignments.forEach(assignment => {
-                const isInitiator = Math.abs(new Date(assignment.joined_at).getTime() - new Date(task.started_at).getTime()) < 5000;
+                // If there's only 1 worker or this is the first worker who joined: they are Initiator!
+                const isInitiator = sortedAssignments.length <= 1 || assignment.id === initiatorAssignmentId;
                 const workerName = assignment.worker ? assignment.worker.name : 'Unknown';
 
                 // Change 1: "Bucket_Arrange ki jagha busket_arrange kar do"

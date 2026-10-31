@@ -622,7 +622,7 @@ const handleStageCompletion = async (task) => {
         while (nextStage) {
             if (nextStage === 'SOAKING') duration = calculateSoakingDuration(product);
             else if (nextStage === 'CUTTING') duration = calculateCuttingDuration(product, task.quantity_grams);
-            else if (nextStage === 'DRYING') duration = calculateDryingDuration(product);
+            else if (nextStage === 'DRYING') duration = calculateDryingDuration(product, task.quantity_grams);
 
             if (duration === 0 && ['SOAKING', 'DRYING'].includes(nextStage)) {
                 // skip zero-duration waiting stages
