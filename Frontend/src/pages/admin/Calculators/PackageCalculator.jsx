@@ -582,6 +582,8 @@ export default function PackageCalculator() {
           <select className="input text-sm" value={packageType} onChange={e => setPackageType(e.target.value)}>
             <option value="standard">Standard</option>
             <option value="custom">Custom</option>
+            <option value="yearly">Yearly</option>
+            <option value="sample">Sample</option>
           </select>
         </div>
         {packageType === "custom" && (
@@ -978,6 +980,8 @@ export default function PackageCalculator() {
               <option value="all">All Types</option>
               <option value="standard">Standard</option>
               <option value="custom">Custom</option>
+              <option value="yearly">Yearly</option>
+              <option value="sample">Sample</option>
             </select>
           </div>
         </div>
@@ -1002,8 +1006,16 @@ export default function PackageCalculator() {
                   <h3 className="font-bold text-gray-900">{draft.name}</h3>
                   <div className="flex flex-col items-end gap-1">
                     <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">₹{parseFloat(draft.calculated_price).toFixed(2)}</span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${draft.draft_type === 'custom' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                      {draft.draft_type === 'custom' ? 'Custom' : 'Standard'}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      draft.draft_type === 'custom'
+                        ? 'bg-blue-100 text-blue-700'
+                        : draft.draft_type === 'sample'
+                        ? 'bg-purple-100 text-purple-700'
+                        : draft.draft_type === 'yearly'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-green-100 text-green-700'
+                    }`}>
+                      {draft.draft_type === 'custom' ? 'Custom' : draft.draft_type === 'sample' ? 'Sample' : draft.draft_type === 'yearly' ? 'Yearly' : 'Standard'}
                     </span>
                   </div>
                 </div>

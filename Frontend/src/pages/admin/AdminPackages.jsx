@@ -139,7 +139,7 @@ export default function AdminPackages() {
       num_persons_max: "",
       services_per_month: draft.services_per_month,
       price: draft.calculated_price,
-      type: draft.draft_type === "custom" ? "custom" : "standard",
+      type: ["custom", "sample", "yearly"].includes(draft.draft_type) ? draft.draft_type : "standard",
       target_user_id: draft.target_user_id || "",
       target_mobile_number: draft.target_mobile_number || "",
       margin_percent: draft.margin_percent,
