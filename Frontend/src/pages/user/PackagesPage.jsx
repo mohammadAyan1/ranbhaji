@@ -728,11 +728,11 @@ export default function PackagesPage() {
                     {pkg.num_persons_max
                       ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
                       : `${pkg.num_persons} persons`
-                    } · {pkg.services_per_month} deliveries/month
+                    } · {pkg.services_per_month} {pkg.type === 'sample' ? (pkg.services_per_month === 1 ? 'delivery (one time)' : 'deliveries (one time)') : 'deliveries/month'}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
-                  <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
+                  <span className={`badge ${pkg.type === "custom" ? "badge-blue" : pkg.type === "sample" ? "bg-purple-100 text-purple-800 border-purple-200" : "badge-green"}`}>{pkg.type}</span>
                   {alreadyActive && (
                     <span className="inline-flex items-center gap-1 bg-fresh-100/60 text-fresh-600 border border-fresh-600/50 text-[10px] font-bold px-2 py-0.5 rounded-full">
                       ✅ Active
@@ -750,7 +750,7 @@ export default function PackagesPage() {
                     <p className="text-fresh-600 text-xs mt-1">💰 Save ₹{(pkg.price * 12 * 0.25).toFixed(0)} (25% off)</p>
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold text-gradient">₹{pkg.price}<span className="text-sm text-gray-600 font-normal">/month</span></p>
+                  <p className="text-2xl font-bold text-gradient">₹{pkg.price}<span className="text-sm text-gray-600 font-normal">{pkg.type === 'sample' ? ' (one time)' : '/month'}</span></p>
                 )}
                 <p className="text-gray-500 text-xs mt-1">₹{(pkg.price / pkg.services_per_month).toFixed(1)} per delivery</p>
               </div>

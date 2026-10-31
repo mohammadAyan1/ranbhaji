@@ -122,8 +122,8 @@ export default function PackageCalculator() {
     let text = `Hello! Check out our *${draft.name}* package draft at Rambhaji.\n\n`;
     text += `*Type:* ${draft.draft_type || draft.packageType || 'custom'}\n`;
     text += `*Persons:* ${draft.num_persons}${draft.num_persons_max ? `-${draft.num_persons_max}` : ''}\n`;
-    text += `*Deliveries per month:* ${draft.services_per_month}\n`;
-    text += `*Price:* ₹${parseFloat(draft.calculated_price).toFixed(2)}/month\n\n`;
+    text += `*Deliveries:* ${draft.services_per_month} ${draft.draft_type === 'sample' ? '(one time)' : 'per month'}\n`;
+    text += `*Price:* ₹${parseFloat(draft.calculated_price).toFixed(2)}${draft.draft_type === 'sample' ? ' (one time)' : '/month'}\n\n`;
     
     const fixedItems = draft.Items?.filter(i => i.is_fixed) || [];
     if (fixedItems.length > 0) {
@@ -469,7 +469,7 @@ export default function PackageCalculator() {
           />
         </div>
         <div>
-          <label className="label text-xs uppercase tracking-wider">Deliveries / Month</label>
+          <label className="label text-xs uppercase tracking-wider">{packageType === 'sample' ? 'Deliveries (One Time)' : 'Deliveries / Month'}</label>
           <input
             type="number"
             min="1"
@@ -623,7 +623,7 @@ export default function PackageCalculator() {
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
           <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Deliveries Count</p>
           <p className="text-2xl font-bold text-blue-400">{servicesCount}</p>
-          <span className="text-[10px] text-gray-500">Deliveries per package cycle</span>
+          <span className="text-[10px] text-gray-500">{packageType === 'sample' ? 'Deliveries (One Time)' : 'Deliveries per package cycle'}</span>
         </div>
 
         {/* Final Price */}
@@ -1020,7 +1020,7 @@ export default function PackageCalculator() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mb-4">
-                  {draft.services_per_month} deliveries · {draft.margin_percent}% margin
+                  {draft.services_per_month} {draft.draft_type === 'sample' ? 'deliveries (one time)' : 'deliveries'} · {draft.margin_percent}% margin
                 </p>
                 <div className="flex gap-2">
                   <button 

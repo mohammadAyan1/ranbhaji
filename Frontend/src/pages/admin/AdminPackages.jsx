@@ -81,8 +81,8 @@ export default function AdminPackages() {
     let text = `Hello! Check out our *${pkg.name}* package at Rambhaji.\n\n`;
     text += `*Type:* ${pkg.type}\n`;
     text += `*Persons:* ${pkg.num_persons}${pkg.num_persons_max ? `-${pkg.num_persons_max}` : ''}\n`;
-    text += `*Deliveries per month:* ${pkg.services_per_month}\n`;
-    text += `*Price:* ₹${pkg.price}/month\n\n`;
+    text += `*Deliveries:* ${pkg.services_per_month} ${pkg.type === 'sample' ? '(one time)' : 'per month'}\n`;
+    text += `*Price:* ₹${pkg.price}${pkg.type === 'sample' ? ' (one time)' : '/month'}\n\n`;
 
     if (pkg.FixedItems?.length > 0) {
       text += `*Fixed Items:*\n`;
@@ -466,11 +466,11 @@ export default function AdminPackages() {
             </div>
 
             <div>
-              <label className="label">Deliveries per Month *</label>
+              <label className="label">{form.type === 'sample' ? 'Deliveries (One Time) *' : 'Deliveries per Month *'}</label>
               <input type="number" min="1" max="31" className="input" value={form.services_per_month} onChange={e => setForm({ ...form, services_per_month: e.target.value })} disabled={isDraftApplied} required />
             </div>
             <div>
-              <label className="label">Monthly Price (₹) *</label>
+              <label className="label">{form.type === 'sample' ? 'Price (One Time) (₹) *' : 'Monthly Price (₹) *'}</label>
               <input type="number" min="1" step="any" className="input" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} disabled={isDraftApplied} required />
             </div>
             <div>
@@ -819,7 +819,7 @@ export default function AdminPackages() {
                       {pkg.num_persons_max
                         ? `${pkg.num_persons}–${pkg.num_persons_max} persons`
                         : `${pkg.num_persons} persons`
-                      } · {pkg.services_per_month} deliveries/month · <span className="text-gray-900 font-semibold">₹{pkg.price}/month</span> · Margin: {pkg.margin_percent || 0}%
+                      } · {pkg.services_per_month} {pkg.type === 'sample' ? (pkg.services_per_month === 1 ? 'delivery (one time)' : 'deliveries (one time)') : 'deliveries/month'} · <span className="text-gray-900 font-semibold">₹{pkg.price}{pkg.type === 'sample' ? ' (one time)' : '/month'}</span> · Margin: {pkg.margin_percent || 0}%
                     </p>
                     <p className="text-gray-500 text-xs mt-1">
                       Raw Per-service: ₹{(parseFloat(pkg.price) / pkg.services_per_month).toFixed(2)} ·

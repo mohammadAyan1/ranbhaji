@@ -1157,7 +1157,7 @@ export default function MySubscriptions() {
                       {statusBadge(sub.status)}
                       <span className="badge badge-gray capitalize">{sub.type}</span>
                     </div>
-                    <p className="text-gray-600 text-sm">{sub.Package?.services_per_month} deliveries/month · ₹{sub.Package?.price}/month</p>
+                    <p className="text-gray-600 text-sm">{sub.Package?.services_per_month} {sub.Package?.type === 'sample' ? (sub.Package?.services_per_month === 1 ? 'delivery (one time)' : 'deliveries (one time)') : 'deliveries/month'} · ₹{sub.Package?.price}{sub.Package?.type === 'sample' ? ' (one time)' : '/month'}</p>
                     {sub.start_date ? (
                       <p className="text-gray-500 text-xs mt-1">📅 {sub.start_date} → {sub.end_date} · {sub.services_completed}/{sub.total_services} deliveries done</p>
                     ) : (
