@@ -350,6 +350,34 @@ export const assignNextTask = async (req, res) => {
             return res.status(200).json({ success: true, task: taskToReturn, action });
         };
 
+        // Check for any missing DRYING tasks for products that completed CUTTING
+        for (const d of demands) {
+            const cutTasks = tasks.filter(t => t.product_id === d.product_id && t.stage === 'CUTTING' && t.status === 'DONE');
+            const dryTasks = tasks.filter(t => t.product_id === d.product_id && t.stage === 'DRYING');
+            if (cutTasks.length > 0 && dryTasks.length === 0) {
+                const product = d.Product;
+                const dryDuration = calculateDryingDuration(product, d.quantity_grams);
+                if (dryDuration > 0) {
+                    const newDryTask = await BatchProductTask.create({
+                        batch_id: batchId,
+                        product_id: d.product_id,
+                        stage: 'DRYING',
+                        quantity_grams: d.quantity_grams,
+                        status: 'NOT_STARTED',
+                        duration_seconds: dryDuration,
+                        remaining_seconds: dryDuration
+                    });
+                    const loadedDryTask = await BatchProductTask.findByPk(newDryTask.id, {
+                        include: [
+                            { model: Product },
+                            { model: TaskWorkerAssignment, as: 'worker_assignments', required: false }
+                        ]
+                    });
+                    tasks.push(loadedDryTask);
+                }
+            }
+        }
+
         // Check if all batch processing is complete
         // 1. Have all demands been weighed (i.e. entered the pipeline)?
         const unweighedProductsForCheck = demands.filter(d => {
@@ -435,7 +463,17 @@ export const assignNextTask = async (req, res) => {
             return ['NOT_STARTED', 'RUNNING', 'PAUSED'].includes(t.status);
         });
         if (myCurrentTask) {
-            return await returnTask(myCurrentTask, 'CONTINUE_TASK');
+            const hasPendingPipeline = tasks.some(t =>
+                ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'].includes(t.stage) &&
+                t.status !== 'DONE'
+            );
+            if (myCurrentTask.stage === 'BUCKET_ARRANGE' && myCurrentTask.status === 'NOT_STARTED' && hasPendingPipeline) {
+                await TaskWorkerAssignment.destroy({
+                    where: { task_id: myCurrentTask.id, worker_id: workerId, left_at: null }
+                });
+            } else {
+                return await returnTask(myCurrentTask, 'CONTINUE_TASK');
+            }
         }
 
         // Priority 1: Advance existing products (NOT_STARTED for DRYING, CUTTING, SOAKING)
