@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../../api/axios';
 import useAuthStore from '../../../store/authStore';
-import { Search, X } from 'lucide-react';
+import { Search, X, Clock, Edit2 } from 'lucide-react';
 
 export default function ReadyForDeliver() {
   const { user: currentUser } = useAuthStore();
@@ -23,6 +23,41 @@ export default function ReadyForDeliver() {
   const [expandedId, setExpandedId] = useState(null);
   const [packedQuantities, setPackedQuantities] = useState({});
   const [uncheckedItems, setUncheckedItems] = useState({});
+
+  // Requested Time editing state
+  const [editingOrderTime, setEditingOrderTime] = useState(null);
+  const [newTimeSlot, setNewTimeSlot] = useState("");
+  const [savingTime, setSavingTime] = useState(false);
+
+  const openEditTimeModal = (order) => {
+    setEditingOrderTime(order);
+    setNewTimeSlot(order.delivery_time_slot || "");
+  };
+
+  const handleSaveTimeSlot = async () => {
+    if (!editingOrderTime) return;
+    setSavingTime(true);
+    try {
+      const res = await api.put('/admin/orders/requested-time', {
+        scheduleIds: editingOrderTime.allScheduleIds || (editingOrderTime.order_id ? [editingOrderTime.order_id] : []),
+        retailOrderIds: editingOrderTime.allRetailOrderIds || (editingOrderTime.order_type === 'retail' ? [editingOrderTime.order_id] : []),
+        delivery_time_slot: newTimeSlot
+      });
+      if (res.data.success) {
+        setUsers(prev => prev.map(u => {
+          if (u.uniqueId === editingOrderTime.uniqueId) {
+            return { ...u, delivery_time_slot: newTimeSlot };
+          }
+          return u;
+        }));
+        setEditingOrderTime(null);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update requested time');
+    } finally {
+      setSavingTime(false);
+    }
+  };
 
   const fetchBatches = async () => {
     try {
@@ -55,7 +90,7 @@ export default function ReadyForDeliver() {
             addresses: filteredAddresses,
             totalItems: allCompletedItems
           };
-        });
+        }).filter(u => u.totalItems && u.totalItems.length > 0);
 
         setUsers(processedUsers);
         const initialUnchecked = {};
@@ -284,13 +319,30 @@ export default function ReadyForDeliver() {
                           {u.hasPackage ? 'Yes' : 'No'}
                         </span>
                       </td>
-                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
+                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
                         {u.delivery_time_slot ? (
-                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
-                            ⏱ {u.delivery_time_slot}
-                          </span>
+                          <div className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
+                              ⏱ {u.delivery_time_slot}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openEditTimeModal(u)}
+                              className="p-1 text-gray-400 hover:text-amber-700 hover:bg-amber-100 rounded-md transition-colors"
+                              title="Change Requested Time"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          </div>
                         ) : (
-                          <span className="text-gray-400 text-xs italic">—</span>
+                          <button
+                            type="button"
+                            onClick={() => openEditTimeModal(u)}
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline bg-blue-50/50 hover:bg-blue-100/50 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors"
+                          >
+                            <Clock size={12} />
+                            + Set Time
+                          </button>
                         )}
                       </td>
                       <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
@@ -432,6 +484,98 @@ export default function ReadyForDeliver() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+      {/* Edit Requested Time Modal */}
+      {editingOrderTime && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 text-amber-700 rounded-xl">
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Change Requested Time</h3>
+                  <p className="text-xs text-gray-500">Order #{editingOrderTime.order_number} · {editingOrderTime.user?.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingOrderTime(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider block mb-2">Preset Time Slots</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    "06:00 AM - 08:00 AM",
+                    "07:00 AM - 09:00 AM",
+                    "08:00 AM - 10:00 AM",
+                    "10:00 AM - 12:00 PM",
+                    "01:00 PM - 02:00 PM",
+                    "03:00 PM - 05:00 PM",
+                    "06:00 PM - 08:00 PM"
+                  ].map((slot) => (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => setNewTimeSlot(slot)}
+                      className={`text-xs px-2.5 py-2 rounded-xl border font-medium text-left transition-all ${
+                        newTimeSlot === slot
+                          ? "bg-amber-50 text-amber-900 border-amber-400 font-bold shadow-xs"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      ⏱ {slot}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider block mb-1.5">Custom Slot / Value</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 02:00 PM - 04:00 PM or Morning"
+                  value={newTimeSlot}
+                  onChange={(e) => setNewTimeSlot(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNewTimeSlot("")}
+                  className="px-3 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-xl font-medium"
+                >
+                  Clear Time
+                </button>
+                <div className="flex-1 flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditingOrderTime(null)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingTime}
+                    onClick={handleSaveTimeSlot}
+                    className="px-5 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-500 active:bg-green-700 rounded-xl shadow-sm disabled:opacity-50"
+                  >
+                    {savingTime ? "Saving..." : "Save Time"}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

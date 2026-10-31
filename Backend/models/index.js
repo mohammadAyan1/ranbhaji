@@ -505,7 +505,8 @@ const RetailOrder = sequelize.define('RetailOrder', {
   delivery_boy_id: { type: DataTypes.INTEGER, allowNull: true },
   discount_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   discount_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
-  subtotal: { type: DataTypes.DECIMAL(10, 2), allowNull: true }
+  subtotal: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+  delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true }
 }, { tableName: 'retail_orders', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 RetailOrder.belongsTo(User, { foreignKey: 'user_id' });

@@ -1551,6 +1551,7 @@ export const getAllOrdersForDate = async (req, res) => {
         retailOrders.forEach(r => { if (r.batch_id) allBatchIds.add(r.batch_id); });
 
         const batchTasksMap = {};
+        const allBatchTasksByBatch = {};
         if (allBatchIds.size > 0) {
             const batchTasks = await BatchProductTask.findAll({
                 where: {
@@ -1565,6 +1566,8 @@ export const getAllOrdersForDate = async (req, res) => {
                 const key = `${t.batch_id}_${t.product_id}`;
                 if (!batchTasksMap[key]) batchTasksMap[key] = [];
                 batchTasksMap[key].push(t);
+                if (!allBatchTasksByBatch[t.batch_id]) allBatchTasksByBatch[t.batch_id] = [];
+                allBatchTasksByBatch[t.batch_id].push(t);
             }
         }
 
@@ -1640,6 +1643,7 @@ export const getAllOrdersForDate = async (req, res) => {
                         id: product.id,
                         name: product.name,
                         hindi_name: product.hindi_name,
+                        category: product.category,
                         unit: product.unit,
                         packageQty: 0,
                         retailQty: 0,
@@ -1741,7 +1745,21 @@ export const getAllOrdersForDate = async (req, res) => {
             }));
 
             if (isDispatchMode) {
+                const allItems = Object.values(itemsMap);
+                const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && (i.packageQty > 0 || i.retailQty > 0));
+
+                if (hasVegetables) {
+                    const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
+                    const schedBatchTasks = s.batch_id ? (allBatchTasksByBatch[s.batch_id] || []) : [];
+                    const batchHasTasks = schedBatchTasks.length > 0;
+                    const batchHasIncompleteTasks = !batchHasTasks || schedBatchTasks.some(t => t.status !== 'DONE');
+
+                    if (hasIncompleteVegetable || batchHasIncompleteTasks) {
+                        continue;
+                    }
+                }
                 totalItems = totalItems.filter(i => i.is_production_completed);
+                if (totalItems.length === 0) continue;
             }
 
             const addresses = [{
@@ -1807,7 +1825,21 @@ export const getAllOrdersForDate = async (req, res) => {
 
             let totalItems = Object.values(itemsMap);
             if (isDispatchMode) {
+                const allItems = Object.values(itemsMap);
+                const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && i.retailQty > 0);
+
+                if (hasVegetables) {
+                    const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
+                    const retailBatchTasks = r.batch_id ? (allBatchTasksByBatch[r.batch_id] || []) : [];
+                    const batchHasTasks = retailBatchTasks.length > 0;
+                    const batchHasIncompleteTasks = !batchHasTasks || retailBatchTasks.some(t => t.status !== 'DONE');
+
+                    if (hasIncompleteVegetable || batchHasIncompleteTasks) {
+                        continue;
+                    }
+                }
                 totalItems = totalItems.filter(i => i.is_production_completed);
+                if (totalItems.length === 0) continue;
             }
             const addresses = [{
                 address: addrStr,
@@ -2743,5 +2775,70 @@ export const getTodayIncoming = async (req, res) => {
         res.status(200).json({ success: true, incoming: mySchedules });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+
+// PUT /api/admin/orders/requested-time
+export const updateRequestedTime = async (req, res) => {
+    try {
+        const { scheduleIds, retailOrderIds, delivery_time_slot, update_subscription = true } = req.body;
+
+        if (delivery_time_slot === undefined) {
+            return res.status(400).json({ success: false, message: "delivery_time_slot is required" });
+        }
+
+        const slotValue = delivery_time_slot ? delivery_time_slot.trim() : null;
+        let updatedCount = 0;
+
+        if (scheduleIds && scheduleIds.length > 0) {
+            const schedIdsArr = Array.isArray(scheduleIds) ? scheduleIds : [scheduleIds];
+            const [count] = await DeliverySchedule.update(
+                { delivery_time_slot: slotValue },
+                { where: { id: schedIdsArr } }
+            );
+            updatedCount += count;
+
+            if (update_subscription) {
+                const schedules = await DeliverySchedule.findAll({
+                    where: { id: schedIdsArr },
+                    attributes: ['subscription_id', 'water_subscription_id']
+                });
+                const subIds = schedules.map(s => s.subscription_id).filter(Boolean);
+                const waterSubIds = schedules.map(s => s.water_subscription_id).filter(Boolean);
+
+                if (subIds.length > 0) {
+                    await Subscription.update(
+                        { delivery_time_slot: slotValue },
+                        { where: { id: subIds } }
+                    );
+                }
+                if (waterSubIds.length > 0) {
+                    await WaterSubscription.update(
+                        { delivery_time_slot: slotValue },
+                        { where: { id: waterSubIds } }
+                    );
+                }
+            }
+        }
+
+        if (retailOrderIds && retailOrderIds.length > 0) {
+            const retailIdsArr = Array.isArray(retailOrderIds) ? retailOrderIds : [retailOrderIds];
+            const [count] = await RetailOrder.update(
+                { delivery_time_slot: slotValue },
+                { where: { id: retailIdsArr } }
+            );
+            updatedCount += count;
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Requested delivery time updated to "${slotValue || 'None'}"`,
+            delivery_time_slot: slotValue,
+            updatedCount
+        });
+    } catch (error) {
+        console.error("updateRequestedTime error:", error);
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
