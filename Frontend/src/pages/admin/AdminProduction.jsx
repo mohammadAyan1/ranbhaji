@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Activity, Clock, Users, CheckCircle, Hourglass, Calendar, Filter, RotateCcw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import api from "../../api/axios";
@@ -65,12 +65,13 @@ export default function AdminProduction() {
   const [toDate, setToDate] = useState("");
   const [selectedWorker, setSelectedWorker] = useState("all");
   const [availableWorkers, setAvailableWorkers] = useState([]);
+  const appliedFiltersRef = useRef({ fromDate: "", toDate: "" });
 
-  const fetchWorkerLogs = async (customOverrides = {}) => {
-    setLoadingLogs(true);
+  const fetchWorkerLogs = async (customOverrides = {}, silent = false) => {
+    if (!silent) setLoadingLogs(true);
     try {
-      const activeFrom = customOverrides.fromDate !== undefined ? customOverrides.fromDate : fromDate;
-      const activeTo = customOverrides.toDate !== undefined ? customOverrides.toDate : toDate;
+      const activeFrom = customOverrides.fromDate !== undefined ? customOverrides.fromDate : appliedFiltersRef.current.fromDate;
+      const activeTo = customOverrides.toDate !== undefined ? customOverrides.toDate : appliedFiltersRef.current.toDate;
 
       const params = {};
       if (activeFrom) params.from_date = activeFrom;
@@ -89,29 +90,34 @@ export default function AdminProduction() {
       }
     } catch (err) {
       console.error(err);
-      setError("Failed to load worker logs.");
+      if (!silent) setError("Failed to load worker logs.");
     } finally {
-      setLoadingLogs(false);
+      if (!silent) setLoadingLogs(false);
     }
   };
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (silent = false) => {
     try {
       const res = await api.get('/production/dashboard');
       if (res.data.success) {
         setBatches(res.data.batches);
       }
-      await fetchWorkerLogs();
+      await fetchWorkerLogs({}, silent);
     } catch (err) {
       console.error(err);
-      setError("Failed to load production data.");
+      if (!silent) setError("Failed to load production data.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDashboard();
+    fetchDashboard(false);
+
+    // Auto-poll every 10 seconds for real-time updates
+    const interval = setInterval(() => {
+      fetchDashboard(true);
+    }, 10000);
 
     // Determine socket URL from axios baseURL
     const baseURL = api.defaults.baseURL || 'http://localhost:3000/api';
@@ -120,23 +126,26 @@ export default function AdminProduction() {
     const socket = io(socketURL);
 
     socket.on('production:update', () => {
-      fetchDashboard();
+      fetchDashboard(true);
     });
 
     return () => {
+      clearInterval(interval);
       socket.disconnect();
     };
   }, []);
 
   const handleApplyFilter = () => {
-    fetchWorkerLogs();
+    appliedFiltersRef.current = { fromDate, toDate };
+    fetchWorkerLogs({ fromDate, toDate }, false);
   };
 
   const handleResetFilter = () => {
     setFromDate("");
     setToDate("");
     setSelectedWorker("all");
-    fetchWorkerLogs({ fromDate: "", toDate: "" });
+    appliedFiltersRef.current = { fromDate: "", toDate: "" };
+    fetchWorkerLogs({ fromDate: "", toDate: "" }, false);
   };
 
   const displayedLogs = (selectedWorker === 'all' || !selectedWorker)
@@ -165,9 +174,15 @@ export default function AdminProduction() {
               </h2>
               <p className="text-gray-500 text-sm mt-1">Real-time breakdown of worker assignments and task statuses.</p>
             </div>
-            <span className="text-xs font-semibold px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full self-start sm:self-auto">
-              {displayedLogs.length} {displayedLogs.length === 1 ? 'task' : 'tasks'}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                Live (10s)
+              </span>
+              <span className="text-xs font-semibold px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
+                {displayedLogs.length} {displayedLogs.length === 1 ? 'task' : 'tasks'}
+              </span>
+            </div>
           </div>
 
           {/* Filter Bar */}
