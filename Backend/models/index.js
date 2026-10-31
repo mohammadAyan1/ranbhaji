@@ -128,7 +128,7 @@ const Package = sequelize.define('Package', {
   num_persons_max: { type: DataTypes.INTEGER, allowNull: true },
   services_per_month: { type: DataTypes.INTEGER },
   price: { type: DataTypes.DECIMAL(10, 2) },
-  type: { type: DataTypes.ENUM('standard', 'custom', 'yearly') },
+  type: { type: DataTypes.ENUM('standard', 'custom', 'yearly', 'sample') },
   target_user_id: { type: DataTypes.INTEGER, allowNull: true },
   target_mobile_number: { type: DataTypes.STRING(15), allowNull: true },
   margin_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Search, X, ImageOff, Image as ImageIcon } from "lucide-react";
 import api from "../../api/axios";
 
-const TYPES = ["standard", "custom", "yearly"];
+const TYPES = ["standard", "custom", "yearly", "sample"];
 
 export default function AdminPackages() {
   const topRef = useRef(null);
@@ -806,7 +806,7 @@ export default function AdminPackages() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1 flex-wrap">
                       <h3 className="text-lg font-bold text-gray-900">{pkg.name}</h3>
-                      <span className={`badge ${pkg.type === "custom" ? "badge-blue" : "badge-green"}`}>{pkg.type}</span>
+                      <span className={`badge ${pkg.type === "custom" ? "badge-blue" : pkg.type === "sample" ? "bg-purple-100 text-purple-800 border-purple-200" : "badge-green"}`}>{pkg.type}</span>
                       <span className={pkg.status === "active" ? "badge-green badge" : "badge-red badge"}>{pkg.status}</span>
                       {pkg.creation_source === 'draft_margin_calculator' && (
                         <span className="badge bg-purple-100 text-purple-700 border-purple-200">Margin Calculator</span>
