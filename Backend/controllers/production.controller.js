@@ -694,26 +694,40 @@ export const getDetailedWorkerLogs = async (req, res) => {
         const logs = [];
 
         tasks.forEach(task => {
+            const assignments = task.worker_assignments || [];
+            if (assignments.length === 0) return;
+
             // Sort assignments by joined_at to identify the first worker (Initiator)
-            const sortedAssignments = [...(task.worker_assignments || [])].sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
-            const initiatorAssignmentId = sortedAssignments.length > 0 ? sortedAssignments[0].id : null;
+            const sortedAssignments = [...assignments].sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
+            const initiatorWorkerId = sortedAssignments[0].worker_id;
 
-            task.worker_assignments.forEach(assignment => {
-                // If there's only 1 worker or this is the first worker who joined: they are Initiator!
-                const isInitiator = sortedAssignments.length <= 1 || assignment.id === initiatorAssignmentId;
-                const workerName = assignment.worker ? assignment.worker.name : 'Unknown';
+            // Group assignments by worker_id to consolidate multiple sessions/intervals of the same worker on this task
+            const workerMap = new Map();
+            sortedAssignments.forEach(assignment => {
+                if (!workerMap.has(assignment.worker_id)) {
+                    workerMap.set(assignment.worker_id, []);
+                }
+                workerMap.get(assignment.worker_id).push(assignment);
+            });
 
-                // Change 1: "Bucket_Arrange ki jagha busket_arrange kar do"
-                const stageName = (task.stage || '').toUpperCase() === 'BUCKET_ARRANGE' ? 'busket_arrange' : task.stage;
+            const uniqueWorkerCount = workerMap.size;
+            const stageName = (task.stage || '').toUpperCase() === 'BUCKET_ARRANGE' ? 'busket_arrange' : task.stage;
+
+            workerMap.forEach((workerAssignments, workerId) => {
+                const firstAssignment = workerAssignments[0];
+                const lastAssignment = workerAssignments[workerAssignments.length - 1];
+                // If there is only 1 unique worker on this task, or this is the initiator worker: role is Initiator
+                const isInitiator = uniqueWorkerCount <= 1 || workerId === initiatorWorkerId;
+                const workerName = firstAssignment.worker ? firstAssignment.worker.name : 'Unknown';
 
                 logs.push({
                     worker_name: workerName,
-                    worker_id: assignment.worker_id,
+                    worker_id: workerId,
                     task: `${task.Product ? task.Product.name : 'Unknown'} - ${stageName}`,
                     status: task.status,
-                    assigned_at: assignment.joined_at,
+                    assigned_at: firstAssignment.joined_at,
                     started_at: task.started_at,
-                    completed_at: assignment.left_at || task.completed_at,
+                    completed_at: lastAssignment.left_at || task.completed_at,
                     alarm_fired_at: task.alarm_fired_at,
                     role: isInitiator ? 'Initiator' : 'Helper',
                     duration_seconds: task.duration_seconds

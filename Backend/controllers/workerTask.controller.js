@@ -358,22 +358,39 @@ export const assignNextTask = async (req, res) => {
                 const product = d.Product;
                 const dryDuration = calculateDryingDuration(product, d.quantity_grams);
                 if (dryDuration > 0) {
-                    const newDryTask = await BatchProductTask.create({
-                        batch_id: batchId,
-                        product_id: d.product_id,
-                        stage: 'DRYING',
-                        quantity_grams: d.quantity_grams,
-                        status: 'NOT_STARTED',
-                        duration_seconds: dryDuration,
-                        remaining_seconds: dryDuration
-                    });
-                    const loadedDryTask = await BatchProductTask.findByPk(newDryTask.id, {
+                    const existingDryTask = await BatchProductTask.findOne({
+                        where: {
+                            batch_id: batchId,
+                            product_id: d.product_id,
+                            stage: 'DRYING',
+                            created_at: { [Op.gte]: startOfTodayForTasks }
+                        },
                         include: [
                             { model: Product },
                             { model: TaskWorkerAssignment, as: 'worker_assignments', required: false }
                         ]
                     });
-                    tasks.push(loadedDryTask);
+
+                    if (existingDryTask) {
+                        tasks.push(existingDryTask);
+                    } else {
+                        const newDryTask = await BatchProductTask.create({
+                            batch_id: batchId,
+                            product_id: d.product_id,
+                            stage: 'DRYING',
+                            quantity_grams: d.quantity_grams,
+                            status: 'NOT_STARTED',
+                            duration_seconds: dryDuration,
+                            remaining_seconds: dryDuration
+                        });
+                        const loadedDryTask = await BatchProductTask.findByPk(newDryTask.id, {
+                            include: [
+                                { model: Product },
+                                { model: TaskWorkerAssignment, as: 'worker_assignments', required: false }
+                            ]
+                        });
+                        tasks.push(loadedDryTask);
+                    }
                 }
             }
         }
@@ -512,21 +529,34 @@ export const assignNextTask = async (req, res) => {
             const remainingQty = parseFloat(topProduct.quantity_grams) - processedQty;
             const duration = calculateWeighingDuration(topProduct.Product);
 
-            // Create WEIGHING task
-            let newTask = await BatchProductTask.create({
-                batch_id: batchId,
-                product_id: topProduct.product_id,
-                stage: 'WEIGHING',
-                quantity_grams: remainingQty,
-                status: 'NOT_STARTED',
-                duration_seconds: duration,
-                remaining_seconds: duration
-            });
-
-            // Reload to get the Product association
-            newTask = await BatchProductTask.findByPk(newTask.id, {
+            // Check if WEIGHING task already exists in DB for this product today
+            let newTask = await BatchProductTask.findOne({
+                where: {
+                    batch_id: batchId,
+                    product_id: topProduct.product_id,
+                    stage: 'WEIGHING',
+                    created_at: { [Op.gte]: startOfTodayForTasks }
+                },
                 include: [{ model: Product }]
             });
+
+            if (!newTask) {
+                // Create WEIGHING task
+                newTask = await BatchProductTask.create({
+                    batch_id: batchId,
+                    product_id: topProduct.product_id,
+                    stage: 'WEIGHING',
+                    quantity_grams: remainingQty,
+                    status: 'NOT_STARTED',
+                    duration_seconds: duration,
+                    remaining_seconds: duration
+                });
+
+                // Reload to get the Product association
+                newTask = await BatchProductTask.findByPk(newTask.id, {
+                    include: [{ model: Product }]
+                });
+            }
 
             return await returnTask(newTask, 'NEW_TASK');
         }
@@ -636,6 +666,11 @@ export const startTaskStage = async (req, res) => {
 };
 
 const handleStageCompletion = async (task) => {
+    // If task is already DONE, do not process again or create duplicate next tasks
+    if (task.status === 'DONE') {
+        return { task, nextTask: null };
+    }
+
     task.status = 'DONE';
     task.completed_at = new Date();
     task.remaining_seconds = 0;
@@ -676,17 +711,38 @@ const handleStageCompletion = async (task) => {
         }
 
         if (nextStage) {
-            nextTask = await BatchProductTask.create({
-                batch_id: task.batch_id,
-                product_id: task.product_id,
-                stage: nextStage,
-                quantity_grams: task.quantity_grams,
-                status: 'NOT_STARTED',
-                duration_seconds: duration,
-                remaining_seconds: duration
+            // Guard: Check if next stage task ALREADY exists for this batch and product today
+            const startOfToday = new Date();
+            startOfToday.setMinutes(startOfToday.getMinutes() + 330);
+            startOfToday.setUTCHours(0, 0, 0, 0);
+            startOfToday.setMinutes(startOfToday.getMinutes() - 330);
+
+            const existingNextTask = await BatchProductTask.findOne({
+                where: {
+                    batch_id: task.batch_id,
+                    product_id: task.product_id,
+                    stage: nextStage,
+                    created_at: { [Op.gte]: startOfToday }
+                },
+                include: [{ model: Product }]
             });
-            // Reload to attach product
-            nextTask = await BatchProductTask.findByPk(nextTask.id, { include: [{ model: Product }] });
+
+            if (existingNextTask) {
+                console.log(`[STAGE TRANSITION] Next stage ${nextStage} for product ${task.product_id} already exists (task ${existingNextTask.id}), reusing.`);
+                nextTask = existingNextTask;
+            } else {
+                nextTask = await BatchProductTask.create({
+                    batch_id: task.batch_id,
+                    product_id: task.product_id,
+                    stage: nextStage,
+                    quantity_grams: task.quantity_grams,
+                    status: 'NOT_STARTED',
+                    duration_seconds: duration,
+                    remaining_seconds: duration
+                });
+                // Reload to attach product
+                nextTask = await BatchProductTask.findByPk(nextTask.id, { include: [{ model: Product }] });
+            }
         }
     }
     return { task, nextTask };
@@ -764,7 +820,12 @@ export const completeTask = async (req, res) => {
         const workerId = req.user.id;
 
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
-        if (!task) return res.status(404).json({ success: false });
+        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+
+        // If already completed (e.g. double click), return immediately
+        if (task.status === 'DONE') {
+            return res.status(200).json({ success: true, task, message: "Task is already completed." });
+        }
 
         const result = await handleStageCompletion(task);
 

@@ -46,3 +46,4 @@ Thumbs.db
 
 # Node modules anywhere
 **/node_modules/
+Backend/scripts/inspect_*
