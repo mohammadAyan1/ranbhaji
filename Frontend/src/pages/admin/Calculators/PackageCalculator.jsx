@@ -218,6 +218,28 @@ export default function PackageCalculator() {
   const pricePerService = fixedBudget + seasonalBudget;
   const finalPackagePrice = Math.round(pricePerService * parseInt(servicesCount || 1) * 100) / 100;
 
+  // Base purchase costs without added margin (for display in Calculation Budget)
+  const totalSeasonalPurchaseCost = baseSeasonalPricePerGm * totalSeasonalQtyGm;
+  const totalBasePurchaseCost = totalFixedPurchaseCost + totalSeasonalPurchaseCost;
+
+  // Weight calculations per delivery and package cycle
+  const totalFixedWeightGm = fixedItems.reduce((sum, item) => {
+    return sum + (item.product_id ? (parseFloat(item.qty) || 0) : 0);
+  }, 0);
+  const isSeasonalActive = seasonalPool.length > 0 || (calculationMode === "custom" && parseFloat(customPrice || 0) > 0);
+  const totalSeasonalWeightGm = isSeasonalActive ? totalSeasonalQtyGm : 0;
+  const totalWeightPerServiceGm = totalFixedWeightGm + totalSeasonalWeightGm;
+  const totalPackageWeightGm = totalWeightPerServiceGm * parseInt(servicesCount || 1);
+
+  const formatWeight = (gm) => {
+    const g = Math.round((parseFloat(gm) || 0) * 100) / 100;
+    if (g >= 1000) {
+      const kg = g / 1000;
+      return `${parseFloat(kg.toFixed(2))} kg`;
+    }
+    return `${g} gm`;
+  };
+
   const toggleSeasonalProduct = (product_id) => {
     const id = parseInt(product_id);
     if (seasonalPool.includes(id)) {
@@ -605,11 +627,11 @@ export default function PackageCalculator() {
 
       {/* ─── SUMMARY CARDS ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Base Cost (Info only) */}
+        {/* Total Base Cost (Info only - without added margin) */}
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
           <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculation Budget</p>
-          <p className="text-2xl font-bold text-gray-900">₹{(fixedBudget + seasonalBudget).toFixed(2)}</p>
-          <span className="text-[10px] text-gray-500">Fixed: ₹{fixedBudget.toFixed(2)} · Seasonal: ₹{seasonalBudget.toFixed(2)}</span>
+          <p className="text-2xl font-bold text-gray-900">₹{totalBasePurchaseCost.toFixed(2)}</p>
+          <span className="text-[10px] text-gray-500">Fixed: ₹{totalFixedPurchaseCost.toFixed(2)} · Seasonal: ₹{totalSeasonalPurchaseCost.toFixed(2)}</span>
         </div>
 
         {/* Per-Service Price */}
@@ -630,7 +652,12 @@ export default function PackageCalculator() {
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
           <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculated Package Price</p>
           <p className="text-2xl font-bold text-fresh-600">₹{finalPackagePrice.toFixed(2)}</p>
-          <span className="text-[10px] text-gray-500">₹{pricePerService.toFixed(2)} * {servicesCount} services</span>
+          <div className="text-[10px] space-y-0.5 mt-1">
+            <span className="text-gray-500 block">₹{pricePerService.toFixed(2)} * {servicesCount} services</span>
+            <span className="text-gray-700 font-medium block" title={`Fixed: ${formatWeight(totalFixedWeightGm)} | Seasonal: ${formatWeight(totalSeasonalWeightGm)}`}>
+              ⚖️ {formatWeight(totalWeightPerServiceGm)} * {servicesCount} services = {formatWeight(totalPackageWeightGm)}
+            </span>
+          </div>
         </div>
       </div>
 

@@ -6,7 +6,7 @@ on:
       - main
 
     paths:
-      - 'Backend/**'
+      - "Backend/**"
 
 jobs:
   deploy:
@@ -23,8 +23,6 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
-
-          
 
           local-dir: ./Backend/
           server-dir: /rambhaji.backend.shreenari.com/
