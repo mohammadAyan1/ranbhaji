@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 
 export default function MySubscriptions() {
+  const navigate = useNavigate();
   const [subs, setSubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+
+  // Renew Modal state
+  const [renewingSub, setRenewingSub] = useState(null);
+  const [renewLoading, setRenewLoading] = useState(false);
+  const [renewMsg, setRenewMsg] = useState("");
+  const [renewPaymentMethod, setRenewPaymentMethod] = useState("wallet");
+  const [renewStartDate, setRenewStartDate] = useState("");
 
   // Pause Configuration Modal state
   const [pausingSub, setPausingSub] = useState(null);
@@ -63,7 +71,74 @@ export default function MySubscriptions() {
       .then(r => setSubs(r.data.subscriptions || []))
       .finally(() => setLoading(false));
   };
-  useEffect(fetchSubs, []);
+
+  const fetchWallet = () => {
+    api.get("/auth/me").then(res => {
+      if (res.data?.user?.wallet_balance !== undefined) {
+        setWalletBalance(parseFloat(res.data.user.wallet_balance || 0));
+      }
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchSubs();
+    fetchWallet();
+  }, []);
+
+  const getRenewAmount = (sub) => {
+    if (!sub || !sub.Package) return 0;
+    const isYearly = sub.type === "yearly";
+    const renewalCount = (sub.renewal_count || 1) + 1;
+    let basePrice = parseFloat(sub.Package.price || 0);
+    if (renewalCount >= 3 && sub.locked_price) {
+      basePrice = parseFloat(sub.locked_price);
+    }
+    return isYearly ? (basePrice * 12 * 0.75) : basePrice;
+  };
+
+  const openRenewModal = (sub) => {
+    setRenewingSub(sub);
+    setRenewMsg("");
+    setRenewPaymentMethod("wallet");
+    setRenewStartDate(getMinStartDate());
+    fetchWallet();
+  };
+
+  const handleExecuteRenewal = async () => {
+    if (!renewingSub) return;
+    setRenewLoading(true);
+    setRenewMsg("");
+    try {
+      if (renewPaymentMethod === "wallet") {
+        const res = await api.post("/subscriptions/renew", {
+          subscription_id: renewingSub.id,
+          payment_method: "wallet",
+          start_date: renewStartDate || undefined
+        });
+        setMsg(`✅ ${res.data.message || "Package safaltapoorvak renew ho gaya hai!"}`);
+        setRenewingSub(null);
+        fetchSubs();
+        fetchWallet();
+      } else if (renewPaymentMethod === "phonepe") {
+        const res = await api.post("/payment/phonepe/initiate", {
+          type: "package",
+          package_id: renewingSub.package_id,
+          billing_type: renewingSub.type || "monthly",
+          address_id: renewingSub.address_id,
+          delivery_time_slot: renewingSub.delivery_time_slot || undefined
+        });
+        if (res.data?.redirectUrl) {
+          window.location.href = res.data.redirectUrl;
+        } else {
+          setRenewMsg("❌ Online payment gateway URL nahi mil saki.");
+        }
+      }
+    } catch (err) {
+      setRenewMsg(`❌ ${err.response?.data?.message || err.message || "Renewal fail ho gaya"}`);
+    } finally {
+      setRenewLoading(false);
+    }
+  };
 
   const getMinStartDate = () => {
     const now = new Date();
@@ -821,6 +896,187 @@ export default function MySubscriptions() {
         </div>
       )}
 
+      {/* Renew Subscription Modal */}
+      {renewingSub && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-slide-up space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <span>🔄</span> Renew Subscription
+                </h3>
+                <p className="text-gray-500 text-xs">
+                  Agli delivery cycle shuru karne ke liye apna package renew karein.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRenewingSub(null)}
+                className="text-gray-400 hover:text-gray-700 text-2xl leading-none cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            {renewMsg && (
+              <div className={`rounded-xl px-4 py-3 text-sm border ${
+                renewMsg.startsWith("✅")
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  : "bg-red-50 text-red-700 border-red-200"
+              }`}>
+                {renewMsg}
+              </div>
+            )}
+
+            {/* Package details overview card */}
+            <div className="bg-fresh-50/70 border border-fresh-200/70 rounded-xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-gray-900 text-base">{renewingSub.Package?.name}</span>
+                  <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-fresh-100 text-fresh-800 uppercase tracking-wide">
+                    {renewingSub.type || "Monthly"}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xl font-bold text-fresh-800">
+                    ₹{getRenewAmount(renewingSub).toFixed(2)}
+                  </span>
+                  <span className="text-xs text-gray-500 block">
+                    /{renewingSub.type === "yearly" ? "year" : "month"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-gray-600 pt-1 border-t border-fresh-200/50">
+                <span>Deliveries: <strong>{renewingSub.total_services || renewingSub.Package?.services_per_month} Deliveries</strong></span>
+                <span>Renewal Cycle: <strong>#{((renewingSub.renewal_count || 1) + 1)}</strong></span>
+              </div>
+
+              {((renewingSub.renewal_count || 1) + 1) >= 3 && (
+                <div className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                  <span>🌟</span> Price Lock Benefit Active! Aapko locked price par package mil raha hai.
+                </div>
+              )}
+            </div>
+
+            {/* Start Date */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                📅 Delivery Start Date (Nayi cycle ki pehli delivery)
+              </label>
+              <input
+                type="date"
+                className="input text-sm w-full"
+                min={getMinStartDate()}
+                value={renewStartDate}
+                onChange={(e) => setRenewStartDate(e.target.value)}
+                required
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                {new Date().getHours() >= 20 ? "Shaam 8 baje ke baad agle se agle din ki date uplabdh hoti hai." : "Shaam 8 baje se pehle kal se delivery shuru ki ja sakti hai."}
+              </p>
+            </div>
+
+            {/* Payment Method Selection */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                💳 Payment Method Chunein
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Wallet Option */}
+                <div
+                  onClick={() => setRenewPaymentMethod("wallet")}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    renewPaymentMethod === "wallet"
+                      ? "border-fresh-600 bg-fresh-50/70 ring-1 ring-fresh-600"
+                      : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-sm text-gray-900 flex items-center gap-1.5">
+                      <span>💰</span> Wallet
+                    </span>
+                    <input
+                      type="radio"
+                      name="renewPaymentMethod"
+                      checked={renewPaymentMethod === "wallet"}
+                      onChange={() => setRenewPaymentMethod("wallet")}
+                      className="text-fresh-600"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    Balance: <strong className={walletBalance >= getRenewAmount(renewingSub) ? "text-emerald-700 font-bold" : "text-red-600 font-bold"}>
+                      ₹{walletBalance.toFixed(2)}
+                    </strong>
+                  </div>
+                  {walletBalance < getRenewAmount(renewingSub) && (
+                    <span className="text-[10px] text-red-600 block mt-0.5">
+                      (Insufficient balance)
+                    </span>
+                  )}
+                </div>
+
+                {/* Online PhonePe Option */}
+                <div
+                  onClick={() => setRenewPaymentMethod("phonepe")}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                    renewPaymentMethod === "phonepe"
+                      ? "border-fresh-600 bg-fresh-50/70 ring-1 ring-fresh-600"
+                      : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-sm text-gray-900 flex items-center gap-1.5">
+                      <span>📱</span> Online Pay
+                    </span>
+                    <input
+                      type="radio"
+                      name="renewPaymentMethod"
+                      checked={renewPaymentMethod === "phonepe"}
+                      onChange={() => setRenewPaymentMethod("phonepe")}
+                      className="text-fresh-600"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    PhonePe / UPI / Cards
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRenewingSub(null)}
+                className="btn-secondary flex-1 py-2 text-sm"
+                disabled={renewLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteRenewal}
+                disabled={renewLoading || (renewPaymentMethod === "wallet" && walletBalance < getRenewAmount(renewingSub))}
+                className={`btn-primary flex-1 py-2 text-sm flex items-center justify-center gap-2 ${
+                  renewPaymentMethod === "wallet" && walletBalance < getRenewAmount(renewingSub)
+                    ? "opacity-50 cursor-not-allowed bg-gray-400"
+                    : "bg-fresh-600 hover:bg-fresh-500 cursor-pointer"
+                }`}
+              >
+                {renewLoading ? (
+                  <span>Processing...</span>
+                ) : (
+                  <span>
+                    Confirm & Renew (₹{getRenewAmount(renewingSub).toFixed(2)})
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Start Date Confirmation Modal */}
       {confirmingStartSub && (
         <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1260,7 +1516,19 @@ export default function MySubscriptions() {
 
 
                     <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-200">
-                      {sub.status === "active" && (
+                      {(sub.status === "completed" || sub.services_completed >= sub.total_services) ? (
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <button
+                            onClick={() => openRenewModal(sub)}
+                            className="btn-primary text-sm py-1.5 px-4 flex items-center gap-1.5 bg-fresh-600 hover:bg-fresh-500 shadow-sm cursor-pointer"
+                          >
+                            🔄 Renew Package
+                          </button>
+                          <span className="text-xs text-gray-500">
+                            Aapki sabhi {sub.total_services} deliveries poori ho chuki hain. Nayi cycle shuru karne ke liye Renew karein.
+                          </span>
+                        </div>
+                      ) : sub.status === "active" ? (
                         <>
                           {sub.Package?.SeasonalConfig && (
                             <button
@@ -1277,10 +1545,9 @@ export default function MySubscriptions() {
                           </button>
                           <button onClick={() => handleCancel(sub.id)} className="btn-danger text-sm py-1.5 px-3">✕ Cancel</button>
                         </>
-                      )}
-                      {sub.status === "paused" && (
+                      ) : sub.status === "paused" ? (
                         <button onClick={() => startResumeFlow(sub)} className="btn-primary text-sm py-1.5 px-4">▶ Resume</button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )}

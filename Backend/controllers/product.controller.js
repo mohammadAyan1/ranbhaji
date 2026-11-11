@@ -187,14 +187,14 @@ export const deleteProduct = async (req, res) => {
     }
 };
 
-// POST /api/products/purchase (admin)
+// POST /api/products/purchase (worker / admin)
 export const createPurchase = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const { product_id, quantity, purchase_price_per_kg, selling_price_per_kg } = req.body;
-        if (!product_id || !quantity || !purchase_price_per_kg) {
+        if (!product_id || !quantity) {
             await t.rollback();
-            return res.status(400).json({ success: false, message: "product_id, quantity, and purchase_price_per_kg are required" });
+            return res.status(400).json({ success: false, message: "product_id and quantity are required" });
         }
 
         const product = await Product.findByPk(product_id, { transaction: t });
@@ -204,7 +204,9 @@ export const createPurchase = async (req, res) => {
         }
 
         const qtyVal = parseFloat(quantity);
-        const purchasePricePerKg = parseFloat(purchase_price_per_kg);
+        const purchasePricePerKg = (purchase_price_per_kg !== undefined && purchase_price_per_kg !== null && purchase_price_per_kg !== "")
+            ? parseFloat(purchase_price_per_kg)
+            : 0;
         const sellingPricePerKg = selling_price_per_kg ? parseFloat(selling_price_per_kg) : null;
 
         let baseQty = qtyVal;
@@ -217,37 +219,90 @@ export const createPurchase = async (req, res) => {
         const totalAmount = qtyVal * purchasePricePerKg;
         const currentStock = parseFloat(product.current_stock || 0);
 
-        const updatedTotalPurchased = parseFloat(product.total_purchased_qty || 0) + baseQty;
-        const updatedCurrentStock = currentStock + baseQty;
+        // Check if a purchase log was already created today for this product
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
 
-        const updateData = {
-            total_purchased_qty: updatedTotalPurchased,
-            current_stock: updatedCurrentStock
-        };
+        const existingLog = await PurchaseLog.findOne({
+            where: {
+                product_id,
+                purchase_date: {
+                    [Op.between]: [startOfDay, endOfDay]
+                }
+            },
+            transaction: t
+        });
 
-        if (sellingPricePerKg !== null) {
+        let log;
+        if (existingLog) {
+            const oldQty = parseFloat(existingLog.quantity || 0);
+            const diff = baseQty - oldQty;
+            const updatedCurrentStock = currentStock + diff;
+            const updatedTotalPurchased = parseFloat(product.total_purchased_qty || 0) + diff;
+
+            const productUpdate = {
+                current_stock: updatedCurrentStock,
+                total_purchased_qty: updatedTotalPurchased
+            };
+
+            const finalPricePerKg = purchasePricePerKg > 0 ? purchasePricePerKg : parseFloat(existingLog.purchase_price_per_kg || 0);
             const isPiece = product.unit === 'piece';
-            updateData.selling_price_per_gm = sellingPricePerKg / (isPiece ? 1 : 1000);
+            if (finalPricePerKg > 0) {
+                productUpdate.purchase_price_per_gm = isPiece ? finalPricePerKg : finalPricePerKg / 1000;
+            }
+            if (sellingPricePerKg !== null) {
+                productUpdate.selling_price_per_gm = sellingPricePerKg / (isPiece ? 1 : 1000);
+            }
+
+            await product.update(productUpdate, { transaction: t });
+
+            const finalTotal = qtyVal * finalPricePerKg;
+            await existingLog.update({
+                quantity: baseQty,
+                purchase_price_per_kg: finalPricePerKg,
+                selling_price_per_kg: sellingPricePerKg || existingLog.selling_price_per_kg,
+                total_amount: finalTotal
+            }, { transaction: t });
+
+            log = existingLog;
+        } else {
+            const updatedTotalPurchased = parseFloat(product.total_purchased_qty || 0) + baseQty;
+            const updatedCurrentStock = currentStock + baseQty;
+
+            const updateData = {
+                total_purchased_qty: updatedTotalPurchased,
+                current_stock: updatedCurrentStock
+            };
+
+            const isPiece = product.unit === 'piece';
+            if (purchasePricePerKg > 0) {
+                updateData.purchase_price_per_gm = isPiece ? purchasePricePerKg : purchasePricePerKg / 1000;
+            }
+            if (sellingPricePerKg !== null) {
+                updateData.selling_price_per_gm = sellingPricePerKg / (isPiece ? 1 : 1000);
+            }
+
+            await product.update(updateData, { transaction: t });
+
+            log = await PurchaseLog.create({
+                product_id,
+                quantity: baseQty,
+                purchase_price_per_kg: purchasePricePerKg,
+                selling_price_per_kg: sellingPricePerKg || 0,
+                total_amount: totalAmount
+            }, { transaction: t });
+
+            // Auto-create a Production Batch so workers have pending tasks
+            await ProductionBatch.create({
+                product_id,
+                date: new Date().toISOString().split('T')[0],
+                total_qty_kg: qtyVal,
+                pending_qty_kg: qtyVal,
+                status: 'pending'
+            }, { transaction: t });
         }
-
-        await product.update(updateData, { transaction: t });
-
-        const log = await PurchaseLog.create({
-            product_id,
-            quantity: baseQty,
-            purchase_price_per_kg: purchasePricePerKg,
-            selling_price_per_kg: sellingPricePerKg || 0,
-            total_amount: totalAmount
-        }, { transaction: t });
-
-        // Auto-create a Production Batch so workers have pending tasks
-        await ProductionBatch.create({
-            product_id,
-            date: new Date().toISOString().split('T')[0],
-            total_qty_kg: qtyVal,
-            pending_qty_kg: qtyVal,
-            status: 'pending'
-        }, { transaction: t });
 
         await t.commit();
 
@@ -277,7 +332,59 @@ export const createPurchase = async (req, res) => {
     }
 };
 
-// GET /api/products/purchases (admin)
+// PUT /api/products/purchase/:id/price (admin)
+export const updatePurchasePrice = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { total_price, purchase_price_per_kg } = req.body;
+
+        const log = await PurchaseLog.findByPk(id, {
+            include: [{ model: Product }],
+            transaction: t
+        });
+
+        if (!log) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Purchase log not found" });
+        }
+
+        const isGm = log.Product?.unit === 'gm' || log.Product?.unit === 'ml';
+        const displayQty = isGm ? parseFloat(log.quantity) / 1000 : parseFloat(log.quantity);
+
+        let finalPricePerKg = 0;
+        let finalTotal = 0;
+
+        if (total_price !== undefined && total_price !== null && displayQty > 0) {
+            finalTotal = parseFloat(total_price);
+            finalPricePerKg = Math.round((finalTotal / displayQty) * 100) / 100;
+        } else if (purchase_price_per_kg !== undefined && purchase_price_per_kg !== null) {
+            finalPricePerKg = parseFloat(purchase_price_per_kg);
+            finalTotal = Math.round((displayQty * finalPricePerKg) * 100) / 100;
+        }
+
+        await log.update({
+            purchase_price_per_kg: finalPricePerKg,
+            total_amount: finalTotal
+        }, { transaction: t });
+
+        // Update product's purchase_price_per_gm so package calculator & costing reflect new rate
+        if (log.Product && finalPricePerKg > 0) {
+            const isPiece = log.Product.unit === 'piece';
+            await log.Product.update({
+                purchase_price_per_gm: isPiece ? finalPricePerKg : finalPricePerKg / 1000
+            }, { transaction: t });
+        }
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Purchase price updated successfully", log });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/products/purchases (worker / admin)
 export const getPurchases = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
@@ -293,10 +400,24 @@ export const getPurchases = async (req, res) => {
 
         const purchases = await PurchaseLog.findAll({
             where: whereClause,
-            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category'] }],
+            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm'] }],
             order: [['purchase_date', 'DESC']]
         });
-        res.status(200).json({ success: true, purchases });
+
+        // If not admin, sanitize prices so worker only sees quantity/has_price
+        const isAdmin = req.user && req.user.role === 'admin';
+        const sanitized = purchases.map(p => {
+            const data = p.toJSON();
+            const hasPrice = parseFloat(p.total_amount || 0) > 0 || parseFloat(p.purchase_price_per_kg || 0) > 0;
+            data.has_price = hasPrice;
+            if (!isAdmin) {
+                delete data.purchase_price_per_kg;
+                delete data.total_amount;
+            }
+            return data;
+        });
+
+        res.status(200).json({ success: true, purchases: sanitized });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

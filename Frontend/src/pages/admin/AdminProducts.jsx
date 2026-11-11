@@ -72,6 +72,18 @@ export default function AdminProducts() {
   });
   const [purchaseLogs, setPurchaseLogs] = useState([]);
   const [stockSummary, setStockSummary] = useState([]);
+  const [demandStatusFilter, setDemandStatusFilter] = useState("all");
+  const [priceModal, setPriceModal] = useState({
+    isOpen: false,
+    logId: null,
+    productId: null,
+    productName: "",
+    quantityDisplay: "",
+    quantityKg: 0,
+    unit: "gm",
+    totalPrice: "",
+    submitting: false
+  });
 
   const getStartOfWeek = () => {
     const d = new Date();
@@ -227,8 +239,8 @@ export default function AdminProducts() {
   useEffect(() => {
     fetchProducts();
     fetchDemands();
+    fetchPurchaseLogs();
     if (isAdmin) {
-      fetchPurchaseLogs();
       fetchStockSummary();
       fetchUnits();
       fetchCategories();
@@ -240,7 +252,10 @@ export default function AdminProducts() {
     if (isAdmin && activeTab === "logs") fetchPurchaseLogs();
     if (isAdmin && activeTab === "stock") fetchStockSummary();
     if (isAdmin && activeTab === "catalog") fetchProducts();
-    if (activeTab === "purchase") fetchDemands();
+    if (activeTab === "purchase") {
+      fetchDemands();
+      fetchPurchaseLogs();
+    }
   }, [activeTab, demandDate, isAdmin]);
 
   useEffect(() => {
@@ -443,7 +458,7 @@ export default function AdminProducts() {
     alert(`Actual Average Cost for ${productName}:\n₹${avgPerBase.toFixed(2)} per ${unit === 'piece' ? 'pc' : 'kg/L'}\n(Based on ${totalQty.toFixed(2)} total quantity and ₹${totalAmount.toFixed(2)} total cost)`);
   };
 
-  // Submit Purchase Entry
+  // Submit Purchase Entry (Worker logs weight; Admin can log weight or weight+price)
   const handlePurchaseSubmit = async (e) => {
     e.preventDefault();
     setMsg("");
@@ -459,9 +474,9 @@ export default function AdminProducts() {
       }
 
       const total = parseFloat(purchaseForm.total_price);
-      // Calculate per base unit price (per kg or per piece)
+      // Calculate per base unit price (per kg or per piece) if entered by admin
       let calculated_purchase_price = 0;
-      if (qty > 0) {
+      if (qty > 0 && !isNaN(total) && total > 0) {
         calculated_purchase_price = total / qty;
       }
 
@@ -470,29 +485,84 @@ export default function AdminProducts() {
         quantity: qty,
         purchase_price_per_kg: calculated_purchase_price
       });
-      setMsg("✅ Purchase entry logged and stock updated!");
 
+      setMsg(isAdmin && calculated_purchase_price > 0 
+        ? "✅ Purchase entry logged and stock updated!" 
+        : "✅ Sabji ka wajan log ho gaya aur stock update ho gaya! (Admin price add karega)");
 
       setCompletedDemands([...completedDemands, parseInt(purchaseForm.product_id)]);
-      setPendingRetailPricing([...pendingRetailPricing, {
-        product_id: purchaseForm.product_id,
-        name: productObj ? productObj.name : "Unknown",
-        calculated_purchase_price: calculated_purchase_price,
-        margin_percentage: productObj?.default_margin_percentage ? productObj.default_margin_percentage.toString() : ""
-      }]);
+      if (calculated_purchase_price > 0) {
+        setPendingRetailPricing([...pendingRetailPricing, {
+          product_id: purchaseForm.product_id,
+          name: productObj ? productObj.name : "Unknown",
+          calculated_purchase_price: calculated_purchase_price,
+          margin_percentage: productObj?.default_margin_percentage ? productObj.default_margin_percentage.toString() : ""
+        }]);
+      }
 
       setPurchaseForm({
         product_id: "",
         quantity: "",
         total_price: ""
       });
-      fetchStockSummary();
       fetchPurchaseLogs();
       fetchDemands();
+      if (isAdmin) fetchStockSummary();
     } catch (err) {
       setMsg(`❌ ${err.response?.data?.message || "Failed to log purchase"}`);
     } finally {
       setSubmittingPurchase(false);
+    }
+  };
+
+  const handleOpenPriceModal = (product, log) => {
+    const isGm = product?.unit === 'gm' || product?.unit === 'ml';
+    const qty = parseFloat(log?.quantity || 0);
+    const displayQty = isGm ? `${qty / 1000} ${product?.unit === 'gm' ? 'kg' : 'L'}` : `${qty} pcs`;
+    const qtyKg = isGm ? qty / 1000 : qty;
+    setPriceModal({
+      isOpen: true,
+      logId: log.id,
+      productId: product?.id,
+      productName: product?.name || "Product",
+      quantityDisplay: displayQty,
+      quantityKg: qtyKg,
+      unit: product?.unit || "gm",
+      totalPrice: log.total_amount && parseFloat(log.total_amount) > 0 ? String(log.total_amount) : "",
+      submitting: false
+    });
+  };
+
+  const handleSavePrice = async (e) => {
+    e.preventDefault();
+    if (!priceModal.totalPrice || parseFloat(priceModal.totalPrice) <= 0) {
+      alert("Kripya valid total price enter karein");
+      return;
+    }
+    setPriceModal(prev => ({ ...prev, submitting: true }));
+    try {
+      await api.put(`/products/purchase/${priceModal.logId}/price`, {
+        total_price: parseFloat(priceModal.totalPrice)
+      });
+      setMsg("✅ Purchase price successfully update ho gaya!");
+      setPriceModal({
+        isOpen: false,
+        logId: null,
+        productId: null,
+        productName: "",
+        quantityDisplay: "",
+        quantityKg: 0,
+        unit: "gm",
+        totalPrice: "",
+        submitting: false
+      });
+      fetchPurchaseLogs();
+      fetchDemands();
+      if (isAdmin) fetchStockSummary();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update price");
+    } finally {
+      setPriceModal(prev => ({ ...prev, submitting: false }));
     }
   };
 
@@ -1284,8 +1354,9 @@ export default function AdminProducts() {
             <div>
               <h3 className="font-semibold text-gray-900 mb-2">Stock Demand List & Purchase Entry</h3>
               <p className="text-gray-600 text-xs">
-                Admin jo bhi fruits/vegetables buy karega, uska wajan (kg/pieces) aur total price yahan enter karein.
-                System automatically per-kg/per-piece rate calculate kar lega.
+                {isAdmin
+                  ? "Worker mandi se laye huye maal ka total wajan (quantity) enter karega, aur Admin yahan total price enter karega."
+                  : "Mandi se kharidi gayi sabji ka total wajan (quantity) yahan enter karein. Total price admin baad me enter karega."}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 shrink-0">
@@ -1332,121 +1403,285 @@ export default function AdminProducts() {
             </div>
           </div>
 
-          <div className="overflow-x-auto mb-8">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="table-header">
-                  <th className="text-left p-3 rounded-tl-xl">Product</th>
-                  <th className="text-right p-3">Total Demand</th>
-                  <th className="text-right p-3 rounded-tr-xl">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const pendingDemands = demands.filter(d => !completedDemands.includes(d.id));
-                  const q = demandSearch.trim().toLowerCase();
-                  const filtered = pendingDemands.filter(d => {
-                    if (!q) return true;
-                    return (
-                      (d.name || "").toLowerCase().includes(q) ||
-                      String(d.id).includes(q) ||
-                      (d.unit || "").toLowerCase().includes(q)
-                    );
-                  });
+          {(() => {
+            const selectedDateStr = demandDate || new Date().toISOString().split('T')[0];
+            const dateLogs = purchaseLogs.filter(log => {
+              if (!log.purchase_date) return false;
+              return new Date(log.purchase_date).toISOString().split('T')[0] === selectedDateStr;
+            });
 
-                  if (pendingDemands.length === 0) {
-                    return (
-                      <tr>
-                        <td colSpan="3" className="text-center py-6 text-gray-500">No pending stock demand found.</td>
+            const getProductLog = (prodId) => dateLogs.find(l => l.product_id === prodId);
+
+            const getLogStatus = (log) => {
+              if (!log) return "pending_weight";
+              const hasPrice = log.has_price || (parseFloat(log.total_amount || 0) > 0 || parseFloat(log.purchase_price_per_kg || 0) > 0);
+              if (!hasPrice) return "awaiting_price";
+              return "completed";
+            };
+
+            const pendingWeightCount = demands.filter(d => getLogStatus(getProductLog(d.id)) === "pending_weight").length;
+            const awaitingPriceCount = demands.filter(d => getLogStatus(getProductLog(d.id)) === "awaiting_price").length;
+            const completedCount = demands.filter(d => getLogStatus(getProductLog(d.id)) === "completed").length;
+
+            const q = demandSearch.trim().toLowerCase();
+            const filtered = demands.filter(d => {
+              const log = getProductLog(d.id);
+              const status = getLogStatus(log);
+              if (demandStatusFilter !== "all" && status !== demandStatusFilter) return false;
+              if (!q) return true;
+              return (
+                (d.name || "").toLowerCase().includes(q) ||
+                String(d.id).includes(q) ||
+                (d.unit || "").toLowerCase().includes(q)
+              );
+            });
+
+            return (
+              <>
+                {/* Status Filter Tabs */}
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setDemandStatusFilter("all")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${demandStatusFilter === "all" ? "bg-fresh-600 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  >
+                    All Demands ({demands.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDemandStatusFilter("pending_weight")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${demandStatusFilter === "pending_weight" ? "bg-gray-800 text-white shadow-xs" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  >
+                    ⏳ Pending Weight ({pendingWeightCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDemandStatusFilter("awaiting_price")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${demandStatusFilter === "awaiting_price" ? "bg-amber-600 text-white shadow-xs" : "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"}`}
+                  >
+                    ⚠️ Awaiting Admin Price ({awaitingPriceCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDemandStatusFilter("completed")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${demandStatusFilter === "completed" ? "bg-emerald-600 text-white shadow-xs" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"}`}
+                  >
+                    ✓ Completed ({completedCount})
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto mb-8">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="table-header">
+                        <th className="text-left p-3 rounded-tl-xl">Product</th>
+                        <th className="text-right p-3">Total Demand</th>
+                        <th className="text-center p-3">Purchased Weight</th>
+                        <th className="text-center p-3">Status</th>
+                        {isAdmin && <th className="text-right p-3">Purchase Price</th>}
+                        <th className="text-right p-3 rounded-tr-xl">Action</th>
                       </tr>
-                    );
-                  }
+                    </thead>
+                    <tbody>
+                      {demands.length === 0 ? (
+                        <tr>
+                          <td colSpan={isAdmin ? "6" : "5"} className="text-center py-6 text-gray-500">No stock demand found for {selectedDateStr}.</td>
+                        </tr>
+                      ) : filtered.length === 0 ? (
+                        <tr>
+                          <td colSpan={isAdmin ? "6" : "5"} className="text-center py-6 text-gray-500">
+                            No items found matching the selected filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        filtered.map(d => {
+                          const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
+                          const isGm = d.unit === 'gm' || d.unit === 'ml';
+                          const displayQty = isGm ? totalQty / 1000 : totalQty;
+                          const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : 'pcs';
 
-                  if (filtered.length === 0) {
-                    return (
-                      <tr>
-                        <td colSpan="3" className="text-center py-6 text-gray-500">
-                          No pending stock demand matching "<span className="text-gray-700 font-semibold">{demandSearch}</span>"
-                        </td>
-                      </tr>
-                    );
-                  }
+                          const log = getProductLog(d.id);
+                          const status = getLogStatus(log);
+                          const matchingProduct = products.find(p => p.id === d.id);
 
-                  return filtered.map(d => {
-                    const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
-                    const isGm = d.unit === 'gm' || d.unit === 'ml';
-                    const displayQty = isGm ? totalQty / 1000 : totalQty;
-                    const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : 'pcs';
+                          let purchasedWeightDisplay = "-";
+                          if (log) {
+                            const pQty = parseFloat(log.quantity || 0);
+                            purchasedWeightDisplay = isGm ? `${pQty / 1000} ${d.unit === 'gm' ? 'kg' : 'L'}` : `${pQty} pcs`;
+                          }
 
-                    return (
-                      <tr key={d.id} className="table-row">
-                        <td className="p-3 text-gray-900 font-medium">{d.name}</td>
-                        <td
-                          className="p-3 text-right font-bold text-blue-400 cursor-pointer hover:underline hover:text-blue-500 transition-colors"
-                          title="Click to view demand breakdown"
-                          onClick={() => setSelectedDemand(d)}
-                        >
-                          {displayQty} {displayUnit}
-                        </td>
-                        <td className="p-3 text-right">
-                          <button
-                            onClick={() => {
-                              const matchingProduct = products.find(p => p.id === d.id);
-                              const sellingPrice = matchingProduct ? (isGm ? matchingProduct.selling_price_per_gm * 1000 : matchingProduct.selling_price_per_gm) : "";
-                              setPurchaseForm({
-                                product_id: d.id,
-                                quantity: isGm ? totalQty : displayQty,
-                                total_price: "",
-                                selling_price_per_kg: sellingPrice || ""
-                              });
-                            }}
-                            className="btn-primary py-1 px-3 text-xs"
-                          >
-                            Submit Purchase
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  });
-                })()}
-              </tbody>
-            </table>
-          </div>
+                          return (
+                            <tr key={d.id} className="table-row">
+                              <td className="p-3 text-gray-900 font-medium">{d.name}</td>
+                              <td
+                                className="p-3 text-right font-bold text-blue-500 cursor-pointer hover:underline"
+                                title="Click to view demand breakdown"
+                                onClick={() => setSelectedDemand(d)}
+                              >
+                                {displayQty} {displayUnit}
+                              </td>
+                              <td className="p-3 text-center">
+                                {log ? (
+                                  <span className="font-semibold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-lg">
+                                    {purchasedWeightDisplay}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 italic text-xs">Not logged</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center">
+                                {status === "pending_weight" && (
+                                  <span className="text-[11px] font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
+                                    ⏳ Pending Weight
+                                  </span>
+                                )}
+                                {status === "awaiting_price" && (
+                                  <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full border border-amber-200">
+                                    ⚠️ Awaiting Price
+                                  </span>
+                                )}
+                                {status === "completed" && (
+                                  <span className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full border border-emerald-200">
+                                    ✓ Completed
+                                  </span>
+                                )}
+                              </td>
+                              {isAdmin && (
+                                <td className="p-3 text-right">
+                                  {log && (parseFloat(log.total_amount || 0) > 0 || parseFloat(log.purchase_price_per_kg || 0) > 0) ? (
+                                    <div>
+                                      <span className="font-bold text-emerald-700">₹{parseFloat(log.total_amount).toFixed(2)}</span>
+                                      <span className="text-[10px] text-gray-500 block">(₹{parseFloat(log.purchase_price_per_kg).toFixed(2)}/{isGm ? 'kg' : 'pc'})</span>
+                                    </div>
+                                  ) : log ? (
+                                    <span className="text-amber-600 font-medium text-xs italic">Awaiting price</span>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                              )}
+                              <td className="p-3 text-right">
+                                {status === "pending_weight" && (
+                                  <button
+                                    onClick={() => {
+                                      setPurchaseForm({
+                                        product_id: d.id,
+                                        quantity: isGm ? totalQty : displayQty,
+                                        total_price: ""
+                                      });
+                                    }}
+                                    className="btn-primary py-1 px-3 text-xs"
+                                  >
+                                    {isAdmin ? "Log Weight" : "Submit Weight"}
+                                  </button>
+                                )}
+                                {status === "awaiting_price" && (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {isAdmin ? (
+                                      <button
+                                        onClick={() => handleOpenPriceModal(matchingProduct, log)}
+                                        className="btn-primary py-1 px-3 text-xs bg-amber-600 hover:bg-amber-700 border-amber-600 flex items-center gap-1 shadow-xs cursor-pointer"
+                                      >
+                                        <span>₹ Enter Price</span>
+                                      </button>
+                                    ) : (
+                                      <span className="text-xs text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                        Price Pending
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() => {
+                                        const pQty = parseFloat(log.quantity || 0);
+                                        setPurchaseForm({
+                                          product_id: d.id,
+                                          quantity: isGm ? pQty : pQty,
+                                          total_price: ""
+                                        });
+                                      }}
+                                      className="btn-secondary py-1 px-2 text-xs"
+                                      title="Edit Weight"
+                                    >
+                                      ✏️
+                                    </button>
+                                  </div>
+                                )}
+                                {status === "completed" && (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className="text-xs font-semibold text-emerald-700">✅ Done</span>
+                                    {isAdmin && (
+                                      <button
+                                        onClick={() => handleOpenPriceModal(matchingProduct, log)}
+                                        className="text-xs text-blue-600 hover:underline cursor-pointer"
+                                        title="Edit Price"
+                                      >
+                                        Edit Price
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
 
+          {/* Modal 1: Log Weight Modal (Used by Worker or Admin) */}
           {purchaseForm.product_id && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
                 <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
                   <div>
-                    <h4 className="font-bold text-lg text-gray-900">Log Purchase</h4>
+                    <h4 className="font-bold text-lg text-gray-900">
+                      {isAdmin ? "Log Purchase Weight" : "Log Purchased Weight (Worker)"}
+                    </h4>
                     <p className="text-sm text-gray-500">{demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}</p>
                   </div>
                   <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
                 </div>
                 <div className="p-6 overflow-y-auto">
                   <form onSubmit={handlePurchaseSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Quantity */}
-                      <div>
-                        <label className="label">
-                          Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'ml' ? 'mL' : 'g')) : 'g'})
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          min="0.001"
-                          placeholder="e.g. 1000"
-                          className="input"
-                          value={purchaseForm.quantity}
-                          onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
-                          required
-                        />
+                    {!isAdmin && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+                        ⚖️ <b>Worker Note:</b> Market se jitna saman/wajan liya hai sirf wahi enter karein. Total price enter karne ki zaroorat nahi hai.
                       </div>
+                    )}
+                    <div>
+                      <label className="label">
+                        Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'ml' ? 'mL' : 'g')) : 'g'})
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.001"
+                        placeholder="e.g. 2000"
+                        className="input text-base font-semibold"
+                        value={purchaseForm.quantity}
+                        onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                        required
+                        autoFocus
+                      />
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        Total Demand: {(() => {
+                          const d = demands.find(item => item.id === purchaseForm.product_id);
+                          if (!d) return "-";
+                          const total = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
+                          const isGm = d.unit === 'gm' || d.unit === 'ml';
+                          return isGm ? `${total / 1000} ${d.unit === 'gm' ? 'kg' : 'L'}` : `${total} pcs`;
+                        })()}
+                      </p>
+                    </div>
 
-                      {/* Total Price */}
+                    {/* Total Price ONLY shown if logged in as Admin */}
+                    {isAdmin && (
                       <div>
                         <label className="label">
-                          Total Price (₹)
+                          Total Price (₹) <span className="text-gray-400 font-normal text-xs">(Optional - Admin can enter now or later)</span>
                         </label>
                         <input
                           type="number"
@@ -1456,17 +1691,14 @@ export default function AdminProducts() {
                           className="input"
                           value={purchaseForm.total_price}
                           onChange={e => setPurchaseForm({ ...purchaseForm, total_price: e.target.value })}
-                          required
                         />
                       </div>
+                    )}
 
-                    </div>
-
-                    {/* Auto Calculated Per Kg Live Preview */}
-                    {parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-sm mt-4">
-                        <span className="text-gray-600">Calculated Purchase Price:</span>
-                        <span className="text-lg font-bold text-gradient">
+                    {isAdmin && parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex justify-between items-center text-sm">
+                        <span className="text-gray-600">Calculated Rate:</span>
+                        <span className="font-bold text-blue-700">
                           ₹{(() => {
                             const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
                             const isGm = productObj?.unit === 'gm' || productObj?.unit === 'ml';
@@ -1477,14 +1709,74 @@ export default function AdminProducts() {
                       </div>
                     )}
 
-                    <div className="pt-4 border-t border-gray-200 mt-6 flex flex-col sm:flex-row justify-end gap-3">
-                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="px-5 py-2.5 rounded-xl font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors w-full sm:w-auto">Cancel</button>
+                    <div className="pt-4 border-t border-gray-200 mt-6 flex justify-end gap-3">
+                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="btn-secondary py-2 px-4">Cancel</button>
                       <button
                         type="submit"
                         disabled={submittingPurchase}
-                        className="btn-primary py-2.5 px-6 w-full sm:w-auto"
+                        className="btn-primary py-2 px-6"
                       >
-                        {submittingPurchase ? "Saving Entry..." : "Submit & Update stock"}
+                        {submittingPurchase ? "Saving..." : "Submit Weight & Update Stock"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 2: Admin Enter Price Modal */}
+          {priceModal.isOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up border border-gray-200 flex flex-col">
+                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                  <div>
+                    <h4 className="font-bold text-lg text-gray-900">Enter Purchase Price</h4>
+                    <p className="text-sm text-gray-500">{priceModal.productName}</p>
+                  </div>
+                  <button type="button" onClick={() => setPriceModal(prev => ({ ...prev, isOpen: false }))} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
+                </div>
+                <div className="p-6">
+                  <form onSubmit={handleSavePrice} className="space-y-4">
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex justify-between items-center">
+                      <span className="text-xs text-gray-600 font-medium">Purchased Quantity (by Worker):</span>
+                      <span className="text-sm font-bold text-gray-900">{priceModal.quantityDisplay}</span>
+                    </div>
+
+                    <div>
+                      <label className="label">
+                        Total Amount Paid (₹)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="e.g. 500"
+                        className="input text-lg font-bold text-fresh-700"
+                        value={priceModal.totalPrice}
+                        onChange={e => setPriceModal({ ...priceModal, totalPrice: e.target.value })}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    {parseFloat(priceModal.totalPrice) > 0 && priceModal.quantityKg > 0 && (
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex justify-between items-center text-sm">
+                        <span className="text-gray-600">Calculated Rate:</span>
+                        <span className="font-bold text-blue-700">
+                          ₹{(parseFloat(priceModal.totalPrice) / priceModal.quantityKg).toFixed(2)} / {priceModal.unit === 'piece' ? 'pc' : (priceModal.unit === 'ml' ? 'L' : 'kg')}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-gray-200 mt-6 flex justify-end gap-3">
+                      <button type="button" onClick={() => setPriceModal(prev => ({ ...prev, isOpen: false }))} className="btn-secondary py-2 px-4">Cancel</button>
+                      <button
+                        type="submit"
+                        disabled={priceModal.submitting}
+                        className="btn-primary py-2 px-6"
+                      >
+                        {priceModal.submitting ? "Saving..." : "Save Price & Complete"}
                       </button>
                     </div>
                   </form>

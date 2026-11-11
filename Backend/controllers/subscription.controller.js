@@ -41,13 +41,18 @@ export const subscribe = async (req, res) => {
             }
         });
         if (existingSubscription) {
-            await t.rollback();
-            return res.status(409).json({
-                success: false,
-                message: `Aap pehle se is package ke subscriber hain. Aapka current subscription end hone ke baad aap ise renew kar sakte hain.`,
-                existing_subscription_id: existingSubscription.id,
-                existing_status: existingSubscription.status
-            });
+            // If all services were delivered, mark it completed and allow renewal
+            if (existingSubscription.services_completed >= existingSubscription.total_services) {
+                await existingSubscription.update({ status: 'completed' }, { transaction: t });
+            } else {
+                await t.rollback();
+                return res.status(409).json({
+                    success: false,
+                    message: `Aap pehle se is package ke subscriber hain. Aapka current subscription end hone ke baad aap ise renew kar sakte hain.`,
+                    existing_subscription_id: existingSubscription.id,
+                    existing_status: existingSubscription.status
+                });
+            }
         }
 
         // Calculate amount
@@ -1594,6 +1599,203 @@ export const renewPackageByAdmin = async (req, res) => {
     } catch (error) {
         await t.rollback();
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// POST /api/subscriptions/renew (user self-renewal)
+export const renewSubscription = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const user_id = req.user.id;
+        const { subscription_id, package_id, payment_method = 'wallet', address_id, delivery_time_slot, start_date } = req.body;
+
+        let oldSub = null;
+        if (subscription_id) {
+            oldSub = await Subscription.findOne({
+                where: { id: subscription_id, user_id },
+                include: [
+                    { model: Package, include: [{ model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] }] }
+                ],
+                transaction: t
+            });
+        } else if (package_id) {
+            oldSub = await Subscription.findOne({
+                where: { user_id, package_id },
+                order: [['created_at', 'DESC']],
+                include: [
+                    { model: Package, include: [{ model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] }] }
+                ],
+                transaction: t
+            });
+        }
+
+        if (!oldSub) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Pehle ka koi subscription nahi mila renew karne ke liye." });
+        }
+
+        // Mark old subscription completed if it was active
+        if (oldSub.status === 'active') {
+            await oldSub.update({ status: 'completed' }, { transaction: t });
+        }
+
+        // Check if another active subscription exists for this package
+        const otherActive = await Subscription.findOne({
+            where: {
+                user_id,
+                package_id: oldSub.package_id,
+                id: { [Op.ne]: oldSub.id },
+                status: { [Op.in]: ['active', 'paused'] }
+            },
+            transaction: t
+        });
+        if (otherActive) {
+            if (otherActive.services_completed >= otherActive.total_services) {
+                await otherActive.update({ status: 'completed' }, { transaction: t });
+            } else {
+                await t.rollback();
+                return res.status(409).json({
+                    success: false,
+                    message: "Aapka ek aur active subscription chal raha hai. Uske poora hone ke baad renew karein."
+                });
+            }
+        }
+
+        const pkg = oldSub.Package || await Package.findByPk(oldSub.package_id, {
+            include: [{ model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] }],
+            transaction: t
+        });
+
+        if (!pkg || pkg.status !== 'active') {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Package uplabdh nahi hai." });
+        }
+
+        const type = oldSub.type || 'monthly';
+        let amount = parseFloat(pkg.price);
+        let yearly_amount_paid = null;
+        let total_services = pkg.services_per_month;
+        const renewal_count = (oldSub.renewal_count || 1) + 1;
+        let locked_price = parseFloat(oldSub.locked_price || pkg.price);
+
+        if (renewal_count >= 3) {
+            if (type === 'yearly') {
+                amount = locked_price * 12 * 0.75;
+            } else {
+                amount = locked_price;
+            }
+        } else {
+            if (type === 'yearly') {
+                amount = parseFloat(pkg.price) * 12 * 0.75;
+            } else {
+                amount = parseFloat(pkg.price);
+            }
+        }
+
+        if (type === 'yearly') {
+            yearly_amount_paid = amount;
+            total_services = pkg.services_per_month * 12;
+        }
+
+        const user = await User.findByPk(user_id, { transaction: t });
+        let newBalance = parseFloat(user.wallet_balance || 0);
+
+        if (parseFloat(user.postpaid_debt || 0) > 0) {
+            const debt = parseFloat(user.postpaid_debt);
+            newBalance -= debt;
+            await user.update({ postpaid_debt: 0 }, { transaction: t });
+            await WalletTransaction.create({
+                user_id, amount: debt, type: 'debit',
+                reason: 'Recovery for previous post-paid serving'
+            }, { transaction: t });
+        }
+
+        if (payment_method === 'wallet') {
+            if (newBalance < amount) {
+                await t.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: `Aapke wallet me paryapt balance nahi hai. Zaroori rashi: ₹${amount.toFixed(2)}, Aapka balance: ₹${newBalance.toFixed(2)}.`
+                });
+            }
+        } else {
+            newBalance += amount;
+            await user.update({ wallet_balance: newBalance }, { transaction: t });
+            await WalletTransaction.create({
+                user_id, amount, type: 'credit',
+                reason: `${type === 'yearly' ? 'Yearly' : 'Monthly'} package renewal: ${pkg.name} (${payment_method})`,
+            }, { transaction: t });
+        }
+
+        await PaymentTransaction.create({
+            user_id, amount,
+            payment_method: payment_method || 'wallet',
+            status: 'success',
+            type: type === 'yearly' ? 'yearly_booking' : 'package_purchase'
+        }, { transaction: t });
+
+        const finalAddressId = address_id || oldSub.address_id;
+        const finalDeliverySlot = delivery_time_slot || oldSub.delivery_time_slot;
+        const finalBatchId = oldSub.batch_id;
+
+        let startDateVal = start_date || null;
+        let endDateVal = null;
+        if (startDateVal) {
+            const daysInCycle = type === 'yearly' ? 360 : 30;
+            const end = new Date(startDateVal);
+            end.setDate(end.getDate() + daysInCycle - 1);
+            endDateVal = end;
+        }
+
+        const newSubscription = await Subscription.create({
+            user_id,
+            package_id: oldSub.package_id,
+            type,
+            status: 'active',
+            yearly_amount_paid,
+            total_services,
+            address_id: finalAddressId,
+            batch_id: finalBatchId,
+            delivery_time_slot: finalDeliverySlot,
+            start_date: startDateVal,
+            end_date: endDateVal,
+            renewal_count,
+            locked_price: (renewal_count >= 3) ? locked_price : amount
+        }, { transaction: t });
+
+        const fixedItemRows = (pkg.FixedItems || []).map(fi => ({
+            subscription_id: newSubscription.id,
+            product_id: fi.product_id,
+            qty_gm: fi.default_qty_gm,
+            is_fixed: true,
+            is_seasonal: false
+        }));
+        if (fixedItemRows.length > 0) {
+            await SubscriptionItem.bulkCreate(fixedItemRows, { transaction: t });
+        }
+
+        if (startDateVal) {
+            const deliveryDates = generateDeliveryDates(startDateVal, pkg.services_per_month, type === 'yearly' ? 12 : 1);
+            const scheduleRows = deliveryDates.map(date => ({
+                subscription_id: newSubscription.id,
+                scheduled_date: date,
+                status: 'pending',
+                batch_id: newSubscription.batch_id || null,
+                delivery_time_slot: newSubscription.delivery_time_slot || null
+            }));
+            await DeliverySchedule.bulkCreate(scheduleRows, { transaction: t });
+        }
+
+        await t.commit();
+        return res.status(201).json({
+            success: true,
+            message: `"${pkg.name}" package safaltapoorvak renew ho gaya hai!`,
+            subscription_id: newSubscription.id,
+            subscription: newSubscription
+        });
+    } catch (error) {
+        await t.rollback();
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 

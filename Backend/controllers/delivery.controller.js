@@ -3,7 +3,7 @@ import { sequelize } from "../confiq/db.js";
 import {
     DeliverySchedule, DeliveryItem, Subscription, SubscriptionItem, User, Product,
     WalletTransaction, Notification, WaterSubscription, Package, Address,
-    ScheduleSeasonalSelection, PackageSeasonalConfig,
+    ScheduleSeasonalSelection, PackageSeasonalConfig, PackageFixedItem, PackageSeasonalPool,
     RetailOrder, RetailOrderItem, Batch, MissedProductLog, ReturnedProductLog,
     LossLog, PurchaseLog, BatchProductTask
 } from "../models/index.js";
@@ -531,10 +531,12 @@ export const markDelivered = async (req, res) => {
             delivery_photo_url: photo_url || null
         }, { transaction: t });
 
-        await sub.update({ services_completed: sub.services_completed + 1 }, { transaction: t });
+        const newCompleted = sub.services_completed + 1;
+        const totalServices = sub.total_services;
+        let isFullyDelivered = newCompleted >= totalServices;
 
         // --- NEW LOGIC: Post-paid Serving Generation ---
-        if (schedule.Subscription && (sub.services_completed + 1) === sub.total_services && sub.renewal_count >= 3 && !sub.postpaid_serving_given) {
+        if (schedule.Subscription && newCompleted === totalServices && sub.renewal_count >= 3 && !sub.postpaid_serving_given) {
             const lastSchedule = await DeliverySchedule.findOne({
                 where: { subscription_id: sub.id },
                 order: [['scheduled_date', 'DESC']],
@@ -559,7 +561,15 @@ export const markDelivered = async (req, res) => {
             const cost = parseFloat(sub.locked_price || sub.Package.price) / sub.Package.services_per_month;
             const userForDebt = await User.findByPk(sub.user_id, { transaction: t });
             await userForDebt.update({ postpaid_debt: parseFloat(userForDebt.postpaid_debt) + cost }, { transaction: t });
+
+            isFullyDelivered = false; // Post-paid schedule created, so still 1 delivery pending
         }
+
+        const subUpdateData = { services_completed: newCompleted };
+        if (isFullyDelivered) {
+            subUpdateData.status = 'completed';
+        }
+        await sub.update(subUpdateData, { transaction: t });
         // ------------------------------------------
 
         // Stock deduction logic
@@ -2839,6 +2849,203 @@ export const updateRequestedTime = async (req, res) => {
         });
     } catch (error) {
         console.error("updateRequestedTime error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/admin/delivery-schedules/:id/status
+export const updateDeliveryScheduleStatus = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        const validStatuses = ['pending', 'ready_for_delivery', 'delivered', 'skipped'];
+        if (!validStatuses.includes(status)) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+        }
+
+        const schedule = await DeliverySchedule.findByPk(id, {
+            include: [{ model: Subscription }],
+            transaction: t
+        });
+
+        if (!schedule) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Delivery schedule not found" });
+        }
+
+        const oldStatus = schedule.status;
+        const updateData = { status };
+
+        if (status === 'delivered') {
+            updateData.actual_delivery_date = new Date().toISOString().split('T')[0];
+            if (oldStatus !== 'delivered' && schedule.Subscription) {
+                const sub = schedule.Subscription;
+                const newCompleted = (sub.services_completed || 0) + 1;
+                const subUpdates = { services_completed: newCompleted };
+                if (newCompleted >= (sub.total_services || 0)) {
+                    subUpdates.status = 'completed';
+                }
+                await sub.update(subUpdates, { transaction: t });
+            }
+        } else if (oldStatus === 'delivered' && status !== 'delivered') {
+            if (schedule.Subscription) {
+                const sub = schedule.Subscription;
+                const newCompleted = Math.max(0, (sub.services_completed || 0) - 1);
+                const subUpdates = { services_completed: newCompleted };
+                if (sub.status === 'completed' && newCompleted < (sub.total_services || 0)) {
+                    subUpdates.status = 'active';
+                }
+                await sub.update(subUpdates, { transaction: t });
+            }
+        }
+
+        await schedule.update(updateData, { transaction: t });
+        await t.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: `Delivery schedule status updated to ${status}`,
+            schedule
+        });
+    } catch (error) {
+        await t.rollback();
+        console.error("updateDeliveryScheduleStatus error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/admin/delivery-schedules/:id/items
+export const updateDeliveryScheduleItems = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { items, fixed_items } = req.body;
+        // items: [{ product_id, qty_gm }] (Seasonal items)
+        // fixed_items: [{ product_id, qty_gm }] (Fixed items)
+
+        const schedule = await DeliverySchedule.findByPk(id, {
+            include: [{
+                model: Subscription,
+                include: [{
+                    model: Package,
+                    include: [
+                        { model: PackageSeasonalConfig, as: 'SeasonalConfig' },
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }
+                    ]
+                }, {
+                    model: SubscriptionItem,
+                    as: 'Items',
+                    include: [{ model: Product }]
+                }]
+            }],
+            transaction: t
+        });
+
+        if (!schedule) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Delivery schedule not found" });
+        }
+
+        const pkg = schedule.Subscription?.Package;
+        if (!pkg) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Package details not found for this schedule" });
+        }
+
+        const per_service_amount = (parseFloat(pkg.price) / pkg.services_per_month) / (1 + parseFloat(pkg.margin_percent || 0) / 100);
+
+        let total_cost = 0;
+
+        // 1. Calculate cost for fixed items
+        const inputFixed = fixed_items || [];
+        for (const item of inputFixed) {
+            const qty = parseFloat(item.qty_gm || 0);
+            if (qty > 0) {
+                const product = await Product.findByPk(item.product_id, { transaction: t });
+                if (!product) {
+                    await t.rollback();
+                    return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
+                }
+                const pkgFi = pkg.FixedItems?.find(fi => fi.product_id === parseInt(item.product_id));
+                const price = pkgFi?.purchase_price_per_gm != null ? parseFloat(pkgFi.purchase_price_per_gm) : parseFloat(product.purchase_price_per_gm || 0);
+                total_cost += qty * price;
+            }
+        }
+
+        // 2. Calculate cost for seasonal items
+        const inputSeasonal = items || [];
+        for (const item of inputSeasonal) {
+            const qty = parseFloat(item.qty_gm || 0);
+            if (qty > 0) {
+                const product = await Product.findByPk(item.product_id, { transaction: t });
+                if (!product) {
+                    await t.rollback();
+                    return res.status(404).json({ success: false, message: `Product ${item.product_id} not found` });
+                }
+                const pkgSp = pkg.SeasonalPool?.find(sp => sp.product_id === parseInt(item.product_id));
+                const price = pkgSp?.purchase_price_per_gm != null ? parseFloat(pkgSp.purchase_price_per_gm) : parseFloat(product.purchase_price_per_gm || 0);
+                total_cost += qty * price;
+            }
+        }
+
+        // 3. Strict budget validation
+        const overage = Math.round((total_cost - per_service_amount) * 100) / 100;
+        if (overage > 0.05) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                message: `Jyada quantity ho gaya hai! Serving ka allowed budget ₹${per_service_amount.toFixed(2)} hai, jabki selected items ka total cost ₹${total_cost.toFixed(2)} ho gaya hai (₹${overage.toFixed(2)} jyada). Kripya quantity kam karein.`,
+                allowed_budget: per_service_amount,
+                total_cost,
+                overage
+            });
+        }
+
+        // 4. Update seasonal selections
+        await ScheduleSeasonalSelection.destroy({
+            where: { schedule_id: id },
+            transaction: t
+        });
+
+        const seasonalRows = inputSeasonal.filter(item => parseFloat(item.qty_gm || 0) > 0).map(item => ({
+            schedule_id: id,
+            product_id: item.product_id,
+            qty_gm: item.qty_gm
+        }));
+        if (seasonalRows.length > 0) {
+            await ScheduleSeasonalSelection.bulkCreate(seasonalRows, { transaction: t });
+        }
+
+        // 5. Update DeliveryItems for fixed items (if custom fixed items were provided)
+        if (inputFixed.length > 0) {
+            await DeliveryItem.destroy({
+                where: { schedule_id: id },
+                transaction: t
+            });
+            const deliveryItemRows = inputFixed.filter(item => parseFloat(item.qty_gm || 0) > 0).map(item => ({
+                schedule_id: id,
+                product_id: item.product_id,
+                qty_gm: item.qty_gm
+            }));
+            if (deliveryItemRows.length > 0) {
+                await DeliveryItem.bulkCreate(deliveryItemRows, { transaction: t });
+            }
+        }
+
+        await t.commit();
+        return res.status(200).json({
+            success: true,
+            message: "Serving products and quantities updated successfully",
+            total_cost,
+            allowed_budget: per_service_amount
+        });
+    } catch (error) {
+        await t.rollback();
+        console.error("updateDeliveryScheduleItems error:", error);
         return res.status(500).json({ success: false, message: error.message });
     }
 };

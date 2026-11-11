@@ -2,10 +2,10 @@ import { Op } from "sequelize";
 import {
     RetailOrder, DeliverySchedule, DeliveryItem, MissedProductLog,
     Product, Subscription, SubscriptionItem, WaterSubscription,
-    ScheduleSeasonalSelection, RetailOrderItem
+    ScheduleSeasonalSelection, RetailOrderItem, PurchaseLog
 } from "../models/index.js";
 
-// Helper to calculate demands (simplified from delivery.controller)
+// Helper to calculate pending purchases (matches /admin/demands and Log Purchase tab)
 const calculatePendingDemands = async (dateStr) => {
     const schedules = await DeliverySchedule.findAll({
         where: { scheduled_date: dateStr, status: 'pending' },
@@ -14,7 +14,8 @@ const calculatePendingDemands = async (dateStr) => {
                 model: Subscription, required: false,
                 include: [{ model: SubscriptionItem, as: 'Items' }]
             },
-            { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false }
+            { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false },
+            { model: DeliveryItem, as: 'DeliveryItems', required: false }
         ]
     });
 
@@ -25,13 +26,26 @@ const calculatePendingDemands = async (dateStr) => {
 
     const demandMap = {};
     const addDemand = (pId, qty) => {
-        if (!demandMap[pId]) demandMap[pId] = 0;
-        demandMap[pId] += qty;
+        if (!pId) return;
+        const key = String(pId);
+        if (!demandMap[key]) demandMap[key] = 0;
+        demandMap[key] += qty;
     };
 
-    // Calculate demands
+    // Calculate demands from delivery schedules
     for (const schedule of schedules) {
-        if (schedule.Subscription) {
+        const dbItems = schedule.DeliveryItems || [];
+        if (dbItems.length > 0) {
+            for (const item of dbItems) {
+                if (schedule.is_returned_serving) {
+                    if (item.will_purchase) {
+                        addDemand(item.product_id, parseFloat(item.qty_gm || 0));
+                    }
+                } else {
+                    addDemand(item.product_id, parseFloat(item.qty_gm || 0));
+                }
+            }
+        } else if (schedule.Subscription) {
             const items = schedule.Subscription.Items || [];
             const fixedItems = items.filter(item => item.is_fixed && item.is_active);
             const selections = schedule.SeasonalSelections || [];
@@ -49,6 +63,10 @@ const calculatePendingDemands = async (dateStr) => {
                 for (const item of fixedItems) {
                     addDemand(item.product_id, parseFloat(item.qty_gm || 0));
                 }
+                const defaultSeasonal = items.filter(item => item.is_seasonal && item.is_active);
+                for (const item of defaultSeasonal) {
+                    addDemand(item.product_id, parseFloat(item.qty_gm || 0));
+                }
             }
         }
     }
@@ -60,24 +78,28 @@ const calculatePendingDemands = async (dateStr) => {
         }
     }
 
-    // Now check against current stock to see if it's pending
     const productIds = Object.keys(demandMap);
     if (productIds.length === 0) return 0;
 
-    const products = await Product.findAll({
-        where: { id: productIds },
-        attributes: ['id', 'current_stock']
+    // Check which products have already been logged in PurchaseLog today
+    const startOfDay = new Date(dateStr);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateStr);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const todaysPurchases = await PurchaseLog.findAll({
+        where: {
+            purchase_date: {
+                [Op.between]: [startOfDay, endOfDay]
+            }
+        },
+        attributes: ['product_id']
     });
 
-    let pendingCount = 0;
-    products.forEach(p => {
-        const demand = demandMap[p.id];
-        const stock = parseFloat(p.current_stock || 0);
-        if (demand > stock) {
-            pendingCount++;
-        }
-    });
+    const completedProductIds = new Set(todaysPurchases.map(p => String(p.product_id)));
 
+    // Pending count = products with demand today that have NOT yet had purchase logged today
+    const pendingCount = productIds.filter(pId => !completedProductIds.has(pId)).length;
     return pendingCount;
 };
 

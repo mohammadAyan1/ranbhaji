@@ -5,13 +5,16 @@ import {
     getSeasonalOptions, selectSeasonalItems,
     getUpcomingSelections, saveScheduleSeasonal,
     assignPackageByAdmin, renewPackageByAdmin,
-    updateSubscriptionBatch
+    updateSubscriptionBatch, renewSubscription
 } from "../controllers/subscription.controller.js";
+import { getMe } from "../controllers/auth.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
+router.get("/me", requireAuth, getMe);
 router.post("/subscribe", requireAuth, requireRole(["user"]), subscribe);
+router.post("/subscriptions/renew", requireAuth, requireRole(["user"]), renewSubscription);
 router.get("/my-subscriptions", requireAuth, requireRole(["user"]), getMySubscriptions);
 router.get("/available-dates", requireAuth, getAvailableDates);
 router.post("/confirm-start-date", requireAuth, requireRole(["user"]), confirmStartDate);

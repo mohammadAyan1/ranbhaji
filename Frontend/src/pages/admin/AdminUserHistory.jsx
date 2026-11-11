@@ -56,6 +56,15 @@ export default function AdminUserHistory() {
     address_id: ""
   });
 
+  // Serving & Products Edit states
+  const [editingServing, setEditingServing] = useState(null);
+  const [editingPackage, setEditingPackage] = useState(null);
+  const [servingFixedItems, setServingFixedItems] = useState({});
+  const [servingSeasonalItems, setServingSeasonalItems] = useState({});
+  const [savingServingItems, setSavingServingItems] = useState(false);
+  const [servingItemsError, setServingItemsError] = useState("");
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+
   // Fetch all users & packages on mount
   useEffect(() => {
     const fetchData = async () => {
@@ -239,6 +248,105 @@ export default function AdminUserHistory() {
       setActionMsg(`❌ Action failed: ${err.response?.data?.message || err.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUpdateServingStatus = async (scheduleId, newStatus) => {
+    setStatusUpdatingId(scheduleId);
+    try {
+      await api.put(`/admin/delivery-schedules/${scheduleId}/status`, { status: newStatus });
+      // Refresh analytics data
+      const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      setAnalytics(res.data.analytics);
+    } catch (err) {
+      alert(`Status update failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const openEditServingModal = (pkg, serving) => {
+    setEditingPackage(pkg);
+    setEditingServing(serving);
+    setServingItemsError("");
+
+    // Initialize fixed items
+    const fixedMap = {};
+    const pkgFixed = pkg.seasonal_config?.fixed_items || [];
+    pkgFixed.forEach(fi => {
+      const found = (serving.fixed_items || []).find(i => i.product_id === fi.product_id);
+      fixedMap[fi.product_id] = found ? parseFloat(found.qty_gm || 0) : parseFloat(fi.qty_gm || 0);
+    });
+    setServingFixedItems(fixedMap);
+
+    // Initialize seasonal items
+    const seasonalMap = {};
+    const pkgSeasonal = pkg.seasonal_config?.seasonal_pool || [];
+    pkgSeasonal.forEach(sp => {
+      const found = (serving.seasonal_items || []).find(i => i.product_id === sp.product_id);
+      seasonalMap[sp.product_id] = found ? parseFloat(found.qty_gm || 0) : 0;
+    });
+    setServingSeasonalItems(seasonalMap);
+  };
+
+  const calcTotalServingCost = () => {
+    if (!editingPackage) return 0;
+    let total = 0;
+    const pkgFixed = editingPackage.seasonal_config?.fixed_items || [];
+    pkgFixed.forEach(fi => {
+      const qty = parseFloat(servingFixedItems[fi.product_id] ?? fi.qty_gm);
+      const price = parseFloat(fi.purchase_price_per_gm || 0);
+      total += qty * price;
+    });
+
+    const pkgSeasonal = editingPackage.seasonal_config?.seasonal_pool || [];
+    pkgSeasonal.forEach(sp => {
+      const qty = parseFloat(servingSeasonalItems[sp.product_id] || 0);
+      const price = parseFloat(sp.purchase_price_per_gm || 0);
+      total += qty * price;
+    });
+
+    return total;
+  };
+
+  const handleSaveServingItems = async () => {
+    if (!editingServing || !editingPackage) return;
+    const budget = editingPackage.seasonal_config?.per_service_budget || 0;
+    const currentCost = calcTotalServingCost();
+
+    if (currentCost - budget > 0.05) {
+      setServingItemsError(`⚠️ Jyada quantity ho gaya hai! Allowed budget ₹${budget.toFixed(2)} hai, lekin selected items ka total ₹${currentCost.toFixed(2)} ho gaya hai (₹${(currentCost - budget).toFixed(2)} extra). Kripya quantity kam karein.`);
+      return;
+    }
+
+    setSavingServingItems(true);
+    setServingItemsError("");
+    try {
+      const fixedPayload = Object.entries(servingFixedItems).map(([pId, qty]) => ({
+        product_id: parseInt(pId),
+        qty_gm: parseFloat(qty)
+      }));
+      const seasonalPayload = Object.entries(servingSeasonalItems)
+        .map(([pId, qty]) => ({
+          product_id: parseInt(pId),
+          qty_gm: parseFloat(qty)
+        }))
+        .filter(i => i.qty_gm > 0);
+
+      await api.put(`/admin/delivery-schedules/${editingServing.id}/items`, {
+        fixed_items: fixedPayload,
+        items: seasonalPayload
+      });
+
+      // Refresh data
+      const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      setAnalytics(res.data.analytics);
+      setEditingServing(null);
+      setEditingPackage(null);
+    } catch (err) {
+      setServingItemsError(`❌ ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingServingItems(false);
     }
   };
 
@@ -947,6 +1055,260 @@ export default function AdminUserHistory() {
         </div>
       )}
 
+      {/* EDIT SERVING PRODUCTS MODAL */}
+      {editingServing && editingPackage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-slide-up my-8 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-fresh-700 to-fresh-600 text-white shrink-0">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <span>🥦</span> Edit Serving Products (Serving #{editingPackage.servings?.findIndex(s => s.id === editingServing.id) + 1})
+                </h2>
+                <p className="text-xs text-fresh-100 mt-0.5">
+                  {editingPackage.name} &bull; Delivery Date: {editingServing.scheduled_date ? new Date(editingServing.scheduled_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' }) : "N/A"}
+                </p>
+              </div>
+              <button
+                onClick={() => { setEditingServing(null); setEditingPackage(null); }}
+                className="text-white hover:bg-white/20 p-1.5 rounded-full transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-5">
+              {/* Live Budget Counter Card */}
+              {(() => {
+                const budget = editingPackage.seasonal_config?.per_service_budget || 0;
+                const totalCost = calcTotalServingCost();
+                const diff = budget - totalCost;
+                const isOverBudget = diff < -0.05;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-center">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-gray-500 tracking-wider block">Allowed Serving Budget</span>
+                        <span className="text-base font-extrabold text-gray-800">₹{budget.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-gray-500 tracking-wider block">Current Selected Cost</span>
+                        <span className={`text-base font-extrabold ${isOverBudget ? 'text-red-600' : 'text-fresh-700'}`}>
+                          ₹{totalCost.toFixed(2)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-gray-500 tracking-wider block">Remaining / Status</span>
+                        <span className={`text-sm font-bold ${isOverBudget ? 'text-red-600' : 'text-emerald-700'}`}>
+                          {isOverBudget ? `-₹${Math.abs(diff).toFixed(2)} (Over)` : `₹${diff.toFixed(2)} (Valid)`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isOverBudget && (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs space-y-1">
+                        <div className="font-bold flex items-center gap-1.5">
+                          <span>⚠️</span> Jyada Quantity Ho Gaya Hai!
+                        </div>
+                        <p>
+                          Is serving ka allowed budget <strong>₹{budget.toFixed(2)}</strong> hai, lekin selected items ka total <strong>₹{totalCost.toFixed(2)}</strong> ho gaya hai (<strong>₹{Math.abs(diff).toFixed(2)} extra</strong>). Kripya quantity kam karein.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {servingItemsError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
+                  {servingItemsError}
+                </div>
+              )}
+
+              {/* SECTION 1: Fixed Products */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    <span>📦</span> 1. Fixed Products
+                  </h3>
+                  <span className="text-[11px] text-gray-400 italic">Included by default in this package</span>
+                </div>
+
+                <div className="space-y-2">
+                  {(editingPackage.seasonal_config?.fixed_items || []).map((fi) => {
+                    const currentQty = servingFixedItems[fi.product_id] ?? fi.qty_gm;
+                    const pricePerKg = fi.purchase_price_per_gm * 1000;
+                    const itemCost = (currentQty || 0) * fi.purchase_price_per_gm;
+
+                    return (
+                      <div
+                        key={fi.product_id}
+                        className="flex items-center justify-between p-2.5 rounded-xl border border-gray-200 bg-white hover:border-gray-300"
+                      >
+                        <div>
+                          <p className="font-semibold text-xs text-gray-800">
+                            {fi.name} {fi.hindi_name ? `(${fi.hindi_name})` : ''}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            Rate: ₹{pricePerKg.toFixed(2)}/kg &bull; Cost: <strong>₹{itemCost.toFixed(2)}</strong>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setServingFixedItems(prev => ({
+                              ...prev,
+                              [fi.product_id]: Math.max(0, (prev[fi.product_id] ?? fi.qty_gm) - 50)
+                            }))}
+                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center text-sm cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            step="50"
+                            value={currentQty}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseFloat(e.target.value) || 0);
+                              setServingFixedItems(prev => ({ ...prev, [fi.product_id]: val }));
+                            }}
+                            className="w-20 text-center text-xs font-bold py-1 border border-gray-200 rounded-md focus:border-fresh-500 focus:outline-none"
+                          />
+                          <span className="text-xs text-gray-500">{fi.unit || 'gm'}</span>
+                          <button
+                            type="button"
+                            onClick={() => setServingFixedItems(prev => ({
+                              ...prev,
+                              [fi.product_id]: (prev[fi.product_id] ?? fi.qty_gm) + 50
+                            }))}
+                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center text-sm cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 2: Seasonal Picks */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    <span>🌿</span> 2. Seasonal Picks
+                  </h3>
+                  <span className="text-[11px] text-gray-400">
+                    Max: {editingPackage.seasonal_config?.max_select_count || 'Unlimited'} items
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {(editingPackage.seasonal_config?.seasonal_pool || []).map((sp) => {
+                    const currentQty = servingSeasonalItems[sp.product_id] || 0;
+                    const pricePerKg = sp.purchase_price_per_gm * 1000;
+                    const itemCost = currentQty * sp.purchase_price_per_gm;
+                    const isSelected = currentQty > 0;
+
+                    return (
+                      <div
+                        key={sp.product_id}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                          isSelected ? 'border-emerald-300 bg-emerald-50/50' : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        <div>
+                          <p className={`font-semibold text-xs ${isSelected ? 'text-emerald-900 font-bold' : 'text-gray-800'}`}>
+                            {sp.name} {sp.hindi_name ? `(${sp.hindi_name})` : ''}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            Rate: ₹{pricePerKg.toFixed(2)}/kg &bull; Cost: <strong>₹{itemCost.toFixed(2)}</strong>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setServingSeasonalItems(prev => ({
+                              ...prev,
+                              [sp.product_id]: Math.max(0, (prev[sp.product_id] || 0) - 50)
+                            }))}
+                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center text-sm cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            step="50"
+                            value={currentQty}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseFloat(e.target.value) || 0);
+                              setServingSeasonalItems(prev => ({ ...prev, [sp.product_id]: val }));
+                            }}
+                            className="w-20 text-center text-xs font-bold py-1 border border-gray-200 rounded-md focus:border-fresh-500 focus:outline-none"
+                          />
+                          <span className="text-xs text-gray-500">{sp.unit || 'gm'}</span>
+                          <button
+                            type="button"
+                            onClick={() => setServingSeasonalItems(prev => ({
+                              ...prev,
+                              [sp.product_id]: (prev[sp.product_id] || 0) + 50
+                            }))}
+                            className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center text-sm cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            {(() => {
+              const budget = editingPackage.seasonal_config?.per_service_budget || 0;
+              const totalCost = calcTotalServingCost();
+              const isOverBudget = totalCost - budget > 0.05;
+
+              return (
+                <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => { setEditingServing(null); setEditingPackage(null); }}
+                    className="btn-secondary text-xs px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveServingItems}
+                    disabled={savingServingItems || isOverBudget}
+                    className={`btn-primary text-xs px-6 py-2 flex items-center gap-2 ${
+                      isOverBudget ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-fresh-600 hover:bg-fresh-500 cursor-pointer'
+                    }`}
+                  >
+                    {savingServingItems ? (
+                      <span>Saving...</span>
+                    ) : isOverBudget ? (
+                      <span>⚠️ Jyada Quantity Ho Gaya (Kam Karein)</span>
+                    ) : (
+                      <span>💾 Save Products & Quantities</span>
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {loading && (
         <div className="flex items-center justify-center py-20 text-gray-600 card">
           <span className="animate-pulse flex items-center gap-2">
@@ -1062,15 +1424,134 @@ export default function AdminUserHistory() {
                           </ul>
                         </div>
 
+                        {/* Package Servings & Delivery Management */}
+                        {pkg.servings && pkg.servings.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-gray-100 space-y-2.5">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div>
+                                <p className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                                  <span>📦</span> Package Servings / Deliveries ({pkg.servings.length})
+                                </p>
+                                <p className="text-[11px] text-gray-400">
+                                  Har serving ka status badlein aur sabji / quantities customize karein.
+                                </p>
+                              </div>
+                              {pkg.seasonal_config?.per_service_budget > 0 && (
+                                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-fresh-50 text-fresh-800 border border-fresh-200">
+                                  Budget / Serving: ₹{pkg.seasonal_config.per_service_budget.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                              {pkg.servings.map((serving, sIdx) => {
+                                const rawDate = serving.actual_delivery_date || serving.scheduled_date;
+                                const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString("en-IN", {
+                                  weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+                                }) : "Date N/A";
+
+                                return (
+                                  <div
+                                    key={serving.id || sIdx}
+                                    className="p-3 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-white hover:border-gray-300 transition-all space-y-2"
+                                  >
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs font-bold text-gray-800 bg-gray-200/80 px-2 py-0.5 rounded">
+                                          Serving #{sIdx + 1}
+                                        </span>
+                                        <span className="text-xs font-medium text-gray-700">
+                                          📅 {formattedDate}
+                                        </span>
+                                        {serving.delivery_time_slot && (
+                                          <span className="text-[10px] text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200">
+                                            🕒 {serving.delivery_time_slot}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-2">
+                                        {/* Status selector */}
+                                        <select
+                                          value={serving.status}
+                                          disabled={statusUpdatingId === serving.id}
+                                          onChange={(e) => handleUpdateServingStatus(serving.id, e.target.value)}
+                                          className={`text-xs font-semibold px-2 py-1 rounded-lg border cursor-pointer ${
+                                            serving.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-300' :
+                                            serving.status === 'ready_for_delivery' ? 'bg-blue-50 text-blue-700 border-blue-300' :
+                                            serving.status === 'skipped' ? 'bg-gray-100 text-gray-600 border-gray-300' :
+                                            'bg-amber-50 text-amber-700 border-amber-300'
+                                          }`}
+                                        >
+                                          <option value="pending">⏳ Pending</option>
+                                          <option value="ready_for_delivery">🚚 Ready for Delivery</option>
+                                          <option value="delivered">✅ Delivered</option>
+                                          <option value="skipped">⏭ Skipped</option>
+                                        </select>
+
+                                        {/* Edit Sabji button */}
+                                        <button
+                                          type="button"
+                                          onClick={() => openEditServingModal(pkg, serving)}
+                                          className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 border-fresh-300 text-fresh-700 bg-fresh-50 hover:bg-fresh-100 cursor-pointer"
+                                        >
+                                          <span>🥦</span> Edit Sabji
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Products in this serving */}
+                                    <div className="pt-1.5 border-t border-gray-200/60">
+                                      <div className="flex flex-wrap gap-1.5 items-center">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Products:</span>
+                                        {/* Fixed items */}
+                                        {serving.fixed_items && serving.fixed_items.length > 0 ? (
+                                          serving.fixed_items.map((fi, fIdx) => (
+                                            <span
+                                              key={`fi_${fIdx}`}
+                                              className="bg-white border border-gray-200 text-gray-700 text-[10px] px-2 py-0.5 rounded-md font-medium"
+                                            >
+                                              {fi.name} <strong className="text-gray-900">{fi.qty_gm >= 1000 ? `${(fi.qty_gm/1000).toFixed(2)}kg` : `${fi.qty_gm}${fi.unit || 'g'}`}</strong>
+                                            </span>
+                                          ))
+                                        ) : null}
+
+                                        {/* Seasonal items */}
+                                        {serving.seasonal_items && serving.seasonal_items.length > 0 ? (
+                                          serving.seasonal_items.map((si, sIdx2) => (
+                                            <span
+                                              key={`si_${sIdx2}`}
+                                              className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] px-2 py-0.5 rounded-md font-medium flex items-center gap-1"
+                                            >
+                                              <span className="text-emerald-500">🌿</span> {si.name} <strong className="text-emerald-900">{si.qty_gm >= 1000 ? `${(si.qty_gm/1000).toFixed(2)}kg` : `${si.qty_gm}${si.unit || 'g'}`}</strong>
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="text-[10px] text-gray-400 italic">No seasonal items selected yet</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         {pkg.deliveries && pkg.deliveries.length > 0 && (
                           <div className="mt-4 pt-3 border-t border-gray-100">
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Delivery History</p>
                             <div className="flex flex-wrap gap-2">
-                              {pkg.deliveries.map((del, di) => (
-                                <span key={di} className="bg-green-50 border border-green-200 text-green-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">
-                                  ✅ {new Date(del.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
-                                </span>
-                              ))}
+                              {pkg.deliveries.map((del, di) => {
+                                const rawDate = del?.date || del?.actual_delivery_date || del?.scheduled_date;
+                                const parsed = rawDate ? new Date(rawDate) : null;
+                                const isValid = parsed && !isNaN(parsed.getTime());
+                                return (
+                                  <span key={di} className="bg-green-50 border border-green-200 text-green-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">
+                                    ✅ {isValid ? parsed.toLocaleDateString("en-IN", { day: 'numeric', month: 'short' }) : "Delivered"}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </div>
                         )}

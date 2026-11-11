@@ -1,4 +1,4 @@
-import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction, UserWaterDiscount } from "../models/index.js";
+import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction, UserWaterDiscount, PackageFixedItem, PackageSeasonalPool, PackageSeasonalConfig } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcryptjs";
 
@@ -248,7 +248,14 @@ export const getUserAnalytics = async (req, res) => {
                 status: { [Op.in]: ['active', 'paused', 'completed'] }
             },
             include: [
-                { model: Package },
+                {
+                    model: Package,
+                    include: [
+                        { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] },
+                        { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] },
+                        { model: PackageSeasonalConfig, as: 'SeasonalConfig' }
+                    ]
+                },
                 { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
                 { model: Batch }
             ]
@@ -311,6 +318,27 @@ export const getUserAnalytics = async (req, res) => {
             const pkg = sub.Package;
             if (pkg) {
                 if (!packageStats[pkg.id]) {
+                    const margin = parseFloat(pkg.margin_percent || 0);
+                    const perServiceBudget = (parseFloat(pkg.price) / (pkg.services_per_month || 1)) / (1 + margin / 100);
+
+                    const fixedItemsList = (pkg.FixedItems || []).filter(fi => fi.Product).map(fi => ({
+                        product_id: fi.product_id,
+                        name: fi.Product?.name,
+                        hindi_name: fi.Product?.hindi_name,
+                        unit: fi.Product?.unit || 'gm',
+                        qty_gm: parseFloat(fi.default_qty_gm || 0),
+                        purchase_price_per_gm: fi.purchase_price_per_gm != null ? parseFloat(fi.purchase_price_per_gm) : parseFloat(fi.Product?.purchase_price_per_gm || 0)
+                    }));
+
+                    const seasonalPoolList = (pkg.SeasonalPool || []).filter(sp => sp.Product && sp.Product.status === 'active').map(sp => ({
+                        product_id: sp.product_id,
+                        name: sp.Product?.name,
+                        hindi_name: sp.Product?.hindi_name,
+                        unit: sp.Product?.unit || 'gm',
+                        purchase_price_per_gm: sp.purchase_price_per_gm != null ? parseFloat(sp.purchase_price_per_gm) : parseFloat(sp.Product?.purchase_price_per_gm || 0),
+                        min_qty: sp.Product?.min_retail_qty || 100
+                    }));
+
                     packageStats[pkg.id] = {
                         sub_id: sub.id,
                         id: pkg.id,
@@ -323,6 +351,13 @@ export const getUserAnalytics = async (req, res) => {
                         is_water: false,
                         history: [],
                         deliveries: [],
+                        servings: [],
+                        seasonal_config: {
+                            per_service_budget: perServiceBudget,
+                            max_select_count: pkg.SeasonalConfig?.max_select_count || 0,
+                            fixed_items: fixedItemsList,
+                            seasonal_pool: seasonalPoolList
+                        },
                         items: {}
                     };
                 }
@@ -466,17 +501,71 @@ export const getUserAnalytics = async (req, res) => {
                 });
             }
 
+            // Track all servings for Admin
+            const deliveryDate = schedule.actual_delivery_date || schedule.scheduled_date;
+            if (schedule.Subscription && schedule.Subscription.package_id) {
+                const pkgId = schedule.Subscription.package_id;
+                if (packageStats[pkgId]) {
+                    const fixedList = (schedule.DeliveryItems && schedule.DeliveryItems.length > 0)
+                        ? schedule.DeliveryItems.map(di => ({
+                            product_id: di.product_id,
+                            name: di.Product?.name || 'Item',
+                            hindi_name: di.Product?.hindi_name,
+                            qty_gm: parseFloat(di.qty_gm || 0),
+                            unit: di.Product?.unit || 'gm',
+                            purchase_price_per_gm: di.Product?.purchase_price_per_gm
+                        }))
+                        : (packageStats[pkgId]?.seasonal_config?.fixed_items || []);
+
+                    const seasonalList = (schedule.SeasonalSelections || []).map(sel => ({
+                        product_id: sel.product_id,
+                        name: sel.Product?.name || 'Seasonal Item',
+                        hindi_name: sel.Product?.hindi_name,
+                        qty_gm: parseFloat(sel.qty_gm || 0),
+                        unit: sel.Product?.unit || 'gm',
+                        purchase_price_per_gm: sel.Product?.purchase_price_per_gm
+                    }));
+
+                    if (!packageStats[pkgId].servings) {
+                        packageStats[pkgId].servings = [];
+                    }
+                    packageStats[pkgId].servings.push({
+                        id: schedule.id,
+                        subscription_id: schedule.subscription_id,
+                        scheduled_date: schedule.scheduled_date,
+                        actual_delivery_date: schedule.actual_delivery_date,
+                        date: deliveryDate,
+                        status: schedule.status,
+                        is_locked: schedule.is_locked,
+                        delivery_time_slot: schedule.delivery_time_slot,
+                        fixed_items: fixedList,
+                        seasonal_items: seasonalList
+                    });
+                }
+            }
+
             // Track deliveries
             if (schedule.status === 'delivered') {
+                const deliveryDate = schedule.actual_delivery_date || schedule.scheduled_date;
                 if (schedule.Subscription && schedule.Subscription.package_id) {
                     const pkgId = schedule.Subscription.package_id;
                     if (packageStats[pkgId]) {
-                        packageStats[pkgId].deliveries.push({ date: schedule.delivery_date, status: schedule.status });
+                        packageStats[pkgId].deliveries.push({
+                            date: deliveryDate,
+                            actual_delivery_date: schedule.actual_delivery_date,
+                            scheduled_date: schedule.scheduled_date,
+                            status: schedule.status
+                        });
                     }
                 } else if (schedule.WaterSubscription && schedule.WaterSubscription.water_type) {
                     const key = 'water_' + schedule.WaterSubscription.water_type;
                     if (packageStats[key]) {
-                        packageStats[key].deliveries.push({ date: schedule.delivery_date, status: schedule.status });
+                        packageStats[key].deliveries.push({
+                            date: deliveryDate,
+                            actual_delivery_date: schedule.actual_delivery_date,
+                            scheduled_date: schedule.scheduled_date,
+                            status: schedule.status
+                        });
                     }
                 }
             }

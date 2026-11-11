@@ -107,8 +107,8 @@ export default function PackagesPage() {
     api.get("/my-subscriptions")
       .then(r => {
         const subs = r.data.subscriptions || [];
-        // Only keep active/paused ones
-        setMySubscriptions(subs.filter(s => s.status === 'active' || s.status === 'paused'));
+        // Only keep active/paused ones where servings are still pending
+        setMySubscriptions(subs.filter(s => (s.status === 'active' || s.status === 'paused') && (s.services_completed < s.total_services)));
       })
       .catch(() => { }); // silently ignore if fails
   }, []);
