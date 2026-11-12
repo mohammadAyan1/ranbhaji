@@ -482,6 +482,10 @@ export const getUserAnalytics = async (req, res) => {
                 { model: WaterSubscription, required: false, attributes: ['id', 'water_type'] },
                 { model: DeliveryItem, as: 'DeliveryItems', include: [{ model: Product }] },
                 { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', include: [{ model: Product }] }
+            ],
+            order: [
+                ['scheduled_date', 'ASC'],
+                ['id', 'ASC']
             ]
         });
 
@@ -502,7 +506,7 @@ export const getUserAnalytics = async (req, res) => {
             }
 
             // Track all servings for Admin
-            const deliveryDate = schedule.actual_delivery_date || schedule.scheduled_date;
+            const deliveryDate = schedule.scheduled_date || schedule.actual_delivery_date;
             if (schedule.Subscription && schedule.Subscription.package_id) {
                 const pkgId = schedule.Subscription.package_id;
                 if (packageStats[pkgId]) {
@@ -534,7 +538,7 @@ export const getUserAnalytics = async (req, res) => {
                         subscription_id: schedule.subscription_id,
                         scheduled_date: schedule.scheduled_date,
                         actual_delivery_date: schedule.actual_delivery_date,
-                        date: deliveryDate,
+                        date: schedule.scheduled_date || deliveryDate,
                         status: schedule.status,
                         is_locked: schedule.is_locked,
                         delivery_time_slot: schedule.delivery_time_slot,
@@ -546,12 +550,12 @@ export const getUserAnalytics = async (req, res) => {
 
             // Track deliveries
             if (schedule.status === 'delivered') {
-                const deliveryDate = schedule.actual_delivery_date || schedule.scheduled_date;
+                const deliveryDate = schedule.scheduled_date || schedule.actual_delivery_date;
                 if (schedule.Subscription && schedule.Subscription.package_id) {
                     const pkgId = schedule.Subscription.package_id;
                     if (packageStats[pkgId]) {
                         packageStats[pkgId].deliveries.push({
-                            date: deliveryDate,
+                            date: schedule.scheduled_date || deliveryDate,
                             actual_delivery_date: schedule.actual_delivery_date,
                             scheduled_date: schedule.scheduled_date,
                             status: schedule.status
@@ -561,7 +565,7 @@ export const getUserAnalytics = async (req, res) => {
                     const key = 'water_' + schedule.WaterSubscription.water_type;
                     if (packageStats[key]) {
                         packageStats[key].deliveries.push({
-                            date: deliveryDate,
+                            date: schedule.scheduled_date || deliveryDate,
                             actual_delivery_date: schedule.actual_delivery_date,
                             scheduled_date: schedule.scheduled_date,
                             status: schedule.status

@@ -6,7 +6,7 @@ import {
     packOrders, getAvailableOrders, acceptOrder, getMissedProducts,
     assignDeliveryBoy, getDeliveryBoyHistory, adminReturnItem, boyReturnItem,
     adminReturnOrder, boyReturnOrder, getTodayIncoming, updateRequestedTime,
-    updateDeliveryScheduleStatus, updateDeliveryScheduleItems
+    updateDeliveryScheduleStatus, updateDeliveryScheduleItems, rescheduleDeliverySchedule
 } from "../controllers/delivery.controller.js";
 import { requireAuth, requireRole, optionalAuth } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
@@ -32,6 +32,7 @@ router.put("/admin/orders/pack", requireAuth, requireRole(["admin"]), packOrders
 router.put("/admin/orders/requested-time", requireAuth, requireRole(["admin"]), updateRequestedTime);
 router.put("/admin/delivery-schedules/:id/status", requireAuth, requireRole(["admin"]), updateDeliveryScheduleStatus);
 router.put("/admin/delivery-schedules/:id/items", requireAuth, requireRole(["admin"]), updateDeliveryScheduleItems);
+router.put("/admin/delivery-schedules/:id/reschedule", requireAuth, requireRole(["admin"]), rescheduleDeliverySchedule);
 router.get("/admin/missed-products", requireAuth, requireRole(["admin"]), getMissedProducts);
 
 router.get("/available-orders", requireAuth, requireRole(["delivery"]), getAvailableOrders);

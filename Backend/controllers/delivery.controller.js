@@ -8,6 +8,7 @@ import {
     LossLog, PurchaseLog, BatchProductTask
 } from "../models/index.js";
 import path from "path";
+import { generateDeliveryDates, generateWaterDeliveryDates } from "../utils/scheduleEngine.js";
 
 export const ensureNotSunday = (dateStr) => {
     if (!dateStr) return dateStr;
@@ -2880,7 +2881,7 @@ export const updateDeliveryScheduleStatus = async (req, res) => {
         const updateData = { status };
 
         if (status === 'delivered') {
-            updateData.actual_delivery_date = new Date().toISOString().split('T')[0];
+            updateData.actual_delivery_date = schedule.scheduled_date || new Date().toISOString().split('T')[0];
             if (oldStatus !== 'delivered' && schedule.Subscription) {
                 const sub = schedule.Subscription;
                 const newCompleted = (sub.services_completed || 0) + 1;
@@ -2891,6 +2892,7 @@ export const updateDeliveryScheduleStatus = async (req, res) => {
                 await sub.update(subUpdates, { transaction: t });
             }
         } else if (oldStatus === 'delivered' && status !== 'delivered') {
+            updateData.actual_delivery_date = null;
             if (schedule.Subscription) {
                 const sub = schedule.Subscription;
                 const newCompleted = Math.max(0, (sub.services_completed || 0) - 1);
@@ -3046,6 +3048,156 @@ export const updateDeliveryScheduleItems = async (req, res) => {
     } catch (error) {
         await t.rollback();
         console.error("updateDeliveryScheduleItems error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// PUT /api/admin/delivery-schedules/:id/reschedule
+export const rescheduleDeliverySchedule = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { new_date } = req.body;
+
+        if (!new_date) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "new_date is required (YYYY-MM-DD format)" });
+        }
+
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(new_date)) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Invalid date format. Expected YYYY-MM-DD" });
+        }
+
+        const schedule = await DeliverySchedule.findByPk(id, {
+            include: [
+                {
+                    model: Subscription,
+                    include: [{ model: Package }]
+                },
+                {
+                    model: WaterSubscription
+                }
+            ],
+            transaction: t
+        });
+
+        if (!schedule) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Delivery schedule not found" });
+        }
+
+        if (schedule.subscription_id) {
+            const allSchedules = await DeliverySchedule.findAll({
+                where: { subscription_id: schedule.subscription_id },
+                order: [['scheduled_date', 'ASC'], ['id', 'ASC']],
+                transaction: t
+            });
+
+            const targetIdx = allSchedules.findIndex(s => s.id === schedule.id);
+            if (targetIdx === -1) {
+                await t.rollback();
+                return res.status(404).json({ success: false, message: "Schedule not found in subscription" });
+            }
+
+            const toReschedule = allSchedules.slice(targetIdx);
+            const count = toReschedule.length;
+
+            const pkg = schedule.Subscription?.Package || await Package.findByPk(schedule.Subscription?.package_id, { transaction: t });
+            const servicesPerMonth = parseInt(pkg?.services_per_month) || 5;
+
+            // Generate delivery dates using package interval and Sunday shift rules
+            const newDates = generateDeliveryDates(new_date, servicesPerMonth, 1, count);
+
+            for (let i = 0; i < toReschedule.length; i++) {
+                const item = toReschedule[i];
+                const newDateStr = newDates[i];
+                const updateFields = {
+                    scheduled_date: newDateStr,
+                    is_locked: false
+                };
+                if (item.status === 'delivered') {
+                    updateFields.actual_delivery_date = newDateStr;
+                }
+                await item.update(updateFields, { transaction: t });
+            }
+
+            // Update Subscription start_date / end_date
+            const subUpdates = {};
+            if (newDates.length > 0) {
+                subUpdates.end_date = newDates[newDates.length - 1];
+            }
+            if (targetIdx === 0 && newDates.length > 0) {
+                subUpdates.start_date = newDates[0];
+            }
+            if (schedule.Subscription && Object.keys(subUpdates).length > 0) {
+                await schedule.Subscription.update(subUpdates, { transaction: t });
+            }
+
+            await t.commit();
+            return res.status(200).json({
+                success: true,
+                message: `Serving #${targetIdx + 1} aur uske aage ki ${count - 1} deliveries package rules ke anusar successfully reschedule ho gayi hain.`,
+                updated_count: count,
+                new_dates: newDates
+            });
+        } else if (schedule.water_subscription_id) {
+            const allWaterSchedules = await DeliverySchedule.findAll({
+                where: { water_subscription_id: schedule.water_subscription_id },
+                order: [['scheduled_date', 'ASC'], ['id', 'ASC']],
+                transaction: t
+            });
+
+            const targetIdx = allWaterSchedules.findIndex(s => s.id === schedule.id);
+            if (targetIdx === -1) {
+                await t.rollback();
+                return res.status(404).json({ success: false, message: "Schedule not found in water subscription" });
+            }
+
+            const toReschedule = allWaterSchedules.slice(targetIdx);
+            const count = toReschedule.length;
+            const waterSub = schedule.WaterSubscription;
+            const newDates = generateWaterDeliveryDates(new_date, count, waterSub?.frequency || 'daily');
+
+            for (let i = 0; i < toReschedule.length; i++) {
+                const item = toReschedule[i];
+                const newDateStr = newDates[i];
+                const updateFields = {
+                    scheduled_date: newDateStr,
+                    is_locked: false
+                };
+                if (item.status === 'delivered') {
+                    updateFields.actual_delivery_date = newDateStr;
+                }
+                await item.update(updateFields, { transaction: t });
+            }
+
+            const waterUpdates = {};
+            if (newDates.length > 0) {
+                waterUpdates.end_date = newDates[newDates.length - 1];
+            }
+            if (targetIdx === 0 && newDates.length > 0) {
+                waterUpdates.start_date = newDates[0];
+            }
+            if (waterSub && Object.keys(waterUpdates).length > 0) {
+                await waterSub.update(waterUpdates, { transaction: t });
+            }
+
+            await t.commit();
+            return res.status(200).json({
+                success: true,
+                message: `Water delivery #${targetIdx + 1} aur uske aage ki ${count - 1} deliveries successfully reschedule ho gayi hain.`,
+                updated_count: count,
+                new_dates: newDates
+            });
+        } else {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Schedule is neither package nor water subscription" });
+        }
+    } catch (error) {
+        await t.rollback();
+        console.error("rescheduleDeliverySchedule error:", error);
         return res.status(500).json({ success: false, message: error.message });
     }
 };

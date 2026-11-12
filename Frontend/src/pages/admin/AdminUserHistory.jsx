@@ -65,6 +65,17 @@ export default function AdminUserHistory() {
   const [servingItemsError, setServingItemsError] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
 
+  // Reschedule Serving states
+  const [rescheduleModal, setRescheduleModal] = useState({
+    isOpen: false,
+    serving: null,
+    pkg: null,
+    servingIndex: 0,
+    newDate: '',
+    loading: false,
+    error: ''
+  });
+
   // Fetch all users & packages on mount
   useEffect(() => {
     const fetchData = async () => {
@@ -262,6 +273,47 @@ export default function AdminUserHistory() {
       alert(`Status update failed: ${err.response?.data?.message || err.message}`);
     } finally {
       setStatusUpdatingId(null);
+    }
+  };
+
+  const openRescheduleModal = (pkg, serving, sIdx) => {
+    setRescheduleModal({
+      isOpen: true,
+      serving,
+      pkg,
+      servingIndex: sIdx,
+      newDate: serving.scheduled_date || (serving.actual_delivery_date ? serving.actual_delivery_date.split('T')[0] : ''),
+      loading: false,
+      error: ''
+    });
+  };
+
+  const handleConfirmReschedule = async () => {
+    if (!rescheduleModal.serving || !rescheduleModal.newDate) return;
+    setRescheduleModal(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const res = await api.put(`/admin/delivery-schedules/${rescheduleModal.serving.id}/reschedule`, {
+        new_date: rescheduleModal.newDate
+      });
+      // Refresh analytics data
+      const userRes = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      setAnalytics(userRes.data.analytics);
+      alert(res.data?.message || 'Serving aur aage ki deliveries successfully reschedule ho gayi!');
+      setRescheduleModal({
+        isOpen: false,
+        serving: null,
+        pkg: null,
+        servingIndex: 0,
+        newDate: '',
+        loading: false,
+        error: ''
+      });
+    } catch (err) {
+      setRescheduleModal(prev => ({
+        ...prev,
+        loading: false,
+        error: err.response?.data?.message || err.message
+      }));
     }
   };
 
@@ -1309,6 +1361,117 @@ export default function AdminUserHistory() {
         </div>
       )}
 
+      {/* RESCHEDULE SERVING MODAL */}
+      {rescheduleModal.isOpen && rescheduleModal.serving && rescheduleModal.pkg && (() => {
+        const totalServings = rescheduleModal.pkg.servings?.length || 0;
+        const currentServingNo = rescheduleModal.servingIndex + 1;
+        const subsequentCount = Math.max(0, totalServings - currentServingNo);
+        const currentRawDate = rescheduleModal.serving.scheduled_date || rescheduleModal.serving.actual_delivery_date;
+        const currentFormatted = currentRawDate ? new Date(currentRawDate).toLocaleDateString("en-IN", {
+          weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+        }) : "N/A";
+        
+        const isSundaySelected = rescheduleModal.newDate ? (new Date(rescheduleModal.newDate + 'T00:00:00').getDay() === 0) : false;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up my-8 flex flex-col">
+              {/* Header */}
+              <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-700 to-indigo-600 text-white shrink-0">
+                <div>
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <span>📅</span> Reschedule Serving #{currentServingNo}
+                  </h2>
+                  <p className="text-xs text-blue-100 mt-0.5">
+                    {rescheduleModal.pkg.name} &bull; Current: {currentFormatted}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setRescheduleModal(prev => ({ ...prev, isOpen: false, error: '' }))}
+                  className="text-white hover:bg-white/20 p-1.5 rounded-full transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-4">
+                {rescheduleModal.error && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+                    <span>⚠️</span> {rescheduleModal.error}
+                  </div>
+                )}
+
+                <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 space-y-1.5">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <span>ℹ️</span> Cascading Reschedule Rule:
+                  </p>
+                  <p className="leading-relaxed text-blue-800">
+                    Is serving ki nayi date chunte hi, iske aage ki <strong>{subsequentCount} servings</strong> ki delivery dates package ke gap rule ke anusar automatic calculate hokar aage ya piche ho jayengi.
+                  </p>
+                  <p className="leading-relaxed text-blue-800 font-medium">
+                    📌 <strong>Sunday Rule:</strong> Agar nayi date ya koi agla serving Sunday ko aata hai, toh package ke business rule ke mutabik wo date automatic Saturday (ya Monday) par shift ho jayegi.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                    Select New Delivery Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={rescheduleModal.newDate}
+                    onChange={(e) => setRescheduleModal(prev => ({ ...prev, newDate: e.target.value, error: '' }))}
+                    className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {rescheduleModal.newDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Chuni gayi date: <strong>{new Date(rescheduleModal.newDate + 'T00:00:00').toLocaleDateString("en-IN", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                    </p>
+                  )}
+                </div>
+
+                {isSundaySelected && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 text-amber-800 text-xs rounded-xl flex items-start gap-2">
+                    <span className="text-base leading-none">⚠️</span>
+                    <div>
+                      <p className="font-bold">Chuni gayi date Sunday hai!</p>
+                      <p className="mt-0.5 text-amber-700">
+                        Package ke Sunday rule ke anusar yeh serving Saturday ko shift kar di jayegi aur agle servings bhi usi hisab se calculate honge.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRescheduleModal(prev => ({ ...prev, isOpen: false, error: '' }))}
+                  className="btn-secondary text-xs px-4 py-2"
+                  disabled={rescheduleModal.loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReschedule}
+                  disabled={rescheduleModal.loading || !rescheduleModal.newDate}
+                  className="btn-primary text-xs px-5 py-2 bg-blue-600 hover:bg-blue-500 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {rescheduleModal.loading ? (
+                    <span>Rescheduling...</span>
+                  ) : (
+                    <span>📅 Confirm & Reschedule ({subsequentCount + 1} Servings)</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {loading && (
         <div className="flex items-center justify-center py-20 text-gray-600 card">
           <span className="animate-pulse flex items-center gap-2">
@@ -1445,7 +1608,7 @@ export default function AdminUserHistory() {
 
                             <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                               {pkg.servings.map((serving, sIdx) => {
-                                const rawDate = serving.actual_delivery_date || serving.scheduled_date;
+                                const rawDate = serving.scheduled_date || serving.actual_delivery_date;
                                 const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString("en-IN", {
                                   weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
                                 }) : "Date N/A";
@@ -1468,6 +1631,14 @@ export default function AdminUserHistory() {
                                             🕒 {serving.delivery_time_slot}
                                           </span>
                                         )}
+                                        <button
+                                          type="button"
+                                          onClick={() => openRescheduleModal(pkg, serving, sIdx)}
+                                          className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                                          title="Reschedule this serving and subsequent deliveries"
+                                        >
+                                          <span>📅</span> Reschedule
+                                        </button>
                                       </div>
 
                                       <div className="flex items-center gap-2">
@@ -1543,7 +1714,7 @@ export default function AdminUserHistory() {
                             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Delivery History</p>
                             <div className="flex flex-wrap gap-2">
                               {pkg.deliveries.map((del, di) => {
-                                const rawDate = del?.date || del?.actual_delivery_date || del?.scheduled_date;
+                                const rawDate = del?.scheduled_date || del?.date || del?.actual_delivery_date;
                                 const parsed = rawDate ? new Date(rawDate) : null;
                                 const isValid = parsed && !isNaN(parsed.getTime());
                                 return (
