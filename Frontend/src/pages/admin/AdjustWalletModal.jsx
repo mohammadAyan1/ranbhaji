@@ -1,14 +1,42 @@
-import React, { useState } from "react";
-import { X, Upload, IndianRupee } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, Upload, IndianRupee, Calendar, Clock } from "lucide-react";
 import api from "../../api/axios";
 
 export default function AdjustWalletModal({ isOpen, onClose, user, onSuccess }) {
+  const getTodayStr = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const getCurrentTimeStr = () => {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${min}`;
+  };
+
   const [type, setType] = useState("credit");
   const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(getTodayStr());
+  const [time, setTime] = useState(getCurrentTimeStr());
   const [reason, setReason] = useState("");
   const [photo, setPhoto] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setDate(getTodayStr());
+      setTime(getCurrentTimeStr());
+      setAmount("");
+      setReason("");
+      setPhoto(null);
+      setError("");
+    }
+  }, [isOpen]);
 
   if (!isOpen || !user) return null;
 
@@ -26,6 +54,8 @@ export default function AdjustWalletModal({ isOpen, onClose, user, onSuccess }) 
       const formData = new FormData();
       formData.append("type", type);
       formData.append("amount", amount);
+      if (date) formData.append("date", date);
+      if (time) formData.append("time", time);
       if (reason) formData.append("reason", reason);
       if (photo) formData.append("photo", photo);
 
@@ -124,6 +154,50 @@ export default function AdjustWalletModal({ isOpen, onClose, user, onSuccess }) 
                   className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-shadow hover:shadow-sm"
                   placeholder="0.00"
                 />
+              </div>
+            </div>
+
+            {/* Transaction Date & Time */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Transaction Date *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-5 w-5 text-slate-400" />
+                  </div>
+                  <input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm transition-shadow hover:shadow-sm cursor-pointer"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Kis date me paise mile ya deduct hue
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Time (Optional)
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Clock className="h-5 w-5 text-slate-400" />
+                  </div>
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm transition-shadow hover:shadow-sm cursor-pointer"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Transaction timing
+                </p>
               </div>
             </div>
 

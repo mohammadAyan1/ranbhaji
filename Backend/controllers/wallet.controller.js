@@ -155,10 +155,10 @@ export const getUserSubscriptions = async (req, res) => {
 // GET /api/admin/users
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await User.findAll({ 
-            attributes: { exclude: ['password_hash'] }, 
+        const users = await User.findAll({
+            attributes: { exclude: ['password_hash'] },
             include: [{ model: Address }],
-            order: [['created_at', 'DESC']] 
+            order: [['created_at', 'DESC']]
         });
         res.status(200).json({ success: true, users });
     } catch (error) {
@@ -170,7 +170,7 @@ export const getAllUsers = async (req, res) => {
 export const createUser = async (req, res) => {
     try {
         const { name, phone, email, password, role } = req.body;
-        
+
         if (!name || !phone || !password) {
             return res.status(400).json({ success: false, message: "Name, phone, and password are required" });
         }
@@ -261,19 +261,19 @@ export const updateUserDislikes = async (req, res) => {
 export const adjustUserWallet = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { amount, type, reason } = req.body;
+        const { amount, type, reason, date, time } = req.body;
         const user = await User.findByPk(req.params.id, { transaction: t });
-        
+
         if (!user) {
             await t.rollback();
             return res.status(404).json({ success: false, message: "User not found" });
         }
-        
+
         if (!amount || amount <= 0) {
             await t.rollback();
             return res.status(400).json({ success: false, message: "Valid amount required" });
         }
-        
+
         if (type !== 'credit' && type !== 'debit') {
             await t.rollback();
             return res.status(400).json({ success: false, message: "Type must be credit or debit" });
@@ -304,19 +304,38 @@ export const adjustUserWallet = async (req, res) => {
         }
 
         await user.update({ wallet_balance: newBalance, due_amount: newDue }, { transaction: t });
-        
+
         let photo_url = null;
         if (req.file) {
             photo_url = `/uploads/${req.file.filename}`;
         }
 
-        const transaction = await WalletTransaction.create({ 
-            user_id: user.id, 
-            amount: parseFloat(amount), 
-            type, 
+        const txnPayload = {
+            user_id: user.id,
+            amount: parseFloat(amount),
+            type,
             reason: reason || `Admin manual adjustment (${type})`,
             photo_url
-        }, { transaction: t });
+        };
+
+        if (date) {
+            const dateParts = date.split('-').map(Number);
+            const now = new Date();
+            let hours = now.getHours();
+            let minutes = now.getMinutes();
+            let seconds = now.getSeconds();
+
+            if (time && typeof time === 'string' && time.includes(':')) {
+                const timeParts = time.split(':').map(Number);
+                hours = !isNaN(timeParts[0]) ? timeParts[0] : 0;
+                minutes = !isNaN(timeParts[1]) ? timeParts[1] : 0;
+                seconds = 0;
+            }
+
+            txnPayload.created_at = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], hours, minutes, seconds);
+        }
+
+        const transaction = await WalletTransaction.create(txnPayload, { transaction: t });
 
         await t.commit();
         res.status(200).json({ success: true, message: "Wallet adjusted successfully", transaction, wallet_balance: newBalance, due_amount: newDue });
@@ -360,8 +379,8 @@ export const getAdminWalletUsers = async (req, res) => {
             ]
         });
 
-        const walletUsers = users.filter(u => 
-            (u.WalletTransactions && u.WalletTransactions.length > 0) || 
+        const walletUsers = users.filter(u =>
+            (u.WalletTransactions && u.WalletTransactions.length > 0) ||
             parseFloat(u.wallet_balance || 0) !== 0 ||
             parseFloat(u.postpaid_debt || 0) !== 0
         ).map(u => {

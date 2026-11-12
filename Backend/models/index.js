@@ -229,7 +229,8 @@ const WalletTransaction = sequelize.define('WalletTransaction', {
   type: { type: DataTypes.ENUM('credit', 'debit') },
   reason: { type: DataTypes.STRING(255) },
   reference_id: { type: DataTypes.INTEGER, allowNull: true },
-  photo_url: { type: DataTypes.STRING(255), allowNull: true }
+  photo_url: { type: DataTypes.STRING(255), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: true }
 }, { tableName: 'wallet_transactions', timestamps: true, createdAt: 'created_at', updatedAt: false });
 
 // 12. PAUSE_LOG

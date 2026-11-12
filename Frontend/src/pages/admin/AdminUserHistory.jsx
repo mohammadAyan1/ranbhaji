@@ -1923,9 +1923,16 @@ export default function AdminUserHistory() {
         onClose={() => setShowWalletModal(false)}
         user={selectedUser}
         onSuccess={() => {
-          // Re-fetch transactions
+          // Re-fetch transactions & user data
           api.get(`/admin/users/${selectedUserId}/wallet/transactions`).then(res => {
             setWalletTransactions(res.data.transactions);
+          });
+          api.get(`/admin/user-analytics/${selectedUserId}`).then(res => {
+            setAnalytics(res.data.analytics);
+            setCurrentUserInfo(res.data.user);
+          });
+          api.get("/admin/users").then(res => {
+            setUsers(res.data.users);
           });
         }}
       />
