@@ -631,7 +631,12 @@ export default function PackageCalculator() {
         <div className="card p-5 border-gray-200 bg-white/50 hover:border-gray-300 transition-all duration-300">
           <p className="text-xs text-gray-600 font-medium uppercase tracking-wider mb-1">Calculation Budget</p>
           <p className="text-2xl font-bold text-gray-900">₹{totalBasePurchaseCost.toFixed(2)}</p>
-          <span className="text-[10px] text-gray-500">Fixed: ₹{totalFixedPurchaseCost.toFixed(2)} · Seasonal: ₹{totalSeasonalPurchaseCost.toFixed(2)}</span>
+          <div className="text-[10px] space-y-0.5 mt-1">
+            <span className="text-gray-500 block">Fixed: ₹{totalFixedPurchaseCost.toFixed(2)} · Seasonal: ₹{totalSeasonalPurchaseCost.toFixed(2)}</span>
+            <span className="text-gray-700 font-medium block" title={`Total Service Weight: ${formatWeight(totalWeightPerServiceGm)}`}>
+              ⚖️ Fixed: {formatWeight(totalFixedWeightGm)} · Seasonal: {formatWeight(totalSeasonalWeightGm)}
+            </span>
+          </div>
         </div>
 
         {/* Per-Service Price */}

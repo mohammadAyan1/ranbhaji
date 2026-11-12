@@ -28,19 +28,19 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1, c
     // Gap means empty days between deliveries, so interval is gap + 1
     switch (servicesPerMonth) {
         case 5:
-            interval_days = 7; // 6 days gap
+            interval_days = 8; // 7 days gap
             break;
         case 6:
-            interval_days = 6; // 5 days gap (Assuming the second '5 serving' was a typo for 6)
+            interval_days = 7; // 6 days gap (Assuming the second '5 serving' was a typo for 6)
             break;
         case 7:
-            interval_days = 5; // 4 days gap
+            interval_days = 6; // 5 days gap
             break;
         case 8:
-            interval_days = 4; // 3 days gap
+            interval_days = 5; // 4 days gap
             break;
         case 9:
-            interval_days = 3; // 2 days gap
+            interval_days = 4; // 3 days gap
             break;
         default:
             // For any other serving, calculate gap as (30 / services), then interval = gap + 1
@@ -64,11 +64,11 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1, c
         let scheduledDate = new Date(currentDate);
 
         if (scheduledDate.getUTCDay() === 0) { // Sunday
-            if (servicesPerMonth === 9) {
-                scheduledDate.setUTCDate(scheduledDate.getUTCDate() + 1); // Shift forward to Monday
-            } else {
-                scheduledDate.setUTCDate(scheduledDate.getUTCDate() - 1); // Shift back to Saturday
-            }
+            // if (servicesPerMonth === 9) {
+            //     scheduledDate.setUTCDate(scheduledDate.getUTCDate() + 1); // Shift forward to Monday
+            // } else {
+            scheduledDate.setUTCDate(scheduledDate.getUTCDate() - 1); // Shift back to Saturday
+            // }
             // Update the currentDate so the next interval is calculated from this shifted date
             currentDate = new Date(scheduledDate);
         }
