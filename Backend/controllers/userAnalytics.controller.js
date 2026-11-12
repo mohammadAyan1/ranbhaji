@@ -319,7 +319,10 @@ export const getUserAnalytics = async (req, res) => {
             if (pkg) {
                 if (!packageStats[pkg.id]) {
                     const margin = parseFloat(pkg.margin_percent || 0);
-                    const perServiceBudget = (parseFloat(pkg.price) / (pkg.services_per_month || 1)) / (1 + margin / 100);
+                    const packagePrice = parseFloat(pkg.price || sub.price || 0);
+                    const servicesCount = parseInt(pkg.services_per_month || sub.services_per_month || 1);
+                    const perServiceSellingPrice = servicesCount > 0 ? (packagePrice / servicesCount) : 0;
+                    const perServiceBudget = (1 + margin / 100) > 0 ? (perServiceSellingPrice / (1 + margin / 100)) : perServiceSellingPrice;
 
                     const fixedItemsList = (pkg.FixedItems || []).filter(fi => fi.Product).map(fi => ({
                         product_id: fi.product_id,
@@ -343,6 +346,10 @@ export const getUserAnalytics = async (req, res) => {
                         sub_id: sub.id,
                         id: pkg.id,
                         name: pkg.name,
+                        package_price: packagePrice,
+                        margin_percent: margin,
+                        services_per_month: servicesCount,
+                        per_service_price: perServiceSellingPrice,
                         type: 'Veg/Fruit Package',
                         renewals: 0,
                         status: sub.status,
@@ -354,6 +361,10 @@ export const getUserAnalytics = async (req, res) => {
                         servings: [],
                         seasonal_config: {
                             per_service_budget: perServiceBudget,
+                            per_service_price: perServiceSellingPrice,
+                            package_price: packagePrice,
+                            margin_percent: margin,
+                            services_per_month: servicesCount,
                             max_select_count: pkg.SeasonalConfig?.max_select_count || 0,
                             fixed_items: fixedItemsList,
                             seasonal_pool: seasonalPoolList
@@ -366,6 +377,15 @@ export const getUserAnalytics = async (req, res) => {
                     packageStats[pkg.id].sub_id = sub.id;
                     packageStats[pkg.id].batch = sub.Batch ? sub.Batch.name : null;
                     packageStats[pkg.id].batch_id = sub.batch_id;
+                    if (sub.price) {
+                        packageStats[pkg.id].package_price = parseFloat(sub.price);
+                        const sc = packageStats[pkg.id].services_per_month || 1;
+                        packageStats[pkg.id].per_service_price = packageStats[pkg.id].package_price / sc;
+                        if (packageStats[pkg.id].seasonal_config) {
+                            packageStats[pkg.id].seasonal_config.package_price = packageStats[pkg.id].package_price;
+                            packageStats[pkg.id].seasonal_config.per_service_price = packageStats[pkg.id].per_service_price;
+                        }
+                    }
                 }
                 packageStats[pkg.id].renewals += 1;
                 packageStats[pkg.id].history.push(sub.created_at || sub.createdAt);
@@ -468,6 +488,30 @@ export const getUserAnalytics = async (req, res) => {
             }
         });
 
+        // 3.5. Fetch debit wallet transactions linked to delivery schedules
+        const debitedTxns = await WalletTransaction.findAll({
+            where: {
+                user_id: userId,
+                type: 'debit',
+                reference_id: { [Op.ne]: null }
+            }
+        });
+        const debitedMap = {};
+        debitedTxns.forEach(t => {
+            const refKey = String(t.reference_id);
+            if (!debitedMap[refKey]) {
+                debitedMap[refKey] = {
+                    amount: parseFloat(t.amount || 0),
+                    created_at: t.created_at,
+                    txn_id: t.id,
+                    count: 1
+                };
+            } else {
+                debitedMap[refKey].amount += parseFloat(t.amount || 0);
+                debitedMap[refKey].count += 1;
+            }
+        });
+
         // To get accurate "Package Quantity" ever ordered by this user, we must check DeliveryItems and ScheduleSeasonalSelections
         // attached to this user's DeliverySchedules.
         const deliverySchedules = await DeliverySchedule.findAll({
@@ -533,6 +577,7 @@ export const getUserAnalytics = async (req, res) => {
                     if (!packageStats[pkgId].servings) {
                         packageStats[pkgId].servings = [];
                     }
+                    const debitedInfo = debitedMap[String(schedule.id)];
                     packageStats[pkgId].servings.push({
                         id: schedule.id,
                         subscription_id: schedule.subscription_id,
@@ -543,7 +588,33 @@ export const getUserAnalytics = async (req, res) => {
                         is_locked: schedule.is_locked,
                         delivery_time_slot: schedule.delivery_time_slot,
                         fixed_items: fixedList,
-                        seasonal_items: seasonalList
+                        seasonal_items: seasonalList,
+                        is_debited: !!debitedInfo,
+                        debited_amount: debitedInfo ? debitedInfo.amount : null,
+                        debited_at: debitedInfo ? debitedInfo.created_at : null,
+                        debited_txn_id: debitedInfo ? debitedInfo.txn_id : null
+                    });
+                }
+            } else if (schedule.WaterSubscription && schedule.WaterSubscription.water_type) {
+                const key = 'water_' + schedule.WaterSubscription.water_type;
+                if (packageStats[key]) {
+                    if (!packageStats[key].servings) {
+                        packageStats[key].servings = [];
+                    }
+                    const debitedInfo = debitedMap[String(schedule.id)];
+                    packageStats[key].servings.push({
+                        id: schedule.id,
+                        water_subscription_id: schedule.water_subscription_id,
+                        scheduled_date: schedule.scheduled_date,
+                        actual_delivery_date: schedule.actual_delivery_date,
+                        date: schedule.scheduled_date || deliveryDate,
+                        status: schedule.status,
+                        is_locked: schedule.is_locked,
+                        delivery_time_slot: schedule.delivery_time_slot,
+                        is_debited: !!debitedInfo,
+                        debited_amount: debitedInfo ? debitedInfo.amount : null,
+                        debited_at: debitedInfo ? debitedInfo.created_at : null,
+                        debited_txn_id: debitedInfo ? debitedInfo.txn_id : null
                     });
                 }
             }

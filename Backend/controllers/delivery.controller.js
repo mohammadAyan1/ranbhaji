@@ -3201,3 +3201,156 @@ export const rescheduleDeliverySchedule = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// POST /api/admin/delivery-schedules/:id/deduct-wallet
+export const deductServingWallet = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { force, custom_amount } = req.body;
+
+        const schedule = await DeliverySchedule.findByPk(id, {
+            include: [
+                {
+                    model: Subscription,
+                    include: [
+                        { model: User },
+                        { model: Package }
+                    ]
+                },
+                {
+                    model: WaterSubscription,
+                    include: [
+                        { model: User },
+                        { model: Product, as: 'Product' }
+                    ]
+                }
+            ],
+            transaction: t
+        });
+
+        if (!schedule) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Delivery schedule not found" });
+        }
+
+        const user = schedule.Subscription?.User || schedule.WaterSubscription?.User;
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "User not found for this delivery schedule" });
+        }
+
+        // Calculate per-serving amount including margin
+        let amount = 0;
+        let packageName = "Subscription";
+
+        if (schedule.Subscription) {
+            const sub = schedule.Subscription;
+            const pkg = sub.Package;
+            packageName = pkg?.name || "Veg/Fruit Package";
+            const pkgPrice = parseFloat(sub.price || pkg?.price || 0);
+            const servicesCount = parseInt(pkg?.services_per_month || sub.services_per_month || sub.total_services || 1);
+            amount = servicesCount > 0 ? (pkgPrice / servicesCount) : 0;
+        } else if (schedule.WaterSubscription) {
+            const waterSub = schedule.WaterSubscription;
+            packageName = `${waterSub.water_type || ''} Water (${waterSub.container || ''})`;
+            if (waterSub.per_delivery_amount) {
+                amount = parseFloat(waterSub.per_delivery_amount);
+            } else {
+                const pricePerBottle = parseFloat(waterSub.price_per_bottle || waterSub.Product?.selling_price_per_gm || 0);
+                const bottles = parseInt(waterSub.bottles_per_delivery || 1);
+                amount = pricePerBottle * bottles;
+            }
+        }
+
+        // Allow override if custom_amount is passed
+        if (custom_amount && !isNaN(parseFloat(custom_amount)) && parseFloat(custom_amount) > 0) {
+            amount = parseFloat(custom_amount);
+        }
+
+        amount = Math.round(amount * 100) / 100;
+
+        if (amount <= 0) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Deduction amount must be greater than 0" });
+        }
+
+        // Check if already debited for this schedule
+        const existingTxn = await WalletTransaction.findOne({
+            where: {
+                reference_id: schedule.id,
+                type: 'debit'
+            },
+            transaction: t
+        });
+
+        if (existingTxn && !force) {
+            await t.rollback();
+            return res.status(400).json({
+                success: false,
+                is_already_debited: true,
+                message: `Is serving ke liye pehle hi ₹${parseFloat(existingTxn.amount).toFixed(2)} deduct ho chuka hai (Txn #${existingTxn.id}). Dobara deduct karne ke liye confirm karein.`
+            });
+        }
+
+        // Determine transaction date = serving scheduled date
+        const servingDateStr = schedule.scheduled_date || schedule.actual_delivery_date;
+        let transactionDate = new Date();
+        if (servingDateStr) {
+            const dateParts = servingDateStr.split('-').map(Number);
+            const now = new Date();
+            transactionDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], now.getHours(), now.getMinutes(), now.getSeconds());
+        }
+
+        // Deduct from wallet & adjust due amount
+        let newBalance = parseFloat(user.wallet_balance || 0);
+        let newDue = parseFloat(user.due_amount || 0);
+
+        newBalance -= amount;
+        if (newBalance < 0) {
+            newDue += Math.abs(newBalance);
+            newBalance = 0;
+        }
+
+        newBalance = Math.round(newBalance * 100) / 100;
+        newDue = Math.round(newDue * 100) / 100;
+
+        await user.update({
+            wallet_balance: newBalance,
+            due_amount: newDue
+        }, { transaction: t });
+
+        // Record transaction
+        const txn = await WalletTransaction.create({
+            user_id: user.id,
+            amount: amount,
+            type: 'debit',
+            reason: req.body.reason || `Serving deduction (${servingDateStr}) for ${packageName} (Margin Included)`,
+            reference_id: schedule.id,
+            created_at: transactionDate
+        }, { transaction: t });
+
+        // Create user notification
+        await Notification.create({
+            user_id: user.id,
+            title: 'Wallet Debited for Serving',
+            message: `₹${amount.toFixed(2)} deducted from your wallet for delivery on ${servingDateStr} (${packageName}).`,
+            type: 'alert',
+            scheduled_at: new Date()
+        }, { transaction: t });
+
+        await t.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: `User ke wallet se Serving (${servingDateStr}) ke liye ₹${amount.toFixed(2)} successfully deduct ho gaye hain.`,
+            transaction: txn,
+            wallet_balance: newBalance,
+            due_amount: newDue
+        });
+    } catch (error) {
+        await t.rollback();
+        console.error("deductServingWallet error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};

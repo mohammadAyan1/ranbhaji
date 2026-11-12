@@ -64,6 +64,7 @@ export default function AdminUserHistory() {
   const [savingServingItems, setSavingServingItems] = useState(false);
   const [servingItemsError, setServingItemsError] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+  const [deductingServingId, setDeductingServingId] = useState(null);
 
   // Reschedule Serving states
   const [rescheduleModal, setRescheduleModal] = useState({
@@ -314,6 +315,61 @@ export default function AdminUserHistory() {
         loading: false,
         error: err.response?.data?.message || err.message
       }));
+    }
+  };
+
+  const refreshUserData = async () => {
+    if (!selectedUserId) return;
+    try {
+      const [res, transRes] = await Promise.all([
+        api.get(`/admin/user-analytics/${selectedUserId}`),
+        api.get(`/admin/users/${selectedUserId}/wallet/transactions`)
+      ]);
+      setAnalytics(res.data.analytics);
+      if (res.data.user) {
+        setCurrentUserInfo(res.data.user);
+        setUsers(prev => prev.map(u => u.id === res.data.user.id ? { ...u, wallet_balance: res.data.user.wallet_balance, due_amount: res.data.user.due_amount } : u));
+      }
+      setWalletTransactions(transRes.data.transactions || []);
+    } catch (e) {
+      console.error("Failed to refresh user data", e);
+    }
+  };
+
+  const handleDeductServingWallet = async (serving, pkg, sIdx) => {
+    if (!serving || !pkg) return;
+
+    const margin = parseFloat(pkg.margin_percent || pkg.seasonal_config?.margin_percent || 0);
+    const budget = parseFloat(pkg.seasonal_config?.per_service_budget || 0);
+    const perServiceWithMargin = parseFloat(pkg.per_service_price || pkg.seasonal_config?.per_service_price || (budget * (1 + margin / 100)) || 0);
+    const amount = perServiceWithMargin > 0 ? perServiceWithMargin : (parseFloat(pkg.package_price || 0) / (pkg.services_per_month || 1));
+    const formattedAmount = amount.toFixed(2);
+    const dateFormatted = serving.scheduled_date || (serving.actual_delivery_date ? serving.actual_delivery_date.split('T')[0] : 'N/A');
+
+    if (serving.is_debited) {
+      const reConfirm = window.confirm(
+        `⚠️ Is serving (#${sIdx + 1} - ${dateFormatted}) ke liye pehle hi ₹${parseFloat(serving.debited_amount || amount).toFixed(2)} deduct ho chuka hai.\n\nKya aap sach me dobara ₹${formattedAmount} deduct karna chahte hain?`
+      );
+      if (!reConfirm) return;
+    } else {
+      const confirmDeduct = window.confirm(
+        `User "${currentUserInfo?.name || 'User'}" ke wallet se Serving #${sIdx + 1} (${dateFormatted}) ke liye ₹${formattedAmount} (margin included) deduct karein?\n\nTransaction ki date serving ki date (${dateFormatted}) hi rahegi.`
+      );
+      if (!confirmDeduct) return;
+    }
+
+    setDeductingServingId(serving.id);
+    try {
+      const res = await api.post(`/admin/delivery-schedules/${serving.id}/deduct-wallet`, {
+        force: serving.is_debited ? true : false,
+        custom_amount: amount
+      });
+      alert(res.data.message || `₹${formattedAmount} wallet se successfully deduct ho gaye!`);
+      await refreshUserData();
+    } catch (err) {
+      alert(`❌ Wallet deduction failed: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setDeductingServingId(null);
     }
   };
 
@@ -1139,6 +1195,11 @@ export default function AdminUserHistory() {
 
                 return (
                   <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 px-1 text-xs text-gray-600 flex-wrap pb-0.5">
+                      <span>🏷️ Package Price: <strong className="text-purple-800">₹{(editingPackage.package_price || (editingPackage.per_service_price ? editingPackage.per_service_price * (editingPackage.services_per_month || 1) : 0)).toFixed(2)}</strong></span>
+                      <span>💰 Customer Pays / Serving: <strong className="text-blue-700">₹{(editingPackage.per_service_price || (budget * (1 + (editingPackage.margin_percent || 0) / 100))).toFixed(2)}</strong></span>
+                      <span>🥦 Veg Purchase Budget: <strong className="text-fresh-700">₹{budget.toFixed(2)}</strong></span>
+                    </div>
                     <div className="grid grid-cols-3 gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 text-center">
                       <div>
                         <span className="text-[10px] font-bold uppercase text-gray-500 tracking-wider block">Allowed Serving Budget</span>
@@ -1513,8 +1574,20 @@ export default function AdminUserHistory() {
                     <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                       <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
                         <div>
-                          <p className="font-bold text-gray-900 flex items-center gap-2">
-                            {pkg.name}
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="font-bold text-gray-900 text-base">
+                              {pkg.name}
+                            </p>
+                            {pkg.package_price > 0 && (
+                              <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                                ₹{pkg.package_price.toFixed(2)}
+                              </span>
+                            )}
+                            {pkg.per_service_price > 0 && (
+                              <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                ₹{pkg.per_service_price.toFixed(2)} / serving
+                              </span>
+                            )}
                             {pkg.status && (
                               <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
                                 pkg.status === 'active' ? 'bg-green-100 text-green-700' :
@@ -1524,7 +1597,7 @@ export default function AdminUserHistory() {
                                 {pkg.status}
                               </span>
                             )}
-                          </p>
+                          </div>
                           <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
                             {pkg.type}
                             {pkg.status === 'active' && (
@@ -1599,11 +1672,33 @@ export default function AdminUserHistory() {
                                   Har serving ka status badlein aur sabji / quantities customize karein.
                                 </p>
                               </div>
-                              {pkg.seasonal_config?.per_service_budget > 0 && (
-                                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-fresh-50 text-fresh-800 border border-fresh-200">
-                                  Budget / Serving: ₹{pkg.seasonal_config.per_service_budget.toFixed(2)}
-                                </span>
-                              )}
+                              {(() => {
+                                const margin = parseFloat(pkg.margin_percent || pkg.seasonal_config?.margin_percent || 0);
+                                const budget = parseFloat(pkg.seasonal_config?.per_service_budget || 0);
+                                const perServiceWithMargin = parseFloat(pkg.per_service_price || pkg.seasonal_config?.per_service_price || (budget * (1 + margin / 100)) || 0);
+                                const pkgPrice = parseFloat(pkg.package_price || pkg.seasonal_config?.package_price || (perServiceWithMargin * (pkg.services_per_month || pkg.servings?.length || 1)) || 0);
+
+                                return (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {pkgPrice > 0 && (
+                                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-1" title="Customer package total price">
+                                        <span>🏷️</span> Package Price: <strong>₹{pkgPrice.toFixed(2)}</strong>
+                                      </span>
+                                    )}
+                                    {perServiceWithMargin > 0 && (
+                                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1" title="Customer selling price per serving with margin included">
+                                        <span>💰</span> Per Serving (With Margin): <strong>₹{perServiceWithMargin.toFixed(2)}</strong>
+                                        {margin > 0 && <span className="text-[10px] text-blue-600 font-normal">({margin}% margin)</span>}
+                                      </span>
+                                    )}
+                                    {budget > 0 && (
+                                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-fresh-50 text-fresh-800 border border-fresh-200 flex items-center gap-1" title="Base Purchase Cost Budget per serving without margin">
+                                        <span>🥦</span> Budget / Serving: <strong>₹{budget.toFixed(2)}</strong>
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
 
                             <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
@@ -1612,6 +1707,10 @@ export default function AdminUserHistory() {
                                 const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString("en-IN", {
                                   weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
                                 }) : "Date N/A";
+
+                                const sMargin = parseFloat(pkg.margin_percent || pkg.seasonal_config?.margin_percent || 0);
+                                const sBudget = parseFloat(pkg.seasonal_config?.per_service_budget || 0);
+                                const sPerServiceWithMargin = parseFloat(pkg.per_service_price || pkg.seasonal_config?.per_service_price || (sBudget * (1 + sMargin / 100)) || 0);
 
                                 return (
                                   <div
@@ -1639,6 +1738,31 @@ export default function AdminUserHistory() {
                                         >
                                           <span>📅</span> Reschedule
                                         </button>
+
+                                        {/* Wallet Deduct button */}
+                                        {serving.is_debited ? (
+                                          <button
+                                            type="button"
+                                            disabled={deductingServingId === serving.id}
+                                            onClick={() => handleDeductServingWallet(serving, pkg, sIdx)}
+                                            className="text-[11px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-2.5 py-0.5 rounded-md flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                            title={`Debited: ₹${parseFloat(serving.debited_amount || sPerServiceWithMargin).toFixed(2)} on serving date (${serving.scheduled_date}). Click to re-deduct.`}
+                                          >
+                                            <span>✅</span>
+                                            {deductingServingId === serving.id ? "Deducting..." : `Debited (₹${parseFloat(serving.debited_amount || sPerServiceWithMargin).toFixed(2)})`}
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            disabled={deductingServingId === serving.id}
+                                            onClick={() => handleDeductServingWallet(serving, pkg, sIdx)}
+                                            className="text-[11px] font-bold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-md flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                            title={`Serving date (${serving.scheduled_date}) par user ke wallet se ₹${sPerServiceWithMargin.toFixed(2)} deduct karein`}
+                                          >
+                                            <span>💳</span>
+                                            {deductingServingId === serving.id ? "Deducting..." : `Wallet Deduct (₹${sPerServiceWithMargin.toFixed(2)})`}
+                                          </button>
+                                        )}
                                       </div>
 
                                       <div className="flex items-center gap-2">
