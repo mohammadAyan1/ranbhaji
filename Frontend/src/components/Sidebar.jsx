@@ -147,23 +147,21 @@ export default function Sidebar({ onClose }) {
   return (
     <aside className="h-screen w-64 bg-white/95 backdrop-blur-xl border-r border-gray-200/60 flex flex-col shadow-2xl z-50">
       {/* Header */}
-      <div className="p-5 border-b border-gray-200/60 flex items-center justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-11 h-11 bg-white border border-gray-200/80 rounded-xl flex items-center justify-center p-0.5 shadow-xs overflow-hidden shrink-0">
-            <img 
-              src="/logo.png" 
-              alt="RamBhaji Logo" 
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <div className="min-w-0">
-            <h1 className="font-bold text-gray-900 text-lg leading-none tracking-tight truncate">RamBhaji</h1>
-            <p className="text-xs text-fresh-600 font-medium capitalize tracking-wide mt-0.5">{user?.role} Panel</p>
-          </div>
+      <div className="px-4 py-4 border-b border-gray-200/70 flex items-center justify-center relative">
+        <div className="w-full flex items-center justify-center">
+          <img 
+            src="/logo.png" 
+            alt="RamBhaji Logo" 
+            className="w-full max-w-[185px] h-auto max-h-28 object-contain transition-transform duration-200 hover:scale-105"
+          />
         </div>
         {onClose && (
-          <button onClick={onClose} className="lg:hidden text-gray-600 hover:text-gray-900 transition-colors p-1 bg-gray-100 rounded-md">
-            <X size={20} />
+          <button 
+            onClick={onClose} 
+            className="lg:hidden absolute right-3 top-3 text-gray-600 hover:text-gray-900 transition-colors p-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg shrink-0"
+            title="Close menu"
+          >
+            <X size={18} />
           </button>
         )}
       </div>

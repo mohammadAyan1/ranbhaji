@@ -30,15 +30,9 @@ export default function Layout() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-gray-50 to-fresh-50/30 relative">
         {/* Unauthenticated Header */}
         {!token && (
-          <header className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 bg-white/95 backdrop-blur-md sticky top-0 z-30 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-white border border-gray-200/80 rounded-xl flex items-center justify-center p-0.5 shadow-xs overflow-hidden shrink-0">
-                <img src="/logo.png" alt="RamBhaji Logo" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <span className="font-bold text-lg tracking-tight text-gray-900 block leading-tight">RamBhaji</span>
-                <span className="text-xs text-gray-500 font-medium">Log Purchase Portal</span>
-              </div>
+          <header className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white/95 backdrop-blur-md sticky top-0 z-30 shadow-xs">
+            <div className="flex items-center">
+              <img src="/logo.png" alt="RamBhaji Logo" className="h-10 w-auto max-w-[160px] object-contain" />
             </div>
             <Link
               to="/login"
@@ -51,12 +45,9 @@ export default function Layout() {
         )}
         {/* Mobile Header */}
         {!isTvMode && (
-          <header className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200/50 bg-white/80 backdrop-blur-md z-30 sticky top-0">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white border border-gray-200/80 rounded-lg flex items-center justify-center p-0.5 shadow-xs overflow-hidden shrink-0">
-                <img src="/logo.png" alt="RamBhaji Logo" className="w-full h-full object-contain" />
-              </div>
-              <span className="font-bold text-lg tracking-tight text-gray-900">RamBhaji</span>
+          <header className="lg:hidden flex items-center justify-between p-3.5 border-b border-gray-200/50 bg-white/80 backdrop-blur-md z-30 sticky top-0">
+            <div className="flex items-center">
+              <img src="/logo.png" alt="RamBhaji Logo" className="h-9 w-auto max-w-[140px] object-contain" />
             </div>
             <button 
               onClick={() => setSidebarOpen(true)}
