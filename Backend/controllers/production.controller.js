@@ -670,7 +670,7 @@ export const getDetailedWorkerLogs = async (req, res) => {
             include: [
                 {
                     model: Product,
-                    attributes: ['name']
+                    attributes: ['id', 'name', 'image_url']
                 },
                 {
                     model: TaskWorkerAssignment,
@@ -713,6 +713,8 @@ export const getDetailedWorkerLogs = async (req, res) => {
             const uniqueWorkerCount = workerMap.size;
             const stageName = (task.stage || '').toUpperCase() === 'BUCKET_ARRANGE' ? 'busket_arrange' : task.stage;
 
+            const prod = task.Product || task.product;
+
             workerMap.forEach((workerAssignments, workerId) => {
                 const firstAssignment = workerAssignments[0];
                 const lastAssignment = workerAssignments[workerAssignments.length - 1];
@@ -723,7 +725,10 @@ export const getDetailedWorkerLogs = async (req, res) => {
                 logs.push({
                     worker_name: workerName,
                     worker_id: workerId,
-                    task: `${task.Product ? task.Product.name : 'Unknown'} - ${stageName}`,
+                    task: `${prod ? prod.name : 'Unknown'} - ${stageName}`,
+                    product_id: prod?.id || null,
+                    product_name: prod ? prod.name : 'Unknown',
+                    product_image: prod?.image_url || null,
                     status: task.status,
                     assigned_at: firstAssignment.joined_at,
                     started_at: task.started_at,

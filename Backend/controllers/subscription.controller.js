@@ -1195,6 +1195,8 @@ export const getUpcomingSelections = async (req, res) => {
             return {
                 id: s.id,
                 scheduled_date: s.scheduled_date,
+                status: s.status,
+                actual_delivery_date: s.actual_delivery_date || null,
                 is_locked: s.is_locked,
                 is_window_open: isWindowOpen,
                 cutoff_time: cutoffTime,

@@ -34,13 +34,18 @@ export default function DispatchOrders() {
     }
   };
 
-  const fetchDeliveryBoys = async () => {
+  const fetchDeliveryBoys = async (targetDate = date) => {
     try {
-      const res = await api.get('/admin/users');
-      const boys = (res.data.users || []).filter(u => u.role === 'delivery');
-      setDeliveryBoys(boys);
+      const activeDate = targetDate || new Date().toISOString().split('T')[0];
+      const res = await api.get(`/admin/present-delivery-boys?date=${activeDate}`);
+      if (res.data?.success) {
+        setDeliveryBoys(res.data.deliveryBoys || []);
+      } else {
+        setDeliveryBoys([]);
+      }
     } catch (err) {
-      console.error('Failed to fetch delivery boys', err);
+      console.error('Failed to fetch present delivery boys', err);
+      setDeliveryBoys([]);
     }
   };
 
@@ -76,11 +81,12 @@ export default function DispatchOrders() {
 
   useEffect(() => {
     fetchBatches();
-    fetchDeliveryBoys();
+    fetchDeliveryBoys(date);
   }, []);
 
   useEffect(() => {
     fetchOrders();
+    fetchDeliveryBoys(date);
   }, [date]);
 
   const handleAssignDeliveryBoy = async (scheduleIds, retailOrderIds, delivery_boy_id) => {

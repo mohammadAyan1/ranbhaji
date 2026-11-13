@@ -1151,6 +1151,19 @@ export default function MySubscriptions() {
                             <div>
                               <p className="font-semibold text-gray-900 text-sm">{formattedDate}</p>
                               <div className="flex flex-wrap gap-2 mt-1">
+                                {schedule.status && (
+                                  <span className={`badge text-[10px] font-semibold ${
+                                    schedule.status === 'delivered' ? 'badge-green' :
+                                    schedule.status === 'ready_for_delivery' ? 'badge-blue' :
+                                    schedule.status === 'skipped' ? 'badge-gray' :
+                                    'badge-yellow'
+                                  }`}>
+                                    {schedule.status === 'delivered' ? '✅ Delivered' :
+                                     schedule.status === 'ready_for_delivery' ? '🚚 Out for Delivery' :
+                                     schedule.status === 'skipped' ? '⏭ Skipped' :
+                                     '⏳ Pending'}
+                                  </span>
+                                )}
                                 {schedule.is_window_open ? (
                                   <span className="badge badge-green text-[10px]">⏳ Open for changes</span>
                                 ) : (

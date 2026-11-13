@@ -5,7 +5,7 @@ import {
     WalletTransaction, Notification, WaterSubscription, Package, Address,
     ScheduleSeasonalSelection, PackageSeasonalConfig, PackageFixedItem, PackageSeasonalPool,
     RetailOrder, RetailOrderItem, Batch, MissedProductLog, ReturnedProductLog,
-    LossLog, PurchaseLog, BatchProductTask
+    LossLog, PurchaseLog, BatchProductTask, AttendanceLog
 } from "../models/index.js";
 import path from "path";
 import { generateDeliveryDates, generateWaterDeliveryDates } from "../utils/scheduleEngine.js";
@@ -1910,6 +1910,46 @@ export const assignBatch = async (req, res) => {
     }
 };
 
+// GET /api/admin/present-delivery-boys
+export const getPresentDeliveryBoys = async (req, res) => {
+    try {
+        const date = req.query.date || new Date().toISOString().split('T')[0];
+
+        // Find attendance records for the given date
+        const attendedLogs = await AttendanceLog.findAll({
+            where: { date },
+            include: [
+                {
+                    model: User,
+                    as: 'DeliveryBoy',
+                    attributes: ['id', 'name', 'phone', 'role', 'status', 'delivery_zones']
+                }
+            ],
+            order: [['login_time', 'ASC']]
+        });
+
+        // Filter active delivery boys and de-duplicate
+        const boyMap = new Map();
+        for (const log of attendedLogs) {
+            if (log.DeliveryBoy && log.DeliveryBoy.status === 'active' && log.DeliveryBoy.role === 'delivery') {
+                if (!boyMap.has(log.DeliveryBoy.id)) {
+                    boyMap.set(log.DeliveryBoy.id, {
+                        ...log.DeliveryBoy.toJSON(),
+                        login_time: log.login_time,
+                        attendance_date: log.date
+                    });
+                }
+            }
+        }
+
+        const deliveryBoys = Array.from(boyMap.values());
+        res.status(200).json({ success: true, date, deliveryBoys });
+    } catch (error) {
+        console.error("getPresentDeliveryBoys error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // PUT /api/admin/orders/assign-delivery-boy
 export const assignDeliveryBoy = async (req, res) => {
     try {
@@ -2155,8 +2195,29 @@ export const packOrders = async (req, res) => {
             if (addressId) {
                 const address = await Address.findByPk(addressId);
                 if (address && address.zone) {
+                    const today = new Date().toISOString().split('T')[0];
+                    const orderDate = targetObj?.scheduled_date || (targetObj?.delivery_date ? String(targetObj.delivery_date).split('T')[0] : null) || today;
+
+                    // Only select delivery boys who have marked attendance for orderDate or today
+                    const attendedLogs = await AttendanceLog.findAll({
+                        where: {
+                            date: { [Op.in]: [orderDate, today] }
+                        },
+                        attributes: ['delivery_boy_id']
+                    });
+                    const attendedBoyIds = [...new Set(attendedLogs.map(l => l.delivery_boy_id))];
+
+                    // If no delivery boys marked attendance, do not auto-assign
+                    if (attendedBoyIds.length === 0) {
+                        return null;
+                    }
+
                     let deliveryBoys = await User.findAll({
-                        where: { role: 'delivery', status: 'active' }
+                        where: {
+                            id: { [Op.in]: attendedBoyIds },
+                            role: 'delivery',
+                            status: 'active'
+                        }
                     });
 
                     // Sort manually by last_assigned_at ASC, treating null as very old date

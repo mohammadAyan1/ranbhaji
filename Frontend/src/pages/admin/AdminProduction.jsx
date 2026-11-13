@@ -3,6 +3,56 @@ import { Activity, Clock, Users, CheckCircle, Hourglass, Calendar, Filter, Rotat
 import { io } from 'socket.io-client';
 import api from "../../api/axios";
 
+const getImageUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${baseUrl}${path}`;
+};
+
+const TaskProductThumbnail = ({ image, name }) => {
+  const [src, setSrc] = useState(image ? getImageUrl(image) : null);
+  const [failed, setFailed] = useState(!image);
+
+  useEffect(() => {
+    setSrc(image ? getImageUrl(image) : null);
+    setFailed(!image);
+  }, [image]);
+
+  const handleError = () => {
+    // If loading from localhost failed, try the production server fallback URL
+    if (src && src.includes('localhost') && image) {
+      const cleanPath = image.startsWith('/') ? image : `/${image}`;
+      setSrc(`https://rambhaji.backend.shreenari.com${cleanPath}`);
+    } else {
+      setFailed(true);
+    }
+  };
+
+  if (!src || failed) {
+    return (
+      <div 
+        className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-lg shadow-2xs shrink-0 select-none"
+        title={name || "Product"}
+      >
+        🥦
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 bg-white shrink-0 shadow-2xs flex items-center justify-center">
+      <img
+        src={src}
+        alt={name || "Product"}
+        className="w-full h-full object-cover transition-transform hover:scale-110"
+        onError={handleError}
+      />
+    </div>
+  );
+};
+
 const LiveTimer = ({ startedAt, expectedMinutes }) => {
   const [elapsed, setElapsed] = useState(0);
 
@@ -293,7 +343,12 @@ export default function AdminProduction() {
                     return (
                       <tr key={index} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{log.worker_name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600">{formattedTask}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-800">
+                          <div className="flex items-center gap-3">
+                            <TaskProductThumbnail image={log.product_image} name={log.product_name} />
+                            <span className="font-medium text-gray-800">{formattedTask}</span>
+                          </div>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 text-xs font-bold rounded-full ${log.role === 'Initiator' ? 'bg-indigo-100 text-indigo-800' : 'bg-pink-100 text-pink-800'
                             }`}>

@@ -1651,7 +1651,7 @@ export default function AdminUserHistory() {
                             {pkg.history && pkg.history.length > 0 ? (
                                pkg.history.map((hDate, hi) => (
                                  <li key={hi}>
-                                   {hi === 0 ? <span className="font-semibold text-gray-800">First Subscribed:</span> : <span className="font-semibold text-blue-700">Renewed ({hi}):</span>} {new Date(hDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                                   {hi === 0 ? <span className="font-semibold text-gray-800">Package Register Date:</span> : <span className="font-semibold text-blue-700">Renewed ({hi}):</span>} {new Date(hDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
                                  </li>
                                ))
                             ) : (

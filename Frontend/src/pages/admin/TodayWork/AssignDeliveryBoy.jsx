@@ -35,13 +35,18 @@ export default function AssignDeliveryBoy() {
     }
   };
 
-  const fetchDeliveryBoys = async () => {
+  const fetchDeliveryBoys = async (targetDate = date) => {
     try {
-      const res = await api.get('/admin/users');
-      const boys = (res.data.users || []).filter(u => u.role === 'delivery');
-      setDeliveryBoys(boys);
+      const activeDate = targetDate || new Date().toISOString().split('T')[0];
+      const res = await api.get(`/admin/present-delivery-boys?date=${activeDate}`);
+      if (res.data?.success) {
+        setDeliveryBoys(res.data.deliveryBoys || []);
+      } else {
+        setDeliveryBoys([]);
+      }
     } catch (err) {
-      console.error('Failed to fetch delivery boys', err);
+      console.error('Failed to fetch present delivery boys', err);
+      setDeliveryBoys([]);
     }
   };
 
@@ -61,11 +66,12 @@ export default function AssignDeliveryBoy() {
 
   useEffect(() => {
     fetchBatches();
-    fetchDeliveryBoys();
+    fetchDeliveryBoys(date);
   }, []);
 
   useEffect(() => {
     fetchOrders();
+    fetchDeliveryBoys(date);
   }, [date]);
 
   const handleAssignDeliveryBoy = async (scheduleIds, retailOrderIds, delivery_boy_id) => {
@@ -224,17 +230,35 @@ export default function AssignDeliveryBoy() {
               defaultValue=""
             >
               <option value="" disabled>Assign to Selected ({selectedUserIds.length})...</option>
-              {deliveryBoys.map(boy => (
-                <option key={boy.id} value={boy.id}>{boy.name}</option>
-              ))}
+              {deliveryBoys.length === 0 ? (
+                <option value="" disabled>⚠️ No delivery boy has marked attendance</option>
+              ) : (
+                deliveryBoys.map(boy => (
+                  <option key={boy.id} value={boy.id}>{boy.name}</option>
+                ))
+              )}
             </select>
           )}
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="input-field w-full sm:w-auto py-2 px-3 text-sm bg-gray-50 border border-gray-200 rounded-xl"
-          />
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border whitespace-nowrap ${
+                deliveryBoys.length > 0
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}
+              title={`Date ${date} ke liye sirf unhi delivery boys ka attendance status show ho raha hai`}
+            >
+              {deliveryBoys.length > 0
+                ? `🟢 ${deliveryBoys.length} Present Boy${deliveryBoys.length === 1 ? '' : 's'}`
+                : '🔴 0 Delivery Boys Present'}
+            </span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="input-field w-full sm:w-auto py-2 px-3 text-sm bg-gray-50 border border-gray-200 rounded-xl"
+            />
+          </div>
         </div>
       </div>
 
@@ -377,9 +401,14 @@ export default function AssignDeliveryBoy() {
                                             {deliveryBoys.map(boy => (
                                               <option key={boy.id} value={boy.id}>{boy.name}</option>
                                             ))}
+                                            {addrGrp.delivery_boy_id && !deliveryBoys.some(b => b.id === addrGrp.delivery_boy_id) && (
+                                              <option value={addrGrp.delivery_boy_id} disabled>
+                                                {addrGrp.delivery_boy_name || `Boy #${addrGrp.delivery_boy_id}`} (Absent / No Attendance)
+                                              </option>
+                                            )}
                                           </select>
                                           <p className="text-[10px] text-gray-500 mt-1 text-right">
-                                            {addrGrp.delivery_boy_id ? 'Assigned' : 'Select to assign'}
+                                            {addrGrp.delivery_boy_id ? 'Assigned' : deliveryBoys.length === 0 ? 'No boys present' : 'Select to assign'}
                                           </p>
                                         </div>
                                       </div>
