@@ -147,14 +147,18 @@ export default function Sidebar({ onClose }) {
   return (
     <aside className="h-screen w-64 bg-white/95 backdrop-blur-xl border-r border-gray-200/60 flex flex-col shadow-2xl z-50">
       {/* Header */}
-      <div className="p-6 border-b border-gray-200/60 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-fresh-400 to-fresh-600 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-fresh-500/30">
-            🥦
+      <div className="p-5 border-b border-gray-200/60 flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-11 h-11 bg-white border border-gray-200/80 rounded-xl flex items-center justify-center p-0.5 shadow-xs overflow-hidden shrink-0">
+            <img 
+              src="/logo.png" 
+              alt="RamBhaji Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
-          <div>
-            <h1 className="font-bold text-gray-900 text-lg leading-none tracking-tight">RamBhaji</h1>
-            <p className="text-xs text-fresh-600 font-medium capitalize tracking-wide">{user?.role} Panel</p>
+          <div className="min-w-0">
+            <h1 className="font-bold text-gray-900 text-lg leading-none tracking-tight truncate">RamBhaji</h1>
+            <p className="text-xs text-fresh-600 font-medium capitalize tracking-wide mt-0.5">{user?.role} Panel</p>
           </div>
         </div>
         {onClose && (

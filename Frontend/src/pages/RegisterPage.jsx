@@ -44,8 +44,10 @@ export default function RegisterPage() {
 
       <div className="relative w-full max-w-md animate-slide-up">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-fresh-600 rounded-2xl text-3xl mb-4 shadow-lg shadow-fresh-600/30">🥦</div>
-          <h1 className="text-4xl font-bold text-gray-900">RamBhaji</h1>
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white border border-gray-200 rounded-2xl p-1 mb-3 shadow-lg shadow-gray-200/50">
+            <img src="/logo.png" alt="RamBhaji Logo" className="w-full h-full object-contain" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900">RamBhaji</h1>
           <p className="text-gray-600 mt-1">Create your account</p>
         </div>
 

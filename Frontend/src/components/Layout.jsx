@@ -32,7 +32,9 @@ export default function Layout() {
         {!token && (
           <header className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 bg-white/95 backdrop-blur-md sticky top-0 z-30 shadow-xs">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-fresh-400 to-fresh-600 shadow-md shadow-fresh-500/20 rounded-xl flex items-center justify-center text-lg">🥦</div>
+              <div className="w-9 h-9 bg-white border border-gray-200/80 rounded-xl flex items-center justify-center p-0.5 shadow-xs overflow-hidden shrink-0">
+                <img src="/logo.png" alt="RamBhaji Logo" className="w-full h-full object-contain" />
+              </div>
               <div>
                 <span className="font-bold text-lg tracking-tight text-gray-900 block leading-tight">RamBhaji</span>
                 <span className="text-xs text-gray-500 font-medium">Log Purchase Portal</span>
@@ -51,7 +53,9 @@ export default function Layout() {
         {!isTvMode && (
           <header className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200/50 bg-white/80 backdrop-blur-md z-30 sticky top-0">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-fresh-400 to-fresh-600 shadow-lg shadow-fresh-500/20 rounded-lg flex items-center justify-center text-sm">🥦</div>
+              <div className="w-8 h-8 bg-white border border-gray-200/80 rounded-lg flex items-center justify-center p-0.5 shadow-xs overflow-hidden shrink-0">
+                <img src="/logo.png" alt="RamBhaji Logo" className="w-full h-full object-contain" />
+              </div>
               <span className="font-bold text-lg tracking-tight text-gray-900">RamBhaji</span>
             </div>
             <button 
