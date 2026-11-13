@@ -93,8 +93,16 @@ export const getProducts = async (req, res) => {
 export const getPublicVegetables = async (req, res) => {
     try {
         const products = await Product.findAll({
-            where: { category: 'vegetable', status: 'active' },
-            attributes: ['id', 'name', 'hindi_name', 'sub_category', 'image_url']
+            where: {
+                status: 'active',
+                [Op.or]: [
+                    sequelize.where(sequelize.fn('LOWER', sequelize.col('category')), { [Op.like]: '%vegetable%' }),
+                    sequelize.where(sequelize.fn('LOWER', sequelize.col('category')), { [Op.like]: '%sabzi%' }),
+                    { is_package_active: true }
+                ]
+            },
+            attributes: ['id', 'name', 'hindi_name', 'sub_category', 'image_url', 'category'],
+            order: [['name', 'ASC']]
         });
         res.status(200).json({ success: true, products });
     } catch (error) {

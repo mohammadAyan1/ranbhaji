@@ -13,6 +13,8 @@ export default function AdminUserHistory() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [currentUserInfo, setCurrentUserInfo] = useState(null);
+  const [userAddresses, setUserAddresses] = useState([]);
+  const [showAllAddressesModal, setShowAllAddressesModal] = useState(false);
 
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [discountPercent, setDiscountPercent] = useState("");
@@ -134,6 +136,7 @@ export default function AdminUserHistory() {
         ]);
         setAnalytics(res.data.analytics);
         setCurrentUserInfo(res.data.user);
+        setUserAddresses(res.data.addresses || []);
         setDiscountPercent(res.data.user?.discount_percentage ?? "0");
         const discounts = waterDiscRes?.data?.discounts || res.data.waterDiscounts || [];
         setWaterDiscounts(discounts);
@@ -251,6 +254,8 @@ export default function AdminUserHistory() {
       setLoading(true);
       const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
       setAnalytics(res.data.analytics);
+      if (res.data.user) setCurrentUserInfo(res.data.user);
+      if (res.data.addresses) setUserAddresses(res.data.addresses);
       setLoading(false);
 
       if (action === 'assign') setShowAssignModal(false);
@@ -329,6 +334,9 @@ export default function AdminUserHistory() {
       if (res.data.user) {
         setCurrentUserInfo(res.data.user);
         setUsers(prev => prev.map(u => u.id === res.data.user.id ? { ...u, wallet_balance: res.data.user.wallet_balance, due_amount: res.data.user.due_amount } : u));
+      }
+      if (res.data.addresses) {
+        setUserAddresses(res.data.addresses);
       }
       setWalletTransactions(transRes.data.transactions || []);
     } catch (e) {
@@ -471,6 +479,8 @@ export default function AdminUserHistory() {
       setLoading(true);
       const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
       setAnalytics(res.data.analytics);
+      if (res.data.user) setCurrentUserInfo(res.data.user);
+      if (res.data.addresses) setUserAddresses(res.data.addresses);
       setLoading(false);
 
       setShowBatchModal(false);
@@ -495,6 +505,8 @@ export default function AdminUserHistory() {
       setLoading(true);
       const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
       setAnalytics(res.data.analytics);
+      if (res.data.user) setCurrentUserInfo(res.data.user);
+      if (res.data.addresses) setUserAddresses(res.data.addresses);
       setLoading(false);
 
       setShowAddressModal(false);
@@ -568,12 +580,77 @@ export default function AdminUserHistory() {
       )}
 
       {selectedUserId && currentUserInfo && (
-        <div className="card bg-gray-50 border border-gray-200 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-gray-900 text-base">{currentUserInfo.name}</h3>
-            <p className="text-sm text-gray-600">{currentUserInfo.phone} {currentUserInfo.email && `| ${currentUserInfo.email}`}</p>
+        <div className="card bg-gray-50 border border-gray-200 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div>
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                {currentUserInfo.name}
+                <span className="text-xs font-normal text-gray-500">#{currentUserInfo.id}</span>
+              </h3>
+              <p className="text-sm text-gray-600 mt-0.5">
+                📞 {currentUserInfo.phone} {currentUserInfo.email && `| ✉️ ${currentUserInfo.email}`}
+              </p>
+            </div>
+
+            {/* User Delivery Address */}
+            <div className="flex items-start gap-2 bg-white/90 border border-gray-200 px-3 py-2 rounded-xl text-xs text-gray-700 max-w-xl shadow-2xs">
+              <span className="text-base shrink-0 mt-0.5">📍</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Delivery Address</p>
+                {userAddresses && userAddresses.length > 0 ? (
+                  <div>
+                    <span className="font-semibold text-gray-900">
+                      {userAddresses[0].address_line}
+                    </span>
+                    {userAddresses[0].landmark && (
+                      <span className="text-gray-600">, Near {userAddresses[0].landmark}</span>
+                    )}
+                    <span className="text-gray-600">
+                      , {userAddresses[0].city} - {userAddresses[0].pincode}
+                    </span>
+                    {userAddresses[0].zone && (
+                      <span className="ml-2 inline-block px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded border border-blue-200">
+                        Zone: {userAddresses[0].zone}
+                      </span>
+                    )}
+                    {userAddresses.length > 1 && (
+                      <button
+                        onClick={() => setShowAllAddressesModal(true)}
+                        className="ml-2 text-[11px] font-semibold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                      >
+                        +{userAddresses.length - 1} more
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-gray-400 italic">
+                    <span>No delivery address registered.</span>
+                    <button
+                      onClick={() => setShowAddressModal(true)}
+                      className="text-blue-600 not-italic font-semibold hover:underline cursor-pointer"
+                    >
+                      + Add Address
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-6">
+
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 self-start md:self-auto">
+            {/* Wallet Balance */}
+            <div className="text-center">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
+              <button
+                onClick={() => setShowWalletModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs hover:bg-emerald-100 hover:scale-105 transition-all cursor-pointer"
+                title="Click to adjust wallet funds"
+              >
+                <span>💰</span>
+                <span>₹{parseFloat(currentUserInfo.wallet_balance || 0).toFixed(2)}</span>
+              </button>
+            </div>
+
             <div className="text-center">
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Retail Discount</p>
               <button
@@ -1544,16 +1621,30 @@ export default function AdminUserHistory() {
       {analytics && !loading && (
         <div className="space-y-6">
           {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="card bg-gradient-to-br from-blue-50 to-white border border-blue-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div 
+              onClick={() => setShowWalletModal(true)}
+              className="card bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 shadow-2xs hover:shadow-md transition-shadow cursor-pointer"
+              title="Click to adjust wallet"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-emerald-700 text-xs font-bold uppercase tracking-wider">Wallet Balance</p>
+                <span className="text-base">💰</span>
+              </div>
+              <p className="text-3xl font-extrabold text-emerald-800 mt-2">
+                ₹{parseFloat(currentUserInfo?.wallet_balance || 0).toFixed(2)}
+              </p>
+              <p className="text-[11px] text-emerald-600/80 mt-1">Available balance • Click to adjust</p>
+            </div>
+            <div className="card bg-gradient-to-br from-blue-50 to-white border border-blue-100 shadow-2xs">
               <p className="text-blue-600 text-xs font-bold uppercase tracking-wider">Packages Subscribed</p>
               <p className="text-3xl font-extrabold text-gray-900 mt-2">{analytics.packages.length}</p>
             </div>
-            <div className="card bg-gradient-to-br from-purple-50 to-white border border-purple-100">
+            <div className="card bg-gradient-to-br from-purple-50 to-white border border-purple-100 shadow-2xs">
               <p className="text-purple-600 text-xs font-bold uppercase tracking-wider">Retail Orders Placed</p>
               <p className="text-3xl font-extrabold text-gray-900 mt-2">{analytics.retailHistory.length}</p>
             </div>
-            <div className="card bg-gradient-to-br from-fresh-50 to-white border border-fresh-100">
+            <div className="card bg-gradient-to-br from-fresh-50 to-white border border-fresh-100 shadow-2xs">
               <p className="text-fresh-600 text-xs font-bold uppercase tracking-wider">Unique Products Bought</p>
               <p className="text-3xl font-extrabold text-gray-900 mt-2">{analytics.totalProducts.length}</p>
             </div>
@@ -2054,6 +2145,7 @@ export default function AdminUserHistory() {
           api.get(`/admin/user-analytics/${selectedUserId}`).then(res => {
             setAnalytics(res.data.analytics);
             setCurrentUserInfo(res.data.user);
+            if (res.data.addresses) setUserAddresses(res.data.addresses);
           });
           api.get("/admin/users").then(res => {
             setUsers(res.data.users);
@@ -2098,6 +2190,68 @@ export default function AdminUserHistory() {
                 {saving ? "Saving..." : "Add Address"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: All Saved Addresses */}
+      {showAllAddressesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <span>📍</span> Saved Addresses ({userAddresses.length})
+              </h3>
+              <button 
+                onClick={() => setShowAllAddressesModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {userAddresses.map((addr, idx) => (
+                <div key={addr.id || idx} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/60 space-y-1 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-gray-900">Address #{idx + 1}</span>
+                    <div className="flex items-center gap-1.5">
+                      {addr.is_default && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 border border-green-200">
+                          Default
+                        </span>
+                      )}
+                      {addr.zone && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          Zone: {addr.zone}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-gray-800 font-medium">{addr.address_line}</p>
+                  {addr.landmark && <p className="text-xs text-gray-500">Landmark: {addr.landmark}</p>}
+                  <p className="text-xs text-gray-600">{addr.city} - {addr.pincode}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 flex justify-between items-center border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setShowAllAddressesModal(false);
+                  setShowAddressModal(true);
+                }}
+                className="btn-secondary text-xs"
+              >
+                + Add New Address
+              </button>
+              <button
+                onClick={() => setShowAllAddressesModal(false)}
+                className="btn-primary text-xs"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

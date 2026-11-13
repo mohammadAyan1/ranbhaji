@@ -229,7 +229,20 @@ export default function RetailStore() {
   const deliveryCharge = cartItems.length > 0 ? 30.00 : 0;
   const grandTotal = discountedSubtotal + deliveryCharge;
 
-  const filteredProducts = products.filter(p => filterCategory === "all" || p.category === filterCategory);
+  // Extract all unique categories present in the products
+  const productCategories = Array.from(
+    new Set(
+      products
+        .map(p => (p.category || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const categories = ["all", ...productCategories];
+
+  const filteredProducts = products.filter(p => {
+    if (filterCategory === "all") return true;
+    return (p.category || "").trim().toLowerCase() === filterCategory.trim().toLowerCase();
+  });
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-600">Loading shop products...</div>;
 
@@ -290,16 +303,22 @@ export default function RetailStore() {
         <div className="lg:col-span-2 space-y-6">
           {/* Category Tabs */}
           <div className="flex flex-wrap gap-1.5 bg-gray-100/60 p-1.5 rounded-xl border border-gray-300 w-fit">
-            {["all", "vegetable", "fruit", "water", "exotic", "salad"].map(c => (
-              <button
-                key={c}
-                onClick={() => setFilterCategory(c)}
-                className={`px-4 py-2 text-xs font-semibold capitalize rounded-lg transition-all ${filterCategory === c ? "bg-fresh-600 text-gray-900" : "text-gray-600 hover:text-gray-900"
+            {categories.map(c => {
+              const isSelected = filterCategory.toLowerCase() === c.toLowerCase();
+              return (
+                <button
+                  key={c}
+                  onClick={() => setFilterCategory(c)}
+                  className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                    isSelected
+                      ? "bg-fresh-600 text-white shadow-2xs font-bold"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
                   }`}
-              >
-                {c === "all" ? "All Shop" : c}
-              </button>
-            ))}
+                >
+                  {c === "all" ? "All Shop" : c}
+                </button>
+              );
+            })}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

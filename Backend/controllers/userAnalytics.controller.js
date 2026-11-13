@@ -241,6 +241,12 @@ export const getUserAnalytics = async (req, res) => {
         const user = await User.findByPk(userId, { attributes: ['id', 'name', 'phone', 'actual_password', 'discount_percentage', 'wallet_balance', 'due_amount', 'email'] });
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
+        // Fetch User Addresses
+        const addresses = await Address.findAll({
+            where: { user_id: userId },
+            order: [['is_default', 'DESC'], ['id', 'DESC']]
+        });
+
         // 1. Fetch Subscriptions (Packages)
         const subscriptions = await Subscription.findAll({
             where: { 
@@ -659,6 +665,7 @@ export const getUserAnalytics = async (req, res) => {
         res.status(200).json({
             success: true,
             user,
+            addresses,
             waterDiscounts,
             analytics: {
                 packages: packageData,
