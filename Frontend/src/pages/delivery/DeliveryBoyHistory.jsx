@@ -173,7 +173,7 @@ export default function DeliveryBoyHistory() {
       ) : (
         <div className="space-y-6">
           {schedules.map(schedule => {
-            const user = schedule.Subscription?.User || {};
+            const user = schedule.Subscription?.User || schedule.WaterSubscription?.User || {};
             const items = schedule.DeliveryItems || [];
             const hasUnreturnedItems = items.some(i => i.return_status === 'none');
 
@@ -181,9 +181,9 @@ export default function DeliveryBoyHistory() {
               <div key={schedule.id} className="card p-5 border border-gray-200">
                 <div className="flex justify-between items-start mb-4 border-b pb-4">
                   <div>
-                    <h3 className="font-bold text-gray-900 text-lg">Order #{schedule.id} (Subscription)</h3>
+                    <h3 className="font-bold text-gray-900 text-lg">Order #{schedule.id} {schedule.Subscription ? '(Subscription)' : schedule.WaterSubscription ? '(Water Subscription)' : ''}</h3>
                     <p className="text-sm text-gray-500">Delivered on: {schedule.actual_delivery_date}</p>
-                    <p className="text-sm font-medium text-gray-700 mt-1">{user.name} • {user.phone}</p>
+                    <p className="text-sm font-medium text-gray-700 mt-1">{user.name || 'Customer'} • {user.phone || 'N/A'}</p>
                   </div>
                   {hasUnreturnedItems && (
                       <button 

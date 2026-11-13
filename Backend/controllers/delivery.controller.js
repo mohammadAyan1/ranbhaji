@@ -767,9 +767,13 @@ export const reviewReturn = async (req, res) => {
 
                 const nextDateStr = reschedule_date ? ensureNotSunday(reschedule_date) : getNextDayNotSunday();
 
+                const subWhere = item.DeliverySchedule.subscription_id
+                    ? { subscription_id: item.DeliverySchedule.subscription_id }
+                    : { water_subscription_id: item.DeliverySchedule.water_subscription_id };
+
                 let nextSchedule = await DeliverySchedule.findOne({
                     where: {
-                        subscription_id: item.DeliverySchedule.subscription_id,
+                        ...subWhere,
                         scheduled_date: nextDateStr
                     },
                     transaction: t
@@ -777,7 +781,8 @@ export const reviewReturn = async (req, res) => {
 
                 if (!nextSchedule) {
                     nextSchedule = await DeliverySchedule.create({
-                        subscription_id: item.DeliverySchedule.subscription_id,
+                        subscription_id: item.DeliverySchedule.subscription_id || null,
+                        water_subscription_id: item.DeliverySchedule.water_subscription_id || null,
                         scheduled_date: nextDateStr,
                         status: 'pending',
                         is_returned_serving: true
@@ -1066,7 +1071,7 @@ export const getReturns = async (req, res) => {
         const returnsData = returns.map(r => r.toJSON());
 
         // Enrich with next_schedule_date
-        const userIds = returnsData.map(r => r.DeliverySchedule?.Subscription?.user_id).filter(Boolean);
+        const userIds = returnsData.map(r => r.DeliverySchedule?.Subscription?.user_id || r.DeliverySchedule?.WaterSubscription?.user_id).filter(Boolean);
         const dates = returnsData.map(r => r.DeliverySchedule?.scheduled_date).filter(Boolean);
 
         if (userIds.length > 0 && dates.length > 0) {
@@ -1079,7 +1084,7 @@ export const getReturns = async (req, res) => {
 
             if (returnedLogs.length > 0) {
                 for (const item of returnsData) {
-                    const userId = item.DeliverySchedule?.Subscription?.user_id;
+                    const userId = item.DeliverySchedule?.Subscription?.user_id || item.DeliverySchedule?.WaterSubscription?.user_id;
                     const date = item.DeliverySchedule?.scheduled_date;
                     if (userId && date) {
                         const log = returnedLogs.find(l => l.user_id === userId && l.returned_date === date && l.product_id === item.product_id);
@@ -2422,6 +2427,10 @@ export const getDeliveryBoyHistory = async (req, res) => {
                     model: Subscription,
                     include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Address }]
                 },
+                {
+                    model: WaterSubscription,
+                    include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Address }]
+                },
                 { model: DeliveryItem, as: 'DeliveryItems', include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] }] }
             ],
             order: [['actual_delivery_date', 'DESC']]
@@ -2546,13 +2555,17 @@ export const adminReturnItem = async (req, res) => {
         }, { transaction: t });
 
         // Carry-over logic for next day
-        if (item.DeliverySchedule?.Subscription) {
+        if (item.DeliverySchedule?.Subscription || item.DeliverySchedule?.WaterSubscription) {
             const schedule = item.DeliverySchedule;
             const nextDateStr = getNextDayNotSunday(schedule.scheduled_date);
 
+            const subWhere = schedule.subscription_id
+                ? { subscription_id: schedule.subscription_id }
+                : { water_subscription_id: schedule.water_subscription_id };
+
             let nextSchedule = await DeliverySchedule.findOne({
                 where: {
-                    subscription_id: schedule.subscription_id,
+                    ...subWhere,
                     scheduled_date: nextDateStr
                 },
                 transaction: t
@@ -2560,7 +2573,8 @@ export const adminReturnItem = async (req, res) => {
 
             if (!nextSchedule) {
                 nextSchedule = await DeliverySchedule.create({
-                    subscription_id: schedule.subscription_id,
+                    subscription_id: schedule.subscription_id || null,
+                    water_subscription_id: schedule.water_subscription_id || null,
                     scheduled_date: nextDateStr,
                     status: 'pending',
                     is_returned_serving: true
@@ -2684,6 +2698,7 @@ export const adminReturnOrder = async (req, res) => {
         const schedule = await DeliverySchedule.findByPk(schedule_id, {
             include: [
                 { model: Subscription, include: [{ model: User }, { model: Package }] },
+                { model: WaterSubscription, include: [{ model: User }] },
                 { model: DeliveryItem, as: 'DeliveryItems' }
             ],
             transaction: t
@@ -2694,19 +2709,21 @@ export const adminReturnOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Schedule not found or not delivered' });
         }
 
-        const user = schedule.Subscription?.User;
+        const user = schedule.Subscription?.User || schedule.WaterSubscription?.User;
         if (!user) {
             await t.rollback();
-            return res.status(404).json({ success: false, message: 'User not found or retail order (not supported)' });
+            return res.status(404).json({ success: false, message: 'User not found or order not supported for return' });
         }
 
         for (const item of schedule.DeliveryItems) {
             if (item.return_status === 'none') {
                 const product = await Product.findByPk(item.product_id, { transaction: t });
-                await product.update({
-                    current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
-                    total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
-                }, { transaction: t });
+                if (product) {
+                    await product.update({
+                        current_stock: parseFloat(product.current_stock || 0) + parseFloat(item.qty_gm),
+                        total_sold_qty: Math.max(0, parseFloat(product.total_sold_qty || 0) - parseFloat(item.qty_gm))
+                    }, { transaction: t });
+                }
                 await item.update({
                     return_status: 'approved',
                     return_qty: item.qty_gm,
@@ -2716,37 +2733,71 @@ export const adminReturnOrder = async (req, res) => {
             }
         }
 
-        const lastSchedule = await DeliverySchedule.findOne({
-            where: { subscription_id: schedule.subscription_id },
-            order: [['scheduled_date', 'DESC']],
-            transaction: t
-        });
+        if (schedule.water_subscription_id) {
+            const lastWaterSchedule = await DeliverySchedule.findOne({
+                where: { water_subscription_id: schedule.water_subscription_id },
+                order: [['scheduled_date', 'DESC']],
+                transaction: t
+            });
+            if (lastWaterSchedule) {
+                let nextDate = new Date(lastWaterSchedule.scheduled_date);
+                nextDate.setDate(nextDate.getDate() + 1);
+                const nextDateStr = ensureNotSunday(nextDate.toISOString().split('T')[0]);
+                const newSchedule = await DeliverySchedule.create({
+                    water_subscription_id: schedule.water_subscription_id,
+                    scheduled_date: nextDateStr,
+                    status: 'pending',
+                    is_returned_serving: true
+                }, { transaction: t });
+                for (const item of schedule.DeliveryItems) {
+                    await DeliveryItem.create({
+                        schedule_id: newSchedule.id,
+                        product_id: item.product_id,
+                        qty_gm: item.qty_gm,
+                        packed_qty: null
+                    }, { transaction: t });
+                    await ReturnedProductLog.create({
+                        user_id: user.id,
+                        product_id: item.product_id,
+                        returned_date: schedule.scheduled_date,
+                        returned_qty: item.qty_gm,
+                        next_schedule_date: newSchedule.scheduled_date
+                    }, { transaction: t });
+                }
+            }
+        } else if (schedule.subscription_id) {
+            const lastSchedule = await DeliverySchedule.findOne({
+                where: { subscription_id: schedule.subscription_id },
+                order: [['scheduled_date', 'DESC']],
+                transaction: t
+            });
 
-        if (lastSchedule && schedule.Subscription.Package) {
-            const gap_days = Math.round(30 / schedule.Subscription.Package.services_per_month);
-            let nextDate = new Date(lastSchedule.scheduled_date);
-            nextDate.setDate(nextDate.getDate() + gap_days);
-            const nextDateStr = ensureNotSunday(nextDate.toISOString().split('T')[0]);
-            const newSchedule = await DeliverySchedule.create({
-                subscription_id: schedule.subscription_id,
-                scheduled_date: nextDateStr,
-                status: 'pending',
-                is_returned_serving: true
-            }, { transaction: t });
-            for (const item of schedule.DeliveryItems) {
-                await DeliveryItem.create({
-                    schedule_id: newSchedule.id,
-                    product_id: item.product_id,
-                    qty_gm: item.qty_gm,
-                    packed_qty: null
+            if (lastSchedule && schedule.Subscription?.Package) {
+                const gap_days = Math.round(30 / schedule.Subscription.Package.services_per_month);
+                let nextDate = new Date(lastSchedule.scheduled_date);
+                nextDate.setDate(nextDate.getDate() + gap_days);
+                const nextDateStr = ensureNotSunday(nextDate.toISOString().split('T')[0]);
+                const newSchedule = await DeliverySchedule.create({
+                    subscription_id: schedule.subscription_id,
+                    scheduled_date: nextDateStr,
+                    status: 'pending',
+                    is_returned_serving: true
                 }, { transaction: t });
-                await ReturnedProductLog.create({
-                    user_id: user.id,
-                    product_id: item.product_id,
-                    returned_date: schedule.scheduled_date,
-                    returned_qty: item.qty_gm,
-                    next_schedule_date: newSchedule.scheduled_date
-                }, { transaction: t });
+                for (const item of schedule.DeliveryItems) {
+                    await DeliveryItem.create({
+                        schedule_id: newSchedule.id,
+                        product_id: item.product_id,
+                        qty_gm: item.qty_gm,
+                        packed_qty: null
+                    }, { transaction: t });
+                    await ReturnedProductLog.create({
+                        user_id: user.id,
+                        product_id: item.product_id,
+                        returned_date: schedule.scheduled_date,
+                        returned_qty: item.qty_gm,
+                        next_schedule_date: newSchedule.scheduled_date
+                    }, { transaction: t });
+                }
             }
         }
 
@@ -2772,6 +2823,7 @@ export const boyReturnOrder = async (req, res) => {
         const schedule = await DeliverySchedule.findByPk(schedule_id, {
             include: [
                 { model: Subscription, include: [{ model: User }, { model: Package }] },
+                { model: WaterSubscription, include: [{ model: User }] },
                 { model: DeliveryItem, as: 'DeliveryItems' }
             ],
             transaction: t
@@ -2782,10 +2834,10 @@ export const boyReturnOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Schedule not found, not delivered, or unauthorized' });
         }
 
-        const user = schedule.Subscription?.User;
+        const user = schedule.Subscription?.User || schedule.WaterSubscription?.User;
         if (!user) {
             await t.rollback();
-            return res.status(404).json({ success: false, message: 'User not found or retail order (not supported)' });
+            return res.status(404).json({ success: false, message: 'User not found or order not supported for return' });
         }
 
         for (const item of schedule.DeliveryItems) {
