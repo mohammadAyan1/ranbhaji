@@ -5,9 +5,10 @@ import {
     DeliverySchedule, Subscription, SubscriptionItem, Notification, User, Package,
     WalletTransaction, CreditLog, Product, DeliveryItem, WaterSubscription,
     ScheduleSeasonalSelection, PackageSeasonalConfig, PauseLog, PackageSeasonalPool,
-    RetailOrder, RetailOrderItem, BatchSplit, ProductionBatch
+    RetailOrder, RetailOrderItem, BatchSplit, ProductionBatch, RegisteredEmail
 } from "../models/index.js";
 import { generateWaterDeliveryDates, generateDeliveryDates } from "./scheduleEngine.js";
+import { sendPurchaseDemandEmails } from "./mailer.js";
 
 let ioInstance = null;
 
@@ -863,11 +864,41 @@ export const startCronJobs = (io) => {
     });
     console.log("[CRON] Scheduled nightly job at 8 PM IST");
 
+    // Daily 8:10 PM job: Send purchase demand link to registered emails
+    cron.schedule("10 20 * * *", sendDailyPurchaseDemandEmailsJob, {
+        scheduled: true,
+        timezone: "Asia/Kolkata"
+    });
+    console.log("[CRON] Scheduled daily purchase demand email job at 8:10 PM IST (20:10)");
+
     cron.schedule("0 */2 * * *", notifyDisabledProductsJob, {
         scheduled: true,
         timezone: "Asia/Kolkata"
     });
     console.log("[CRON] Scheduled 2-hourly disabled product check");
+};
+
+// Daily 8:10 PM job function
+export const sendDailyPurchaseDemandEmailsJob = async () => {
+    console.log("[CRON] ⏰ Running daily 8:10 PM purchase demand email job...");
+    try {
+        const activeEmails = await RegisteredEmail.findAll({
+            where: { status: 'active' }
+        });
+
+        if (activeEmails.length === 0) {
+            console.log("[CRON] No active registered emails found for 8:10 PM notification.");
+            return;
+        }
+
+        const recipients = activeEmails.map(r => ({ email: r.email, name: r.name }));
+        console.log(`[CRON] Dispatching purchase demand emails to ${recipients.length} active registered email(s)...`);
+
+        const result = await sendPurchaseDemandEmails(recipients);
+        console.log(`[CRON] Daily purchase demand emails finished. Sent: ${result.sentCount}/${result.totalAttempted}`);
+    } catch (error) {
+        console.error("[CRON] Daily purchase demand email job failed:", error);
+    }
 };
 
 // Export for manual trigger (testing)

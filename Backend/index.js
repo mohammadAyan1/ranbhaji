@@ -42,6 +42,7 @@ import productionRoutes from "./routes/production.route.js";
 import referralRoutes from "./routes/referral.route.js";
 import closingStockRoutes from "./routes/closingStock.route.js";
 import workerTaskRoutes from "./routes/workerTask.routes.js";
+import registeredEmailRoutes from "./routes/registeredEmail.route.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
@@ -127,6 +128,7 @@ app.use("/api/production", productionRoutes);
 app.use("/api/referral", referralRoutes);
 app.use("/api/admin/closing-stock", closingStockRoutes);
 app.use("/api/worker-tasks", workerTaskRoutes);
+app.use("/api/registered-emails", registeredEmailRoutes);
 // notification
 app.use('/api/notifications', notificationRouter);
 

@@ -781,6 +781,19 @@ const PushToken = sequelize.define('PushToken', {
 PushToken.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 User.hasOne(PushToken, { foreignKey: 'userId', as: 'push_token' });
 
+// REGISTERED EMAILS FOR NOTIFICATIONS (8:10 PM DAILY DEMAND EMAIL)
+const RegisteredEmail = sequelize.define('RegisteredEmail', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: DataTypes.STRING(100), allowNull: true },
+  email: { type: DataTypes.STRING(150), allowNull: false, unique: true },
+  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
+}, {
+  tableName: 'registered_emails',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
 export {
   sequelize,
   User,
@@ -828,6 +841,7 @@ export {
   BatchProductDemand,
   BatchProductTask,
   TaskWorkerAssignment,
-  PushToken
+  PushToken,
+  RegisteredEmail
 };
 

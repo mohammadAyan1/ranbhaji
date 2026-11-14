@@ -1761,21 +1761,30 @@ export const getAllOrdersForDate = async (req, res) => {
             }));
 
             if (isDispatchMode) {
-                const allItems = Object.values(itemsMap);
-                const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && (i.packageQty > 0 || i.retailQty > 0));
+                // If the order is ALREADY marked ready_for_delivery, it has been verified/packed and should always be visible in Dispatch!
+                if (s.status === 'ready_for_delivery') {
+                    totalItems = totalItems.map(i => ({ ...i, is_production_completed: true }));
+                } else {
+                    const allItems = Object.values(itemsMap);
+                    const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && (i.packageQty > 0 || i.retailQty > 0));
 
-                if (hasVegetables) {
-                    const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
-                    const schedBatchTasks = s.batch_id ? (allBatchTasksByBatch[s.batch_id] || []) : [];
-                    const batchHasTasks = schedBatchTasks.length > 0;
-                    const batchHasIncompleteTasks = !batchHasTasks || schedBatchTasks.some(t => t.status !== 'DONE');
+                    if (hasVegetables) {
+                        const schedBatchTasks = s.batch_id ? (allBatchTasksByBatch[s.batch_id] || []) : [];
+                        const batchHasTasks = schedBatchTasks.length > 0;
+                        const batchAllTasksDone = batchHasTasks && schedBatchTasks.every(t => t.status === 'DONE');
+                        const batchHasIncompleteTasks = !batchHasTasks || schedBatchTasks.some(t => t.status !== 'DONE');
 
-                    if (hasIncompleteVegetable || batchHasIncompleteTasks) {
-                        continue;
+                        // If ALL tasks in the batch are DONE, kitchen work for this batch is 100% complete!
+                        if (!batchAllTasksDone) {
+                            const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
+                            if (hasIncompleteVegetable || batchHasIncompleteTasks) {
+                                continue;
+                            }
+                        }
                     }
+                    totalItems = totalItems.filter(i => i.is_production_completed);
+                    if (totalItems.length === 0) continue;
                 }
-                totalItems = totalItems.filter(i => i.is_production_completed);
-                if (totalItems.length === 0) continue;
             }
 
             const addresses = [{
@@ -1847,21 +1856,28 @@ export const getAllOrdersForDate = async (req, res) => {
 
             let totalItems = Object.values(itemsMap);
             if (isDispatchMode) {
-                const allItems = Object.values(itemsMap);
-                const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && i.retailQty > 0);
+                if (r.delivery_status === 'ready_for_delivery') {
+                    totalItems = totalItems.map(i => ({ ...i, is_production_completed: true }));
+                } else {
+                    const allItems = Object.values(itemsMap);
+                    const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && i.retailQty > 0);
 
-                if (hasVegetables) {
-                    const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
-                    const retailBatchTasks = r.batch_id ? (allBatchTasksByBatch[r.batch_id] || []) : [];
-                    const batchHasTasks = retailBatchTasks.length > 0;
-                    const batchHasIncompleteTasks = !batchHasTasks || retailBatchTasks.some(t => t.status !== 'DONE');
+                    if (hasVegetables) {
+                        const retailBatchTasks = r.batch_id ? (allBatchTasksByBatch[r.batch_id] || []) : [];
+                        const batchHasTasks = retailBatchTasks.length > 0;
+                        const batchAllTasksDone = batchHasTasks && retailBatchTasks.every(t => t.status === 'DONE');
+                        const batchHasIncompleteTasks = !batchHasTasks || retailBatchTasks.some(t => t.status !== 'DONE');
 
-                    if (hasIncompleteVegetable || batchHasIncompleteTasks) {
-                        continue;
+                        if (!batchAllTasksDone) {
+                            const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
+                            if (hasIncompleteVegetable || batchHasIncompleteTasks) {
+                                continue;
+                            }
+                        }
                     }
+                    totalItems = totalItems.filter(i => i.is_production_completed);
+                    if (totalItems.length === 0) continue;
                 }
-                totalItems = totalItems.filter(i => i.is_production_completed);
-                if (totalItems.length === 0) continue;
             }
             const addresses = [{
                 address: addrStr,

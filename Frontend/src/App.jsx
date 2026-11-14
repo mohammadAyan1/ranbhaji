@@ -47,6 +47,7 @@ import AdminUserPreferences from "./pages/admin/AdminUserPreferences";
 import Attendance from "./pages/admin/Attendance";
 import AdminProduction from "./pages/admin/AdminProduction";
 import AdminReferrals from "./pages/admin/AdminReferrals";
+import EmailRegister from "./pages/admin/EmailRegister";
 
 // Reports
 import ItemPurchaseReport from "./pages/admin/Reports/ItemPurchaseReport";
@@ -173,6 +174,7 @@ function App() {
           {/* <Route path="/admin/waste" element={<AdminWaste />} /> */}
           <Route path="/admin/closing-stock" element={<AdminClosingStock />} />
           <Route path="/admin/attendance" element={<Attendance />} />
+          <Route path="/admin/email-register" element={<EmailRegister />} />
 
           {/* Master */}
           <Route path="/admin/master/categories" element={<AdminCategories />} />

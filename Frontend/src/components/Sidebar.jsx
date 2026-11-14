@@ -4,7 +4,7 @@ import useAuthStore from "../store/authStore";
 import {
   LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin,
   Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator,
-  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings, Activity, ChevronDown, Database, Briefcase
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings, Activity, ChevronDown, Database, Briefcase, Mail
 } from "lucide-react";
 
 const adminLinks = [
@@ -105,6 +105,12 @@ const adminLinks = [
     icon: <ClipboardList size={20} />,
     isCollapsible: false,
     to: "/admin/attendance"
+  },
+  {
+    label: "Email Register",
+    icon: <Mail size={20} />,
+    isCollapsible: false,
+    to: "/admin/email-register"
   }
 ];
 
