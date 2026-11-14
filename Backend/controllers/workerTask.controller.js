@@ -25,6 +25,16 @@ export const getTodayBatches = async (req, res) => {
     }
 };
 
+// Helper: Check if stage allows multiple workers (Joint / Helper)
+// Rule: ONLY CUTTING and manual DRYING (piece or gram) allow multiple workers!
+// WEIGHING, SOAKING, machine DRYING, and BUCKET_ARRANGE strictly allow only ONE worker!
+export const isJointAllowed = (task) => {
+    if (!task) return false;
+    if (task.stage === 'CUTTING') return true;
+    if (task.stage === 'DRYING' && ['piece', 'gram'].includes(task.drying_mode)) return true;
+    return false;
+};
+
 // Helper: Handle when a worker leaves all hands-on tasks
 const leaveTaskHelper = async (workerId) => {
     // Find ALL active assignments for the worker
@@ -321,49 +331,65 @@ export const assignNextTask = async (req, res) => {
         };
 
         const returnTask = async (taskToReturn, action) => {
-            const isManualDrying = taskToReturn && taskToReturn.stage === 'DRYING' && ['piece', 'gram'].includes(taskToReturn.drying_mode);
-            const isHandsOn = taskToReturn && (['WEIGHING', 'CUTTING', 'BUCKET_ARRANGE'].includes(taskToReturn.stage) || isManualDrying);
+            if (!taskToReturn) return res.status(200).json({ success: true, task: null, action: 'IDLE' });
 
-            if (taskToReturn && isHandsOn) {
-                // If reassigning an unstarted task from another worker to this worker, close previous worker's assignment
-                if (taskToReturn.status === 'NOT_STARTED') {
+            const allowsMultiple = isJointAllowed(taskToReturn);
+            const isManualDrying = taskToReturn.stage === 'DRYING' && ['piece', 'gram'].includes(taskToReturn.drying_mode);
+            const isHandsOn = ['WEIGHING', 'CUTTING', 'BUCKET_ARRANGE'].includes(taskToReturn.stage) || isManualDrying;
+
+            // STRICT SINGLE-WORKER ENFORCEMENT:
+            // If this task does NOT allow multiple workers (WEIGHING, SOAKING, machine DRYING, BUCKET_ARRANGE):
+            // Check if ANY OTHER worker is already actively assigned to this task:
+            if (!allowsMultiple) {
+                const otherActiveAssignments = await TaskWorkerAssignment.findAll({
+                    where: { task_id: taskToReturn.id, worker_id: { [Op.ne]: workerId }, left_at: null }
+                });
+
+                if (otherActiveAssignments.length > 0) {
+                    // If task is RUNNING or PAUSED with another worker, NEVER assign this worker!
+                    if (['RUNNING', 'PAUSED'].includes(taskToReturn.status)) {
+                        console.warn(`[SINGLE WORKER GUARD] Task ${taskToReturn.id} (${taskToReturn.stage}) is already active with worker ${otherActiveAssignments[0].worker_id}. Cannot assign worker ${workerId}.`);
+                        return res.status(200).json({ success: true, task: null, action: 'IDLE' });
+                    }
+                    // If task is NOT_STARTED and we are reassigning it, close other worker's assignment so only 1 worker has it
                     await TaskWorkerAssignment.update(
                         { left_at: new Date() },
                         { where: { task_id: taskToReturn.id, left_at: null, worker_id: { [Op.ne]: workerId } } }
                     );
                 }
+            }
 
+            if (isHandsOn) {
                 const existing = await TaskWorkerAssignment.findOne({ where: { task_id: taskToReturn.id, worker_id: workerId, left_at: null } });
                 if (!existing) {
                     const activeAssignments = await TaskWorkerAssignment.findAll({ where: { task_id: taskToReturn.id, left_at: null } });
+
+                    // Final safety guard: if single worker, oldWorkerCount must be 0!
+                    if (!allowsMultiple && activeAssignments.length > 0) {
+                        console.warn(`[SINGLE WORKER GUARD] Task ${taskToReturn.id} (${taskToReturn.stage}) already has active worker.`);
+                        return res.status(200).json({ success: true, task: null, action: 'IDLE' });
+                    }
+
                     const oldWorkerCount = activeAssignments.length;
                     const newWorkerCount = oldWorkerCount + 1;
 
                     await TaskWorkerAssignment.create({ task_id: taskToReturn.id, worker_id: workerId, joined_at: new Date() });
 
-                    // Recalculate time if it was running or not started and there's a change in worker count
-                    if (['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(taskToReturn.status)) {
-                        let currentRemaining = taskToReturn.remaining_seconds;
-                        if (taskToReturn.status === 'RUNNING' && oldWorkerCount > 0) {
-                            const now = new Date();
-                            const elapsedRealSeconds = Math.floor((now.getTime() - new Date(taskToReturn.started_at).getTime()) / 1000);
-                            const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
-                            currentRemaining = taskToReturn.remaining_seconds - Math.floor(effectiveElapsed / oldWorkerCount);
-                            if (currentRemaining < 0) currentRemaining = 0;
-                            taskToReturn.started_at = new Date(); // reset start time for the new speed
-                        }
+                    // Recalculate time ONLY if allowsMultiple (e.g. CUTTING, manual DRYING)
+                    if (allowsMultiple && ['RUNNING', 'PAUSED'].includes(taskToReturn.status) && oldWorkerCount > 0) {
+                        const now = new Date();
+                        const elapsedRealSeconds = Math.floor((now.getTime() - new Date(taskToReturn.started_at).getTime()) / 1000);
+                        const effectiveElapsed = elapsedRealSeconds * oldWorkerCount;
+                        let currentRemaining = taskToReturn.remaining_seconds - Math.floor(effectiveElapsed / oldWorkerCount);
+                        if (currentRemaining < 0) currentRemaining = 0;
+                        taskToReturn.started_at = new Date();
                         taskToReturn.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
                         await taskToReturn.save();
                     }
                 }
-            } else if (taskToReturn && ['SOAKING', 'DRYING'].includes(taskToReturn.stage)) {
-                // Background stage (machine drying / soaking)
+            } else if (['SOAKING', 'DRYING'].includes(taskToReturn.stage)) {
+                // Background stage (machine drying / soaking) -> Strictly single worker!
                 if (taskToReturn.status === 'NOT_STARTED') {
-                    // Close previous unstarted assignment if any
-                    await TaskWorkerAssignment.update(
-                        { left_at: new Date() },
-                        { where: { task_id: taskToReturn.id, left_at: null, worker_id: { [Op.ne]: workerId } } }
-                    );
                     const existing = await TaskWorkerAssignment.findOne({ where: { task_id: taskToReturn.id, worker_id: workerId, left_at: null } });
                     if (!existing) {
                         await TaskWorkerAssignment.create({ task_id: taskToReturn.id, worker_id: workerId, joined_at: new Date() });
@@ -552,11 +578,10 @@ export const assignNextTask = async (req, res) => {
         }
 
         // 1B. Second preference: tasks assigned to another worker who HAS NOT started them
-        // If Worker A was assigned a task, but status is still NOT_STARTED:
-        // And either:
-        // - Assignment was made > 15 seconds ago, OR
-        // - Worker A is currently busy with another task (running hands-on or running background)
-        // Then Worker 2 can take over the task so it doesn't block production!
+        // Strict safety rule:
+        // Only reassign if the task is NOT_STARTED and the assigned worker has abandoned it for > 45 seconds!
+        // NEVER reassign if assigned < 45 seconds ago (the worker is actively reading the screen / pressing Start).
+        // NEVER allow 2 workers on single-worker tasks (WEIGHING, SOAKING, machine DRYING, BUCKET_ARRANGE).
         const nowMs = Date.now();
         const unstartedByOtherWorkers = candidateTasks.filter(t => {
             if (t.worker_assignments.length === 0) return false;
@@ -566,19 +591,19 @@ export const assignNextTask = async (req, res) => {
             const joinedAtMs = otherAssignment.joined_at ? new Date(otherAssignment.joined_at).getTime() : 0;
             const idleSeconds = (nowMs - joinedAtMs) / 1000;
 
-            const otherWorkerId = otherAssignment.worker_id;
-            const otherWorkerBusy = tasks.some(otherT =>
-                otherT.id !== t.id &&
-                ['RUNNING', 'PAUSED'].includes(otherT.status) &&
-                otherT.worker_assignments.some(a => a.worker_id === otherWorkerId)
-            );
-
-            return idleSeconds > 15 || otherWorkerBusy;
+            // Must be idle for at least 45 seconds without starting
+            return idleSeconds > 45;
         }).sort((a, b) => stagePriority[b.stage] - stagePriority[a.stage]);
 
         if (unstartedByOtherWorkers.length > 0) {
-            console.log(`[TASK REASSIGN] Reassigning unstarted task ${unstartedByOtherWorkers[0].id} (${unstartedByOtherWorkers[0].stage} - ${unstartedByOtherWorkers[0].Product?.name}) to worker ${workerId}`);
-            return await returnTask(unstartedByOtherWorkers[0], 'NEW_TASK');
+            const taskToSteal = unstartedByOtherWorkers[0];
+            console.log(`[TASK REASSIGN] Task ${taskToSteal.id} (${taskToSteal.stage}) was abandoned for >45s. Reassigning solely to worker ${workerId}`);
+            // Free previous worker's assignment so ONLY the new worker gets it
+            await TaskWorkerAssignment.update(
+                { left_at: new Date() },
+                { where: { task_id: taskToSteal.id, left_at: null } }
+            );
+            return await returnTask(taskToSteal, 'NEW_TASK');
         }
 
         // Priority 2: Start new WEIGHING task (Unweighed product available?)
@@ -632,17 +657,10 @@ export const assignNextTask = async (req, res) => {
             return await returnTask(newTask, 'NEW_TASK');
         }
 
-        // Priority 3: Join active work (CUTTING and Manual DRYING only. WEIGHING strictly allows only ONE worker)
+        // Priority 3: Join active work (ONLY CUTTING and manual DRYING: piece/gram. NEVER WEIGHING, SOAKING, or machine DRYING!)
         const activeHandsOnTasks = tasks.filter(t => {
-            const isManualDrying = t.stage === 'DRYING' && ['piece', 'gram'].includes(t.drying_mode);
-            if (!['WEIGHING', 'CUTTING'].includes(t.stage) && !isManualDrying) return false;
-
-            if (!['RUNNING', 'PAUSED', 'NOT_STARTED'].includes(t.status)) return false;
-
-            // Strict rule: Weighing cannot be helped by a second worker
-            if (t.stage === 'WEIGHING' && t.worker_assignments.length > 0) {
-                return false;
-            }
+            if (!isJointAllowed(t)) return false;
+            if (!['RUNNING', 'PAUSED'].includes(t.status)) return false;
             return true;
         });
 
@@ -689,6 +707,19 @@ export const startTaskStage = async (req, res) => {
 
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
         if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+
+        const allowsMultiple = isJointAllowed(task);
+        if (!allowsMultiple) {
+            const activeOtherAssignments = await TaskWorkerAssignment.findAll({
+                where: { task_id: taskId, worker_id: { [Op.ne]: workerId }, left_at: null }
+            });
+            if (activeOtherAssignments.length > 0 && task.status === 'RUNNING') {
+                return res.status(400).json({
+                    success: false,
+                    message: `This ${task.stage} task is already running with another worker. Only 1 worker is allowed.`
+                });
+            }
+        }
 
         const isBackground = task.stage === 'SOAKING' || (task.stage === 'DRYING' && (!req.body.drying_mode || req.body.drying_mode === 'machine'));
         const isHandsOn = !isBackground;
@@ -994,9 +1025,17 @@ export const joinTask = async (req, res) => {
         const { taskId } = req.params;
         const workerId = req.user.id;
 
-
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
-        if (!task) return res.status(404).json({ success: false });
+        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+
+        // STRICT ENFORCEMENT: Only CUTTING and manual DRYING (piece/25g) allow a helper/second worker!
+        // WEIGHING, SOAKING, machine DRYING, BUCKET_ARRANGE strictly allow only ONE worker!
+        if (!isJointAllowed(task)) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot join ${task.stage}. Only CUTTING and manual DRYING (per piece/per 25g) allow multiple workers.`
+            });
+        }
 
         const isBackground = task.stage === 'SOAKING' || (task.stage === 'DRYING' && (!task.drying_mode || task.drying_mode === 'machine'));
         const isHandsOn = !isBackground;
