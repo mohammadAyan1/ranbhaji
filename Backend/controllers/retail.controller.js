@@ -70,16 +70,28 @@ export const createRetailOrder = async (req, res) => {
         const discountedSubtotal = Math.max(0, subtotal - discountAmount);
         const totalAmount = parseFloat((discountedSubtotal + deliveryCharge).toFixed(2));
 
-        // Cutoff Logic
+        // Cutoff Logic (8 PM IST cutoff & No delivery on Sunday rule)
         const now = new Date();
-        const hour = now.getHours();
-        const deliveryDate = new Date();
-        if (hour < 20) {
+        const istDateStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // YYYY-MM-DD
+        const istHour = parseInt(now.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false }).split(":")[0], 10);
+        const [y, m, d] = istDateStr.split("-").map(Number);
+        const deliveryDate = new Date(y, m - 1, d);
+
+        if (istHour < 20) {
             deliveryDate.setDate(deliveryDate.getDate() + 1); // Tomorrow
         } else {
             deliveryDate.setDate(deliveryDate.getDate() + 2); // Next-to-next day
         }
-        const deliveryDateStr = deliveryDate.toISOString().split('T')[0];
+
+        // Sunday Rule: No deliveries on Sunday. If delivery falls on Sunday, shift to Monday.
+        if (deliveryDate.getDay() === 0) {
+            deliveryDate.setDate(deliveryDate.getDate() + 1);
+        }
+
+        const yyyy = deliveryDate.getFullYear();
+        const mm = String(deliveryDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(deliveryDate.getDate()).padStart(2, '0');
+        const deliveryDateStr = `${yyyy}-${mm}-${dd}`;
 
         if (payment_method === 'wallet') {
             const todayStr = new Date().toLocaleString("sv-SE", { timeZone: "Asia/Kolkata" }).split(" ")[0]; // YYYY-MM-DD in IST

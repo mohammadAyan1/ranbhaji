@@ -33,19 +33,38 @@ export default function RetailStore() {
   const [showAddressChoiceModal, setShowAddressChoiceModal] = useState(false);
   const [addressChoiceMode, setAddressChoiceMode] = useState("existing");
 
-  // 8 PM Cutoff calculation
+  // 8 PM Cutoff calculation (with Sunday off rule)
   const now = new Date();
   const currentHour = now.getHours();
   const deliveryTomorrow = currentHour < 20;
 
-  const getExpectedDeliveryDate = () => {
+  const getExpectedDeliveryObj = () => {
     const d = new Date();
     if (currentHour < 20) {
       d.setDate(d.getDate() + 1);
     } else {
       d.setDate(d.getDate() + 2);
     }
+    // Sunday Rule: No delivery on Sunday. If date falls on Sunday, shift to Monday.
+    if (d.getDay() === 0) {
+      d.setDate(d.getDate() + 1);
+    }
+    return d;
+  };
+
+  const getExpectedDeliveryDate = () => {
+    const d = getExpectedDeliveryObj();
     return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", weekday: "long" });
+  };
+
+  const getBannerHeadline = () => {
+    const d = getExpectedDeliveryObj();
+    if (d.getDay() === 1 && (now.getDay() === 5 || now.getDay() === 6 || now.getDay() === 0)) {
+      return "🚚 Sunday Off: Delivery on Monday!";
+    }
+    return deliveryTomorrow
+      ? "⚡ Ordered before 8:00 PM: Delivery Tomorrow!"
+      : "⏳ Ordered after 8:00 PM: Delivery day after tomorrow!";
   };
 
   const fetchProducts = () => {
@@ -260,9 +279,7 @@ export default function RetailStore() {
         }`}>
         <div>
           <p className="font-bold text-sm">
-            {deliveryTomorrow
-              ? "⚡ Ordered before 8:00 PM: Delivery Tomorrow!"
-              : "⏳ Ordered after 8:00 PM: Delivery day after tomorrow!"}
+            {getBannerHeadline()}
           </p>
           <p className="text-xs text-gray-600 mt-0.5">
             Expected Delivery: <strong className="text-gray-900">{getExpectedDeliveryDate()}</strong>
