@@ -322,7 +322,17 @@ export const assignNextTask = async (req, res) => {
 
         const returnTask = async (taskToReturn, action) => {
             const isManualDrying = taskToReturn && taskToReturn.stage === 'DRYING' && ['piece', 'gram'].includes(taskToReturn.drying_mode);
-            if (taskToReturn && (['WEIGHING', 'CUTTING', 'BUCKET_ARRANGE'].includes(taskToReturn.stage) || isManualDrying)) {
+            const isHandsOn = taskToReturn && (['WEIGHING', 'CUTTING', 'BUCKET_ARRANGE'].includes(taskToReturn.stage) || isManualDrying);
+
+            if (taskToReturn && isHandsOn) {
+                // If reassigning an unstarted task from another worker to this worker, close previous worker's assignment
+                if (taskToReturn.status === 'NOT_STARTED') {
+                    await TaskWorkerAssignment.update(
+                        { left_at: new Date() },
+                        { where: { task_id: taskToReturn.id, left_at: null, worker_id: { [Op.ne]: workerId } } }
+                    );
+                }
+
                 const existing = await TaskWorkerAssignment.findOne({ where: { task_id: taskToReturn.id, worker_id: workerId, left_at: null } });
                 if (!existing) {
                     const activeAssignments = await TaskWorkerAssignment.findAll({ where: { task_id: taskToReturn.id, left_at: null } });
@@ -344,6 +354,19 @@ export const assignNextTask = async (req, res) => {
                         }
                         taskToReturn.remaining_seconds = recalculateRemainingTime(currentRemaining, oldWorkerCount, newWorkerCount);
                         await taskToReturn.save();
+                    }
+                }
+            } else if (taskToReturn && ['SOAKING', 'DRYING'].includes(taskToReturn.stage)) {
+                // Background stage (machine drying / soaking)
+                if (taskToReturn.status === 'NOT_STARTED') {
+                    // Close previous unstarted assignment if any
+                    await TaskWorkerAssignment.update(
+                        { left_at: new Date() },
+                        { where: { task_id: taskToReturn.id, left_at: null, worker_id: { [Op.ne]: workerId } } }
+                    );
+                    const existing = await TaskWorkerAssignment.findOne({ where: { task_id: taskToReturn.id, worker_id: workerId, left_at: null } });
+                    if (!existing) {
+                        await TaskWorkerAssignment.create({ task_id: taskToReturn.id, worker_id: workerId, joined_at: new Date() });
                     }
                 }
             }
@@ -461,10 +484,26 @@ export const assignNextTask = async (req, res) => {
             }
         }
 
-        // Priority -1: My Unacknowledged ALARMs?
-        const myAlarmTasks = tasks.filter(t => t.status === 'ALARM' && t.worker_assignments.some(a => a.worker_id === workerId));
-        if (myAlarmTasks.length > 0) {
-            return await returnTask(myAlarmTasks[0], 'CONTINUE_TASK');
+        // Priority -1: Handle any batch tasks in ALARM status
+        // Background tasks (SOAKING, machine DRYING) in ALARM status have completed their timers!
+        // Auto-complete them so their next stage tasks (CUTTING, DRYING) enter the pipeline immediately.
+        const batchAlarmTasks = tasks.filter(t => t.status === 'ALARM');
+        if (batchAlarmTasks.length > 0) {
+            for (const at of batchAlarmTasks) {
+                console.log(`[ASSIGN AUTO-ADVANCE] Auto-advancing ALARM task ${at.id} (${at.stage} - ${at.Product?.name}) to next stage.`);
+                await handleStageCompletion(at);
+            }
+            // Reload tasks so newly created next stages are reflected
+            tasks = await BatchProductTask.findAll({
+                where: {
+                    batch_id: batchId,
+                    created_at: { [Op.gte]: startOfTodayForTasks }
+                },
+                include: [
+                    { model: TaskWorkerAssignment, as: 'worker_assignments', where: { left_at: null }, required: false },
+                    { model: Product }
+                ]
+            });
         }
 
         // Priority 0: Is the worker already assigned to an active HANDS-ON task, or an unstarted task?
@@ -472,11 +511,11 @@ export const assignNextTask = async (req, res) => {
             if (!t.worker_assignments.some(a => a.worker_id === workerId)) return false;
 
             // If it's a background task (SOAKING, DRYING), only return it if it's NOT_STARTED
-            if (['SOAKING', 'DRYING'].includes(t.stage)) {
+            if (['SOAKING', 'DRYING'].includes(t.stage) && (!t.drying_mode || t.drying_mode === 'machine')) {
                 return t.status === 'NOT_STARTED';
             }
 
-            // If it's a hands-on task (WEIGHING, CUTTING), return it if it's active
+            // If it's a hands-on task (WEIGHING, CUTTING, manual DRYING, BUCKET_ARRANGE), return it if it's active
             return ['NOT_STARTED', 'RUNNING', 'PAUSED'].includes(t.status);
         });
         if (myCurrentTask) {
@@ -493,21 +532,53 @@ export const assignNextTask = async (req, res) => {
             }
         }
 
-        // Priority 1: Advance existing products (NOT_STARTED for DRYING, CUTTING, SOAKING)
-        // If the entire batch is complete, BUCKET_ARRANGE is also allowed
+        // Priority 1: Pick up NOT_STARTED tasks (SOAKING, CUTTING, DRYING, WEIGHING, and BUCKET_ARRANGE if complete)
         const stagePriority = { BUCKET_ARRANGE: 4, DRYING: 3, CUTTING: 2, SOAKING: 1, WEIGHING: 0 };
-        const allowedStages = ['SOAKING', 'CUTTING', 'DRYING'];
+        const allowedStages = ['SOAKING', 'CUTTING', 'DRYING', 'WEIGHING'];
         if (isBatchProcessingComplete) {
             allowedStages.push('BUCKET_ARRANGE');
         }
 
-        const notStartedPipelineTasks = tasks.filter(t =>
-            t.status === 'NOT_STARTED' && allowedStages.includes(t.stage) &&
-            t.worker_assignments.length === 0
-        ).sort((a, b) => stagePriority[b.stage] - stagePriority[a.stage]);
+        const candidateTasks = tasks.filter(t =>
+            t.status === 'NOT_STARTED' && allowedStages.includes(t.stage)
+        );
 
-        if (notStartedPipelineTasks.length > 0) {
-            return await returnTask(notStartedPipelineTasks[0], 'NEW_TASK');
+        // 1A. First preference: completely unassigned tasks (no active worker)
+        const unassignedTasks = candidateTasks.filter(t => t.worker_assignments.length === 0)
+            .sort((a, b) => stagePriority[b.stage] - stagePriority[a.stage]);
+
+        if (unassignedTasks.length > 0) {
+            return await returnTask(unassignedTasks[0], 'NEW_TASK');
+        }
+
+        // 1B. Second preference: tasks assigned to another worker who HAS NOT started them
+        // If Worker A was assigned a task, but status is still NOT_STARTED:
+        // And either:
+        // - Assignment was made > 15 seconds ago, OR
+        // - Worker A is currently busy with another task (running hands-on or running background)
+        // Then Worker 2 can take over the task so it doesn't block production!
+        const nowMs = Date.now();
+        const unstartedByOtherWorkers = candidateTasks.filter(t => {
+            if (t.worker_assignments.length === 0) return false;
+            const otherAssignment = t.worker_assignments.find(a => a.worker_id !== workerId);
+            if (!otherAssignment) return false;
+
+            const joinedAtMs = otherAssignment.joined_at ? new Date(otherAssignment.joined_at).getTime() : 0;
+            const idleSeconds = (nowMs - joinedAtMs) / 1000;
+
+            const otherWorkerId = otherAssignment.worker_id;
+            const otherWorkerBusy = tasks.some(otherT =>
+                otherT.id !== t.id &&
+                ['RUNNING', 'PAUSED'].includes(otherT.status) &&
+                otherT.worker_assignments.some(a => a.worker_id === otherWorkerId)
+            );
+
+            return idleSeconds > 15 || otherWorkerBusy;
+        }).sort((a, b) => stagePriority[b.stage] - stagePriority[a.stage]);
+
+        if (unstartedByOtherWorkers.length > 0) {
+            console.log(`[TASK REASSIGN] Reassigning unstarted task ${unstartedByOtherWorkers[0].id} (${unstartedByOtherWorkers[0].stage} - ${unstartedByOtherWorkers[0].Product?.name}) to worker ${workerId}`);
+            return await returnTask(unstartedByOtherWorkers[0], 'NEW_TASK');
         }
 
         // Priority 2: Start new WEIGHING task (Unweighed product available?)
@@ -653,6 +724,12 @@ export const startTaskStage = async (req, res) => {
             await task.save();
 
             // Assign worker to this task if not already (for all stages so we know who initiated background tasks)
+            // Also close any unstarted assignment by another worker
+            await TaskWorkerAssignment.update(
+                { left_at: new Date() },
+                { where: { task_id: taskId, left_at: null, worker_id: { [Op.ne]: workerId } } }
+            );
+
             const existing = await TaskWorkerAssignment.findOne({ where: { task_id: taskId, worker_id: workerId, left_at: null } });
             if (!existing) {
                 await TaskWorkerAssignment.create({ task_id: taskId, worker_id: workerId, joined_at: new Date() });
@@ -665,7 +742,7 @@ export const startTaskStage = async (req, res) => {
     }
 };
 
-const handleStageCompletion = async (task) => {
+export const handleStageCompletion = async (task) => {
     // If task is already DONE, do not process again or create duplicate next tasks
     if (task.status === 'DONE') {
         return { task, nextTask: null };
@@ -866,6 +943,23 @@ export const acknowledgeAlarm = async (req, res) => {
         // Complete the alarm task and get next task
         const result = await handleStageCompletion(task);
 
+        // ALSO complete any OTHER concurrent tasks in ALARM status for this batch!
+        // When 2 background tasks (e.g. soaking + drying) end simultaneously, turning off the alarm
+        // must also complete the other expired background task so its next stage is generated!
+        const otherAlarmTasks = await BatchProductTask.findAll({
+            where: {
+                batch_id: task.batch_id,
+                status: 'ALARM',
+                id: { [Op.ne]: task.id }
+            },
+            include: [{ model: Product }]
+        });
+
+        for (const other of otherAlarmTasks) {
+            console.log(`[ALARM SYNC] Completing concurrent alarm task ${other.id} (${other.stage} - ${other.Product?.name})`);
+            await handleStageCompletion(other);
+        }
+
         // Check if the worker is currently busy with ANOTHER hands-on task
         const conflictingTasks = await checkForConflictingHandsOnTasks(workerId, taskId);
         const isBusy = conflictingTasks.length > 0;
@@ -1061,13 +1155,34 @@ export const getStuckTasks = async (req, res) => {
                 {
                     model: TaskWorkerAssignment,
                     as: 'worker_assignments',
-                    where: { worker_id: workerId }, // removed left_at: null so it catches past assignments too
+                    where: { worker_id: workerId },
                     required: true
                 }
             ]
         });
 
-        res.status(200).json({ success: true, tasks: stuckTasks });
+        // Filter:
+        // 1. For NOT_STARTED: only show if the worker CURRENTLY has an active assignment (left_at === null).
+        //    If it was reassigned to another worker, left_at is not null, so do not show to this worker!
+        // 2. For PAUSED: only show if no other worker is currently running it.
+        const validStuckTasks = [];
+        for (const t of stuckTasks) {
+            const myAssignment = (t.worker_assignments || []).find(a => a.worker_id === workerId);
+            if (t.status === 'NOT_STARTED') {
+                if (myAssignment && myAssignment.left_at === null) {
+                    validStuckTasks.push(t);
+                }
+            } else if (t.status === 'PAUSED') {
+                const otherActive = await TaskWorkerAssignment.findOne({
+                    where: { task_id: t.id, worker_id: { [Op.ne]: workerId }, left_at: null }
+                });
+                if (!otherActive) {
+                    validStuckTasks.push(t);
+                }
+            }
+        }
+
+        res.status(200).json({ success: true, tasks: validStuckTasks });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

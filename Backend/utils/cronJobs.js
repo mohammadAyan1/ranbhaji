@@ -782,14 +782,64 @@ const checkBatchProductTaskAlarms = async () => {
             const remaining = task.remaining_seconds - safeElapsed;
 
             if (remaining <= 0) {
-                await sequelize.models.BatchProductTask.update(
-                    { status: 'ALARM', remaining_seconds: 0, alarm_fired_at: now },
-                    { where: { id: task.id, status: 'RUNNING' } } // Only update if still RUNNING (prevent double-fire)
-                );
-                console.log(`[CRON ALARM] Task ${task.id} marked as ALARM`);
+                // Only background tasks (SOAKING or machine DRYING) should transition status to ALARM!
+                const isBackground = task.stage === 'SOAKING' || (task.stage === 'DRYING' && (!task.drying_mode || task.drying_mode === 'machine'));
 
-                if (ioInstance) {
-                    ioInstance.emit('worker:alarm', { task_id: task.id, stage: task.stage, batch_id: task.batch_id });
+                if (isBackground) {
+                    await sequelize.models.BatchProductTask.update(
+                        { status: 'ALARM', remaining_seconds: 0, alarm_fired_at: now },
+                        { where: { id: task.id, status: 'RUNNING' } } // Only update if still RUNNING (prevent double-fire)
+                    );
+                    console.log(`[CRON ALARM] Background Task ${task.id} (${task.stage}) marked as ALARM`);
+
+                    if (ioInstance) {
+                        ioInstance.emit('worker:alarm', { task_id: task.id, stage: task.stage, batch_id: task.batch_id });
+                    }
+                } else {
+                    // Manual/hands-on tasks (WEIGHING, CUTTING, manual DRYING, BUCKET_ARRANGE):
+                    // Keep status RUNNING so workers can click "Mark Complete" / "Purna Karein" on their app!
+                    if (task.remaining_seconds !== 0) {
+                        await sequelize.models.BatchProductTask.update(
+                            { remaining_seconds: 0 },
+                            { where: { id: task.id, status: 'RUNNING' } }
+                        );
+                    }
+                }
+            }
+        }
+
+        // 1. Self-healing: if any manual task (WEIGHING, CUTTING, manual DRYING, BUCKET_ARRANGE) was wrongly marked as ALARM,
+        // restore it to RUNNING so workers can complete it!
+        const stuckManualAlarms = await sequelize.models.BatchProductTask.findAll({
+            where: {
+                status: 'ALARM',
+                stage: { [Op.in]: ['WEIGHING', 'CUTTING', 'BUCKET_ARRANGE'] }
+            }
+        });
+        for (const sm of stuckManualAlarms) {
+            console.log(`[CRON ALARM FIX] Restoring wrongly alarmed manual task ${sm.id} (${sm.stage}) to RUNNING`);
+            sm.status = 'RUNNING';
+            await sm.save();
+        }
+
+        // 2. Auto-advance stale ALARM tasks (> 90 seconds in ALARM state)
+        // If an alarm sounded and was not dismissed after 90 seconds (e.g. worker away or concurrent alarm),
+        // automatically complete it and generate the next stage so the production pipeline never stalls!
+        const staleAlarmTasks = await sequelize.models.BatchProductTask.findAll({
+            where: {
+                status: 'ALARM',
+                stage: { [Op.in]: ['SOAKING', 'DRYING'] }
+            },
+            include: [{ model: sequelize.models.Product }]
+        });
+        if (staleAlarmTasks.length > 0) {
+            const { handleStageCompletion } = await import('../controllers/workerTask.controller.js');
+            for (const sat of staleAlarmTasks) {
+                const firedAt = sat.alarm_fired_at ? new Date(sat.alarm_fired_at) : new Date(sat.updated_at);
+                const secondsSinceAlarm = Math.floor((now.getTime() - firedAt.getTime()) / 1000);
+                if (secondsSinceAlarm > 90) {
+                    console.log(`[CRON ALARM AUTO-COMPLETE] Auto-advancing stale alarm task ${sat.id} (${sat.stage}) to next stage.`);
+                    await handleStageCompletion(sat);
                 }
             }
         }
