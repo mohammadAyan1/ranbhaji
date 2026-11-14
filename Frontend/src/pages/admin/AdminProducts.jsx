@@ -466,7 +466,10 @@ export default function AdminProducts() {
 
     try {
       const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
-      const isGm = productObj?.unit === 'gm' || productObj?.unit === 'ml';
+      const curCat = (productObj?.category || '').toLowerCase();
+      const curUnit = (productObj?.unit || '').toLowerCase().trim();
+      const isWaterOrPiece = curCat === 'water' || curUnit === 'piece' || curUnit === 'pcs' || curUnit === 'pc';
+      const isGm = !isWaterOrPiece && (curUnit === 'gm' || curUnit === 'ml');
 
       let qty = parseFloat(purchaseForm.quantity);
       if (isGm) {
@@ -488,7 +491,9 @@ export default function AdminProducts() {
 
       setMsg(isAdmin && calculated_purchase_price > 0 
         ? "✅ Purchase entry logged and stock updated!" 
-        : "✅ Sabji ka wajan log ho gaya aur stock update ho gaya! (Admin price add karega)");
+        : (isWaterOrPiece 
+            ? "✅ Product ke pcs log ho gaye aur stock update ho gaya! (Admin price add karega)"
+            : "✅ Sabji ka wajan log ho gaya aur stock update ho gaya! (Admin price add karega)"));
 
       setCompletedDemands([...completedDemands, parseInt(purchaseForm.product_id)]);
       if (calculated_purchase_price > 0) {
@@ -516,7 +521,10 @@ export default function AdminProducts() {
   };
 
   const handleOpenPriceModal = (product, log) => {
-    const isGm = product?.unit === 'gm' || product?.unit === 'ml';
+    const isWater = (product?.category || '').toLowerCase() === 'water';
+    const isPiece = product?.unit === 'piece' || product?.unit === 'pcs' || product?.unit === 'pc';
+    const isWaterOrPiece = isWater || isPiece;
+    const isGm = !isWaterOrPiece && (product?.unit === 'gm' || product?.unit === 'ml');
     const qty = parseFloat(log?.quantity || 0);
     const displayQty = isGm ? `${qty / 1000} ${product?.unit === 'gm' ? 'kg' : 'L'}` : `${qty} pcs`;
     const qtyKg = isGm ? qty / 1000 : qty;
@@ -527,7 +535,7 @@ export default function AdminProducts() {
       productName: product?.name || "Product",
       quantityDisplay: displayQty,
       quantityKg: qtyKg,
-      unit: product?.unit || "gm",
+      unit: isWaterOrPiece ? 'piece' : (product?.unit || "gm"),
       totalPrice: log.total_amount && parseFloat(log.total_amount) > 0 ? String(log.total_amount) : "",
       submitting: false
     });
@@ -1476,7 +1484,7 @@ export default function AdminProducts() {
                       <tr className="table-header">
                         <th className="text-left p-3 rounded-tl-xl">Product</th>
                         <th className="text-right p-3">Total Demand</th>
-                        <th className="text-center p-3">Purchased Weight</th>
+                        <th className="text-center p-3">Purchased Qty / Weight</th>
                         <th className="text-center p-3">Status</th>
                         {isAdmin && <th className="text-right p-3">Purchase Price</th>}
                         <th className="text-right p-3 rounded-tr-xl">Action</th>
@@ -1495,19 +1503,25 @@ export default function AdminProducts() {
                         </tr>
                       ) : (
                         filtered.map(d => {
+                          const matchingProduct = products.find(p => p.id === d.id);
+                          const cat = (d.category || matchingProduct?.category || '').toLowerCase();
+                          const u = (d.unit || matchingProduct?.unit || '').toLowerCase().trim();
+                          const isWater = cat === 'water';
+                          const isPiece = u === 'piece' || u === 'pcs' || u === 'pc';
+                          const isWaterOrPiece = isWater || isPiece;
+                          const isGm = !isWaterOrPiece && (u === 'gm' || u === 'ml');
+
                           const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
-                          const isGm = d.unit === 'gm' || d.unit === 'ml';
                           const displayQty = isGm ? totalQty / 1000 : totalQty;
-                          const displayUnit = isGm ? (d.unit === 'gm' ? 'kg' : 'L') : 'pcs';
+                          const displayUnit = isGm ? (u === 'gm' ? 'kg' : 'L') : 'pcs';
 
                           const log = getProductLog(d.id);
                           const status = getLogStatus(log);
-                          const matchingProduct = products.find(p => p.id === d.id);
 
                           let purchasedWeightDisplay = "-";
                           if (log) {
                             const pQty = parseFloat(log.quantity || 0);
-                            purchasedWeightDisplay = isGm ? `${pQty / 1000} ${d.unit === 'gm' ? 'kg' : 'L'}` : `${pQty} pcs`;
+                            purchasedWeightDisplay = isGm ? `${pQty / 1000} ${u === 'gm' ? 'kg' : 'L'}` : `${pQty} pcs`;
                           }
 
                           return (
@@ -1532,7 +1546,7 @@ export default function AdminProducts() {
                               <td className="p-3 text-center">
                                 {status === "pending_weight" && (
                                   <span className="text-[11px] font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full border border-gray-200">
-                                    ⏳ Pending Weight
+                                    {isWaterOrPiece ? "⏳ Pending Pcs" : "⏳ Pending Weight"}
                                   </span>
                                 )}
                                 {status === "awaiting_price" && (
@@ -1551,7 +1565,7 @@ export default function AdminProducts() {
                                   {log && (parseFloat(log.total_amount || 0) > 0 || parseFloat(log.purchase_price_per_kg || 0) > 0) ? (
                                     <div>
                                       <span className="font-bold text-emerald-700">₹{parseFloat(log.total_amount).toFixed(2)}</span>
-                                      <span className="text-[10px] text-gray-500 block">(₹{parseFloat(log.purchase_price_per_kg).toFixed(2)}/{isGm ? 'kg' : 'pc'})</span>
+                                      <span className="text-[10px] text-gray-500 block">(₹{parseFloat(log.purchase_price_per_kg).toFixed(2)}/{isWaterOrPiece ? 'pc' : (isGm ? 'kg' : 'pc')})</span>
                                     </div>
                                   ) : log ? (
                                     <span className="text-amber-600 font-medium text-xs italic">Awaiting price</span>
@@ -1572,7 +1586,7 @@ export default function AdminProducts() {
                                     }}
                                     className="btn-primary py-1 px-3 text-xs"
                                   >
-                                    {isAdmin ? "Log Weight" : "Submit Weight"}
+                                    {isAdmin ? (isWaterOrPiece ? "Log Pcs" : "Log Weight") : (isWaterOrPiece ? "Submit Pcs" : "Submit Weight")}
                                   </button>
                                 )}
                                 {status === "awaiting_price" && (
@@ -1599,7 +1613,7 @@ export default function AdminProducts() {
                                         });
                                       }}
                                       className="btn-secondary py-1 px-2 text-xs"
-                                      title="Edit Weight"
+                                      title={isWaterOrPiece ? "Edit Pcs" : "Edit Weight"}
                                     >
                                       ✏️
                                     </button>
@@ -1631,99 +1645,108 @@ export default function AdminProducts() {
             );
           })()}
 
-          {/* Modal 1: Log Weight Modal (Used by Worker or Admin) */}
-          {purchaseForm.product_id && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
-                <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
-                  <div>
-                    <h4 className="font-bold text-lg text-gray-900">
-                      {isAdmin ? "Log Purchase Weight" : "Log Purchased Weight (Worker)"}
-                    </h4>
-                    <p className="text-sm text-gray-500">{demands.find(d => d.id === purchaseForm.product_id)?.name || "Product"}</p>
-                  </div>
-                  <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
-                </div>
-                <div className="p-6 overflow-y-auto">
-                  <form onSubmit={handlePurchaseSubmit} className="space-y-4">
-                    {!isAdmin && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
-                        ⚖️ <b>Worker Note:</b> Market se jitna saman/wajan liya hai sirf wahi enter karein. Total price enter karne ki zaroorat nahi hai.
-                      </div>
-                    )}
-                    <div>
-                      <label className="label">
-                        Quantity Purchased ({purchaseForm.product_id ? (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pcs' : (products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'ml' ? 'mL' : 'g')) : 'g'})
-                      </label>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0.001"
-                        placeholder="e.g. 2000"
-                        className="input text-base font-semibold"
-                        value={purchaseForm.quantity}
-                        onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
-                        required
-                        autoFocus
-                      />
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        Total Demand: {(() => {
-                          const d = demands.find(item => item.id === purchaseForm.product_id);
-                          if (!d) return "-";
-                          const total = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
-                          const isGm = d.unit === 'gm' || d.unit === 'ml';
-                          return isGm ? `${total / 1000} ${d.unit === 'gm' ? 'kg' : 'L'}` : `${total} pcs`;
-                        })()}
-                      </p>
-                    </div>
+          {/* Modal 1: Log Weight / Pcs Modal (Used by Worker or Admin) */}
+          {purchaseForm.product_id && (() => {
+            const currentDemand = demands.find(d => d.id === parseInt(purchaseForm.product_id));
+            const currentProduct = products.find(p => p.id === parseInt(purchaseForm.product_id));
+            const curCategory = (currentDemand?.category || currentProduct?.category || '').toLowerCase();
+            const curUnit = (currentDemand?.unit || currentProduct?.unit || '').toLowerCase().trim();
+            const isCurWater = curCategory === 'water';
+            const isCurPiece = curUnit === 'piece' || curUnit === 'pcs' || curUnit === 'pc';
+            const isCurWaterOrPiece = isCurWater || isCurPiece;
+            const isCurGm = !isCurWaterOrPiece && (curUnit === 'gm' || curUnit === 'ml');
 
-                    {/* Total Price ONLY shown if logged in as Admin */}
-                    {isAdmin && (
+            return (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
+                  <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 shrink-0">
+                    <div>
+                      <h4 className="font-bold text-lg text-gray-900">
+                        {isAdmin 
+                          ? (isCurWaterOrPiece ? "Log Purchase Quantity (Pcs)" : "Log Purchase Weight") 
+                          : (isCurWaterOrPiece ? "Log Purchased Quantity (Worker)" : "Log Purchased Weight (Worker)")}
+                      </h4>
+                      <p className="text-sm text-gray-500">{currentDemand?.name || currentProduct?.name || "Product"}</p>
+                    </div>
+                    <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">✕</button>
+                  </div>
+                  <div className="p-6 overflow-y-auto">
+                    <form onSubmit={handlePurchaseSubmit} className="space-y-4">
+                      {!isAdmin && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+                          ⚖️ <b>Worker Note:</b> {isCurWaterOrPiece ? "Market se jitne pcs/bottles liye hain sirf wahi quantity enter karein." : "Market se jitna saman/wajan liya hai sirf wahi enter karein."} Total price enter karne ki zaroorat nahi hai.
+                        </div>
+                      )}
                       <div>
                         <label className="label">
-                          Total Price (₹) <span className="text-gray-400 font-normal text-xs">(Optional - Admin can enter now or later)</span>
+                          Quantity Purchased ({isCurWaterOrPiece ? "pcs" : (curUnit === 'ml' ? 'mL' : (curUnit === 'kg' ? 'kg' : 'g'))})
                         </label>
                         <input
                           type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="e.g. 500"
-                          className="input"
-                          value={purchaseForm.total_price}
-                          onChange={e => setPurchaseForm({ ...purchaseForm, total_price: e.target.value })}
+                          step={isCurWaterOrPiece ? "1" : "any"}
+                          min="0.001"
+                          placeholder={isCurWaterOrPiece ? "e.g. 5" : "e.g. 2000"}
+                          className="input text-base font-semibold"
+                          value={purchaseForm.quantity}
+                          onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                          required
+                          autoFocus
                         />
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Total Demand: {(() => {
+                            if (!currentDemand) return "-";
+                            const total = (currentDemand.total_package_qty || 0) + (currentDemand.total_retail_qty || 0);
+                            return isCurGm ? `${total / 1000} ${currentDemand.unit === 'gm' ? 'kg' : 'L'}` : `${total} pcs`;
+                          })()}
+                        </p>
                       </div>
-                    )}
 
-                    {isAdmin && parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
-                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex justify-between items-center text-sm">
-                        <span className="text-gray-600">Calculated Rate:</span>
-                        <span className="font-bold text-blue-700">
-                          ₹{(() => {
-                            const productObj = products.find(p => p.id === parseInt(purchaseForm.product_id));
-                            const isGm = productObj?.unit === 'gm' || productObj?.unit === 'ml';
-                            const q = isGm ? parseFloat(purchaseForm.quantity) / 1000 : parseFloat(purchaseForm.quantity);
-                            return (parseFloat(purchaseForm.total_price) / q).toFixed(2);
-                          })()} / {purchaseForm.product_id && products.find(p => p.id === parseInt(purchaseForm.product_id))?.unit === 'piece' ? 'pc' : 'kg/L'}
-                        </span>
+                      {/* Total Price ONLY shown if logged in as Admin */}
+                      {isAdmin && (
+                        <div>
+                          <label className="label">
+                            Total Price (₹) <span className="text-gray-400 font-normal text-xs">(Optional - Admin can enter now or later)</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="e.g. 500"
+                            className="input"
+                            value={purchaseForm.total_price}
+                            onChange={e => setPurchaseForm({ ...purchaseForm, total_price: e.target.value })}
+                          />
+                        </div>
+                      )}
+
+                      {isAdmin && parseFloat(purchaseForm.quantity) > 0 && parseFloat(purchaseForm.total_price) > 0 && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Calculated Rate:</span>
+                          <span className="font-bold text-blue-700">
+                            ₹{(() => {
+                              const q = isCurGm ? parseFloat(purchaseForm.quantity) / 1000 : parseFloat(purchaseForm.quantity);
+                              return (parseFloat(purchaseForm.total_price) / q).toFixed(2);
+                            })()} / {isCurWaterOrPiece ? 'pc' : 'kg/L'}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="pt-4 border-t border-gray-200 mt-6 flex justify-end gap-3">
+                        <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="btn-secondary py-2 px-4">Cancel</button>
+                        <button
+                          type="submit"
+                          disabled={submittingPurchase}
+                          className="btn-primary py-2 px-6"
+                        >
+                          {submittingPurchase ? "Saving..." : (isCurWaterOrPiece ? "Submit Pcs & Update Stock" : "Submit Weight & Update Stock")}
+                        </button>
                       </div>
-                    )}
-
-                    <div className="pt-4 border-t border-gray-200 mt-6 flex justify-end gap-3">
-                      <button type="button" onClick={() => setPurchaseForm({ product_id: "", quantity: "", total_price: "" })} className="btn-secondary py-2 px-4">Cancel</button>
-                      <button
-                        type="submit"
-                        disabled={submittingPurchase}
-                        className="btn-primary py-2 px-6"
-                      >
-                        {submittingPurchase ? "Saving..." : "Submit Weight & Update Stock"}
-                      </button>
-                    </div>
-                  </form>
+                    </form>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Modal 2: Admin Enter Price Modal */}
           {priceModal.isOpen && (

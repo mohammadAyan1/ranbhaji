@@ -454,7 +454,7 @@ export default function ReadyForDeliver() {
                                     ) : (
                                       <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 text-center text-amber-800 text-xs sm:text-sm">
                                         <span className="font-semibold block mb-0.5">⏳ Production In Progress</span>
-                                        <span>Worker has not completed all 5 states (weighing, soaking, cutting, drying, busket arrange) for products in this order yet.</span>
+                                        <span>Worker has not completed all 5 states (weighing, soaking, cutting, drying, basket arrange) for products in this order yet.</span>
                                       </div>
                                     )}
 

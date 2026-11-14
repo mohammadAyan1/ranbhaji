@@ -256,7 +256,7 @@ export const createPurchase = async (req, res) => {
             };
 
             const finalPricePerKg = purchasePricePerKg > 0 ? purchasePricePerKg : parseFloat(existingLog.purchase_price_per_kg || 0);
-            const isPiece = product.unit === 'piece';
+            const isPiece = product.unit === 'piece' || product.unit === 'pcs' || (product.category || '').toLowerCase() === 'water';
             if (finalPricePerKg > 0) {
                 productUpdate.purchase_price_per_gm = isPiece ? finalPricePerKg : finalPricePerKg / 1000;
             }
@@ -284,7 +284,7 @@ export const createPurchase = async (req, res) => {
                 current_stock: updatedCurrentStock
             };
 
-            const isPiece = product.unit === 'piece';
+            const isPiece = product.unit === 'piece' || product.unit === 'pcs' || (product.category || '').toLowerCase() === 'water';
             if (purchasePricePerKg > 0) {
                 updateData.purchase_price_per_gm = isPiece ? purchasePricePerKg : purchasePricePerKg / 1000;
             }
@@ -378,7 +378,7 @@ export const updatePurchasePrice = async (req, res) => {
 
         // Update product's purchase_price_per_gm so package calculator & costing reflect new rate
         if (log.Product && finalPricePerKg > 0) {
-            const isPiece = log.Product.unit === 'piece';
+            const isPiece = log.Product.unit === 'piece' || log.Product.unit === 'pcs' || (log.Product.category || '').toLowerCase() === 'water';
             await log.Product.update({
                 purchase_price_per_gm: isPiece ? finalPricePerKg : finalPricePerKg / 1000
             }, { transaction: t });

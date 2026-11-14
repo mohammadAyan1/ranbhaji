@@ -338,7 +338,10 @@ export default function AdminProduction() {
                   </tr>
                 ) : (
                   displayedLogs.map((log, index) => {
-                    const formattedTask = (log.task || '').replace(/BUCKET_ARRANGE/gi, 'busket_arrange');
+                    const formattedTask = (log.task || '')
+                      .replace(/BUCKET_ARRANGE/gi, 'basket arrange')
+                      .replace(/busket_arrange/gi, 'basket arrange')
+                      .replace(/busket\s*arrange/gi, 'basket arrange');
 
                     return (
                       <tr key={index} className="hover:bg-gray-50 transition-colors">

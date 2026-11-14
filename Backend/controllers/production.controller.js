@@ -711,7 +711,7 @@ export const getDetailedWorkerLogs = async (req, res) => {
             });
 
             const uniqueWorkerCount = workerMap.size;
-            const stageName = (task.stage || '').toUpperCase() === 'BUCKET_ARRANGE' ? 'busket_arrange' : task.stage;
+            const stageName = (task.stage || '').toUpperCase() === 'BUCKET_ARRANGE' ? 'basket arrange' : task.stage;
 
             const prod = task.Product || task.product;
 

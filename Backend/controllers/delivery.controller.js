@@ -1789,11 +1789,17 @@ export const getAllOrdersForDate = async (req, res) => {
                 items: totalItems
             }];
 
+            const schedDescription = s.Subscription
+                ? (s.is_returned_serving ? `Return Order (${s.Subscription.Package?.name || 'Unknown'})` : (s.Subscription.Package?.name ? `Package: ${s.Subscription.Package.name}` : 'Subscription'))
+                : (s.WaterSubscription ? `Water: ${s.WaterSubscription.water_type} (${s.WaterSubscription.container})` : 'Water Order');
+
             ordersList.push({
                 uniqueId: `sched_${s.id}`,
                 order_id: s.id,
                 order_type: s.Subscription ? 'subscription' : 'water',
                 order_number: s.Subscription ? `SUB-${s.id}` : `WATER-${s.id}`,
+                description: schedDescription,
+                package_name: s.Subscription?.Package?.name || null,
                 user: user,
                 hasPackage: !!s.Subscription,
                 is_returned_serving: !!s.is_returned_serving,
@@ -1873,6 +1879,7 @@ export const getAllOrdersForDate = async (req, res) => {
                 order_id: r.id,
                 order_type: 'retail',
                 order_number: r.order_number || `RO-${r.id}`,
+                description: `Retail Order - ₹${r.total_price || r.total_amount || 0}`,
                 user: user,
                 hasPackage: false,
                 is_returned_serving: false,
