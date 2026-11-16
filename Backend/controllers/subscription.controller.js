@@ -15,6 +15,11 @@ export const subscribe = async (req, res) => {
         const { package_id, type, payment_method, address_id, batch_id, delivery_time_slot } = req.body;
         const user_id = req.user.id;
 
+        if (req.user && req.user.status === 'inactive') {
+            await t.rollback();
+            return res.status(403).json({ success: false, message: "Account is deactivated. Cannot subscribe to packages." });
+        }
+
         const pkg = await Package.findByPk(package_id, {
             include: [
                 { model: PackageFixedItem, as: 'FixedItems', include: [{ model: Product }] },

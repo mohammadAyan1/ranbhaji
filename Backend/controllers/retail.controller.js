@@ -9,6 +9,11 @@ export const createRetailOrder = async (req, res) => {
         const { address_id, items, payment_method } = req.body;
         const user_id = req.user.id;
 
+        if (req.user && req.user.status === 'inactive') {
+            await t.rollback();
+            return res.status(403).json({ success: false, message: "Account is deactivated. Cannot place retail orders." });
+        }
+
         if (!address_id || !items || !Array.isArray(items) || items.length === 0) {
             await t.rollback();
             return res.status(400).json({ success: false, message: "address_id and non-empty items array are required" });

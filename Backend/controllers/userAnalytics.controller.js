@@ -1,6 +1,8 @@
 import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction, UserWaterDiscount, PackageFixedItem, PackageSeasonalPool, PackageSeasonalConfig } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcryptjs";
+import { invalidateBatchDemandCache } from "./batch.controller.js";
+import { syncBatchDemand } from "./workerTask.controller.js";
 
 // GET /api/admin/user-analytics/users
 export const getAllUsers = async (req, res) => {
@@ -58,6 +60,24 @@ export const updateUserStatus = async (req, res) => {
 
         user.status = status;
         await user.save();
+
+        // Invalidate demand cache & auto-sync active batch demands immediately
+        try {
+            invalidateBatchDemandCache();
+            const activeBatches = await Batch.findAll({
+                where: { status: 'active', is_deleted: false },
+                attributes: ['id']
+            });
+            for (const b of activeBatches) {
+                syncBatchDemand(b.id, { force: true }).catch(err => console.error("Auto syncBatchDemand error:", err));
+            }
+            if (req.app && req.app.get('io')) {
+                req.app.get('io').emit('demand:update', { timestamp: new Date() });
+                req.app.get('io').emit('production:update', { timestamp: new Date() });
+            }
+        } catch (syncErr) {
+            console.error("Demand sync error on user status update:", syncErr);
+        }
 
         res.status(200).json({ success: true, message: "Status updated", user });
     } catch (error) {

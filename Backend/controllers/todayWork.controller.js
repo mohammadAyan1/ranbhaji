@@ -25,7 +25,7 @@ export const getOrdersForBatch = async (req, res) => {
         const retailOrders = await RetailOrder.findAll({
             where: retailWhere,
             include: [
-                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                 { model: Batch, attributes: ['id', 'name'] }
             ],
             order: [['created_at', 'DESC']]
@@ -45,14 +45,14 @@ export const getOrdersForBatch = async (req, res) => {
                 {
                     model: Subscription,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                         { model: Package, attributes: ['id', 'name'] }
                     ]
                 },
                 {
                     model: WaterSubscription,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] }
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] }
                     ]
                 },
                 { model: Batch, attributes: ['id', 'name'] }
@@ -63,6 +63,7 @@ export const getOrdersForBatch = async (req, res) => {
         // Map them into a unified array
         const unifiedOrders = [];
         retailOrders.forEach(o => {
+            if (!o.User || o.User.status !== 'active') return;
             unifiedOrders.push({
                 id: o.id,
                 type: 'retail',
@@ -78,6 +79,7 @@ export const getOrdersForBatch = async (req, res) => {
 
         schedules.forEach(s => {
             if (s.Subscription) {
+                if (!s.Subscription.User || s.Subscription.User.status !== 'active') return;
                 unifiedOrders.push({
                     id: `sub-${s.id}`,
                     type: 'subscription',
@@ -93,6 +95,7 @@ export const getOrdersForBatch = async (req, res) => {
             }
             
             if (s.WaterSubscription) {
+                if (!s.WaterSubscription.User || s.WaterSubscription.User.status !== 'active') return;
                 unifiedOrders.push({
                     id: `water-${s.id}`,
                     type: 'water',

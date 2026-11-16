@@ -784,6 +784,21 @@ export const getDetailedWorkerLogs = async (req, res) => {
                 activeParticipants = participatingWorkers; // Fallback if all left before start
             }
 
+            // Does this task allow helpers? Only CUTTING and manual DRYING (piece/gram) allow helpers!
+            // WEIGHING, SOAKING, machine DRYING, and BUCKET_ARRANGE strictly allow only ONE worker!
+            const allowsHelpers = task.stage === 'CUTTING' || (task.stage === 'DRYING' && ['piece', 'gram'].includes(task.drying_mode));
+
+            // If task does NOT allow helpers and is already DONE, ignore any rogue assignments added after task was completed
+            if (!allowsHelpers && task.status === 'DONE' && activeParticipants.length > 1) {
+                const taskCompletedTime = task.completed_at ? new Date(task.completed_at).getTime() : null;
+                if (taskCompletedTime) {
+                    const validWorkers = activeParticipants.filter(p => p.joinedTime <= taskCompletedTime);
+                    if (validWorkers.length > 0) {
+                        activeParticipants = validWorkers;
+                    }
+                }
+            }
+
             // Sort active participants by joined time
             activeParticipants.sort((a, b) => a.joinedTime - b.joinedTime);
             const initiatorWorkerId = activeParticipants[0].workerId;
@@ -791,7 +806,8 @@ export const getDetailedWorkerLogs = async (req, res) => {
             activeParticipants.forEach((p) => {
                 const { workerId, firstAssignment, lastAssignment, joinedTime } = p;
                 const workerName = firstAssignment.worker ? firstAssignment.worker.name : 'Unknown';
-                const isInitiator = activeParticipants.length <= 1 || workerId === initiatorWorkerId;
+                // Single-worker tasks NEVER show Helper, always Initiator
+                const isInitiator = !allowsHelpers || activeParticipants.length <= 1 || workerId === initiatorWorkerId;
 
                 // Calculate accurate started_at for this worker
                 let workerStartedAt = null;

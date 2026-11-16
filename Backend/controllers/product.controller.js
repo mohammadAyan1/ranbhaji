@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Op } from "sequelize";
-import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, Subscription, SubscriptionItem, WaterSubscription, DeliveryItem, ScheduleSeasonalSelection, sequelize, ProductionBatch, Batch } from '../models/index.js';
+import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, Subscription, SubscriptionItem, WaterSubscription, DeliveryItem, ScheduleSeasonalSelection, sequelize, ProductionBatch, Batch, User } from '../models/index.js';
 import { invalidateBatchDemandCache } from './batch.controller.js';
 import { syncBatchDemand } from './workerTask.controller.js';
 
@@ -482,11 +482,16 @@ export const getStockSummary = async (req, res) => {
             });
 
             // 2. Calculate Sold Qty
-            // 2a. Retail Orders
+            // 2a. Retail Orders (active users only)
             const retailItems = await RetailOrderItem.findAll({
                 include: [{
                     model: RetailOrder,
                     where: { delivery_date: { [Op.between]: [startDate, endDate] } },
+                    include: [{
+                        model: User,
+                        where: { status: 'active' },
+                        attributes: []
+                    }],
                     attributes: []
                 }],
                 attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQty']],
@@ -578,11 +583,16 @@ export const getProductSales = async (req, res) => {
             };
         });
 
-        // 1. Retail Orders
+        // 1. Retail Orders (active users only)
         const retailItems = await RetailOrderItem.findAll({
             include: [{
                 model: RetailOrder,
                 where: { delivery_date: { [Op.between]: [startDate, endDate] } },
+                include: [{
+                    model: User,
+                    where: { status: 'active' },
+                    attributes: []
+                }],
                 attributes: []
             }],
             attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQty']],

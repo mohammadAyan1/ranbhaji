@@ -169,6 +169,13 @@ const runNightlyJob = async () => {
         });
 
         for (const schedule of schedules) {
+            const user = schedule.Subscription?.User || schedule.WaterSubscription?.User;
+            if (!user || user.status !== 'active') {
+                console.log(`[CRON] Skipping delivery for deactivated/inactive user (User ID: ${user?.id}) on schedule ${schedule.id}`);
+                await schedule.update({ status: 'skipped' }, { transaction: t });
+                continue;
+            }
+
             if (schedule.Subscription) {
                 const sub = schedule.Subscription;
                 const services_per_month = sub.Package.services_per_month;

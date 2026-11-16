@@ -10,6 +10,11 @@ export const subscribeWater = async (req, res) => {
     try {
         const { water_type, container, frequency, type, payment_method, address_id, batch_id, capacity_liters, bottles_per_delivery, product_id, delivery_time_slot } = req.body;
 
+        if (req.user && req.user.status === 'inactive') {
+            await t.rollback();
+            return res.status(403).json({ success: false, message: "Account is deactivated. Cannot subscribe to water." });
+        }
+
         if (!water_type || !container || !frequency) {
             await t.rollback();
             return res.status(400).json({ success: false, message: "water_type, container, and frequency are required" });

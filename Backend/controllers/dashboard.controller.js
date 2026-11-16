@@ -12,7 +12,10 @@ const calculatePendingDemands = async (dateStr) => {
         include: [
             {
                 model: Subscription, required: false,
-                include: [{ model: SubscriptionItem, as: 'Items' }]
+                include: [
+                    { model: User, attributes: ['id', 'status'] },
+                    { model: SubscriptionItem, as: 'Items' }
+                ]
             },
             { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false },
             { model: DeliveryItem, as: 'DeliveryItems', required: false }
@@ -21,7 +24,10 @@ const calculatePendingDemands = async (dateStr) => {
 
     const retailOrders = await RetailOrder.findAll({
         where: { delivery_date: dateStr, delivery_status: 'pending' },
-        include: [{ model: RetailOrderItem, as: 'Items' }]
+        include: [
+            { model: User, attributes: ['id', 'status'] },
+            { model: RetailOrderItem, as: 'Items' }
+        ]
     });
 
     const demandMap = {};
@@ -34,6 +40,9 @@ const calculatePendingDemands = async (dateStr) => {
 
     // Calculate demands from delivery schedules
     for (const schedule of schedules) {
+        if (schedule.Subscription && (!schedule.Subscription.User || schedule.Subscription.User.status !== 'active')) {
+            continue;
+        }
         const dbItems = schedule.DeliveryItems || [];
         if (dbItems.length > 0) {
             for (const item of dbItems) {
@@ -72,6 +81,7 @@ const calculatePendingDemands = async (dateStr) => {
     }
 
     for (const order of retailOrders) {
+        if (!order.User || order.User.status !== 'active') continue;
         const items = order.Items || [];
         for (const item of items) {
             addDemand(item.product_id, parseFloat(item.quantity || 0));

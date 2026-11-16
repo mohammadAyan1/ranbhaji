@@ -1,7 +1,9 @@
 import { sequelize } from "../confiq/db.js";
-import { User, WalletTransaction, CreditLog, Subscription, DeliverySchedule, Package, WaterSubscription, Address, Product } from "../models/index.js";
+import { User, WalletTransaction, CreditLog, Subscription, DeliverySchedule, Package, WaterSubscription, Address, Product, Batch } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcryptjs";
+import { invalidateBatchDemandCache } from "./batch.controller.js";
+import { syncBatchDemand } from "./workerTask.controller.js";
 
 // GET /api/wallet
 export const getWallet = async (req, res) => {
@@ -223,6 +225,25 @@ export const updateUserStatus = async (req, res) => {
         const user = await User.findByPk(req.params.id);
         if (!user) return res.status(404).json({ success: false, message: "User not found" });
         await user.update({ status });
+
+        // Invalidate demand cache & auto-sync active batch demands immediately
+        try {
+            invalidateBatchDemandCache();
+            const activeBatches = await Batch.findAll({
+                where: { status: 'active', is_deleted: false },
+                attributes: ['id']
+            });
+            for (const b of activeBatches) {
+                syncBatchDemand(b.id, { force: true }).catch(err => console.error("Auto syncBatchDemand error:", err));
+            }
+            if (req.app && req.app.get('io')) {
+                req.app.get('io').emit('demand:update', { timestamp: new Date() });
+                req.app.get('io').emit('production:update', { timestamp: new Date() });
+            }
+        } catch (syncErr) {
+            console.error("Demand sync error on user status update:", syncErr);
+        }
+
         res.status(200).json({ success: true, message: `User ${status}` });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

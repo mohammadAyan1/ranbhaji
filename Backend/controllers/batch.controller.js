@@ -116,13 +116,13 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
                 include: [
                     { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
                     { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }, { model: PackageSeasonalPool, as: 'SeasonalPool', include: [{ model: Product }] }] },
-                    { model: User, attributes: ['id', 'name', 'disliked_products'] }
+                    { model: User, attributes: ['id', 'name', 'disliked_products', 'status'] }
                 ]
             },
             {
                 model: WaterSubscription,
                 required: false,
-                include: [{ model: User, attributes: ['id', 'name'] }] // ensure User is fetched for water sub
+                include: [{ model: User, attributes: ['id', 'name', 'status'] }] // ensure User is fetched for water sub
             },
             { model: DeliveryItem, as: 'DeliveryItems', required: false, include: [{ model: Product }] },
             { model: ScheduleSeasonalSelection, as: 'SeasonalSelections', required: false, include: [{ model: Product }] }
@@ -133,7 +133,7 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
     const retailOrders = await RetailOrder.findAll({
         where: { batch_id, delivery_date: date, delivery_status: ['pending', 'ready_for_delivery'] },
         include: [
-            { model: User },
+            { model: User, attributes: ['id', 'name', 'status'] },
             { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
         ]
     });
@@ -142,14 +142,14 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
     // Note: Water orders are strictly excluded as water does not undergo kitchen processing (weighing, soaking, cutting, drying, bucket arrange)
     const uniqueUsers = new Set();
     schedules.forEach(schedule => {
-        if (schedule.Subscription && schedule.Subscription.User) {
+        if (schedule.Subscription && schedule.Subscription.User && schedule.Subscription.User.status === 'active') {
             uniqueUsers.add(schedule.Subscription.User.id);
         }
     });
 
     retailOrders.forEach(order => {
         const hasKitchenItems = (order.Items || []).some(item => (item.Product?.category || '').toLowerCase() !== 'water');
-        if (hasKitchenItems && order.User) {
+        if (hasKitchenItems && order.User && order.User.status === 'active') {
             uniqueUsers.add(order.User.id);
         }
     });
@@ -211,6 +211,9 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
         let currentUser = null;
         if (schedule.Subscription && schedule.Subscription.User) currentUser = schedule.Subscription.User;
         else if (schedule.WaterSubscription && schedule.WaterSubscription.User) currentUser = schedule.WaterSubscription.User;
+
+        // Skip deactivated/inactive users
+        if (!currentUser || currentUser.status !== 'active') return;
 
         const dbItems = schedule.DeliveryItems || [];
         if (dbItems.length > 0) {
@@ -314,6 +317,8 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
     // Process Retail Orders
     retailOrders.forEach(order => {
         const currentUser = order.User;
+        // Skip deactivated/inactive users
+        if (!currentUser || currentUser.status !== 'active') return;
         if (order.Items) {
             order.Items.forEach(item => {
                 if (item.Product) {

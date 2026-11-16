@@ -300,8 +300,13 @@ export const assignNextTask = async (req, res) => {
             include: [{ model: Product }]
         });
 
-        // Filter out 'Alkaline' products from worker dashboard assignments
-        demands = demands.filter(d => d.Product && !d.Product.name.toLowerCase().includes('alkaline'));
+        // Filter out 'Alkaline' and Water products from worker dashboard assignments
+        demands = demands.filter(d => {
+            if (!d.Product) return false;
+            const cat = (d.Product.category || '').toLowerCase();
+            const name = (d.Product.name || '').toLowerCase();
+            return cat !== 'water' && !name.includes('water') && !name.includes('alkaline');
+        });
 
         if (!demands.length) {
             return res.status(200).json({ success: true, task: null, message: "No demand for this batch" });
@@ -331,7 +336,10 @@ export const assignNextTask = async (req, res) => {
         };
 
         const returnTask = async (taskToReturn, action) => {
-            if (!taskToReturn) return res.status(200).json({ success: true, task: null, action: 'IDLE' });
+            // NEVER assign or return an already completed task
+            if (!taskToReturn || taskToReturn.status === 'DONE') {
+                return res.status(200).json({ success: true, task: null, action: 'IDLE' });
+            }
 
             const allowsMultiple = isJointAllowed(taskToReturn);
             const isManualDrying = taskToReturn.stage === 'DRYING' && ['piece', 'gram'].includes(taskToReturn.drying_mode);
@@ -339,23 +347,30 @@ export const assignNextTask = async (req, res) => {
 
             // STRICT SINGLE-WORKER ENFORCEMENT:
             // If this task does NOT allow multiple workers (WEIGHING, SOAKING, machine DRYING, BUCKET_ARRANGE):
-            // Check if ANY OTHER worker is already actively assigned to this task:
+            // Check if ANY OTHER worker is already assigned to this task:
             if (!allowsMultiple) {
-                const otherActiveAssignments = await TaskWorkerAssignment.findAll({
-                    where: { task_id: taskToReturn.id, worker_id: { [Op.ne]: workerId }, left_at: null }
+                const otherAssignments = await TaskWorkerAssignment.findAll({
+                    where: { task_id: taskToReturn.id, worker_id: { [Op.ne]: workerId } }
                 });
 
-                if (otherActiveAssignments.length > 0) {
-                    // If task is RUNNING or PAUSED with another worker, NEVER assign this worker!
-                    if (['RUNNING', 'PAUSED'].includes(taskToReturn.status)) {
-                        console.warn(`[SINGLE WORKER GUARD] Task ${taskToReturn.id} (${taskToReturn.stage}) is already active with worker ${otherActiveAssignments[0].worker_id}. Cannot assign worker ${workerId}.`);
+                if (otherAssignments.length > 0) {
+                    const otherActive = otherAssignments.filter(a => a.left_at === null);
+                    if (otherActive.length > 0) {
+                        // If task is RUNNING or PAUSED with another worker, NEVER assign this worker!
+                        if (['RUNNING', 'PAUSED'].includes(taskToReturn.status)) {
+                            console.warn(`[SINGLE WORKER GUARD] Task ${taskToReturn.id} (${taskToReturn.stage}) is already active with worker ${otherActive[0].worker_id}. Cannot assign worker ${workerId}.`);
+                            return res.status(200).json({ success: true, task: null, action: 'IDLE' });
+                        }
+                        // If task is NOT_STARTED and we are reassigning it, close other worker's assignment so only 1 worker has it
+                        await TaskWorkerAssignment.update(
+                            { left_at: new Date() },
+                            { where: { task_id: taskToReturn.id, left_at: null, worker_id: { [Op.ne]: workerId } } }
+                        );
+                    } else if (taskToReturn.status === 'DONE' || taskToReturn.started_at !== null) {
+                        // If another worker has already started or completed this single-worker task, NEVER reassign!
+                        console.warn(`[SINGLE WORKER GUARD] Task ${taskToReturn.id} (${taskToReturn.stage}) was already worked on by another worker. Cannot assign worker ${workerId}.`);
                         return res.status(200).json({ success: true, task: null, action: 'IDLE' });
                     }
-                    // If task is NOT_STARTED and we are reassigning it, close other worker's assignment so only 1 worker has it
-                    await TaskWorkerAssignment.update(
-                        { left_at: new Date() },
-                        { where: { task_id: taskToReturn.id, left_at: null, worker_id: { [Op.ne]: workerId } } }
-                    );
                 }
             }
 
@@ -445,16 +460,15 @@ export const assignNextTask = async (req, res) => {
         }
 
         // Check if all batch processing is complete
-        // 1. Have all demands been weighed (i.e. entered the pipeline)?
+        // 1. Have all vegetable demands had their WEIGHING task created (i.e. entered the pipeline)?
         const unweighedProductsForCheck = demands.filter(d => {
-            const processedQty = getProcessedQuantity(d.product_id, 'WEIGHING');
-            return processedQty < parseFloat(d.quantity_grams);
+            return !tasks.some(t => t.product_id === d.product_id && t.stage === 'WEIGHING');
         });
 
         // 2. Are there any active tasks still in the pipeline?
         const activePipelineTasks = tasks.filter(t =>
             ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'].includes(t.stage) &&
-            ['NOT_STARTED', 'RUNNING', 'PAUSED'].includes(t.status)
+            ['NOT_STARTED', 'RUNNING', 'PAUSED', 'ALARM'].includes(t.status)
         );
 
         const isBatchProcessingComplete = demands.length > 0 &&
@@ -465,21 +479,17 @@ export const assignNextTask = async (req, res) => {
             // Check if BUCKET_ARRANGE tasks already exist
             const bucketArrangeTasks = tasks.filter(t => t.stage === 'BUCKET_ARRANGE');
             if (bucketArrangeTasks.length === 0) {
-                // Get all retail orders for this batch to count users per product
-                const retailOrders = await RetailOrder.findAll({
-                    where: { batch_id: batchId },
-                    include: [{ model: RetailOrderItem, as: 'Items' }]
-                });
+                // Fetch demand map to get exact user counts (both subscription & retail)
+                const now = new Date();
+                now.setMinutes(now.getMinutes() + 330);
+                const dateStr = now.toISOString().split('T')[0];
+                const demandMap = await computeBatchDemandHelper(batchId, dateStr);
 
-                // Generate BUCKET_ARRANGE task for each demanded product in bulk
+                // Generate BUCKET_ARRANGE task for each demanded vegetable in bulk
                 const tasksToCreate = [];
                 for (const d of demands) {
-                    // Count how many users ordered this product
-                    let userCount = 0;
-                    for (const ro of retailOrders) {
-                        const hasProduct = ro.Items.some(item => item.product_id === d.product_id);
-                        if (hasProduct) userCount++;
-                    }
+                    const prodDemand = demandMap ? demandMap[d.product_id] : null;
+                    let userCount = prodDemand && prodDemand.usersMap ? Object.keys(prodDemand.usersMap).length : 0;
                     if (userCount === 0) userCount = 1; // Fallback
 
                     const baseTime = d.Product ? (d.Product.weighing_time_seconds || 30) : 30;
@@ -607,9 +617,11 @@ export const assignNextTask = async (req, res) => {
         }
 
         // Priority 2: Start new WEIGHING task (Unweighed product available?)
+        // In the kitchen pipeline, each vegetable is weighed ONCE in one shot for the batch demand.
+        // If a WEIGHING task already exists for a product today, it has already been weighed!
         let unweighedProducts = demands.filter(d => {
-            const processedQty = getProcessedQuantity(d.product_id, 'WEIGHING');
-            return processedQty < parseFloat(d.quantity_grams);
+            const alreadyHasWeighing = tasks.some(t => t.product_id === d.product_id && t.stage === 'WEIGHING');
+            return !alreadyHasWeighing;
         });
 
         if (unweighedProducts.length > 0) {
@@ -621,11 +633,10 @@ export const assignNextTask = async (req, res) => {
             });
 
             const topProduct = unweighedProducts[0];
-            const processedQty = getProcessedQuantity(topProduct.product_id, 'WEIGHING');
-            const remainingQty = parseFloat(topProduct.quantity_grams) - processedQty;
+            const remainingQty = parseFloat(topProduct.quantity_grams);
             const duration = calculateWeighingDuration(topProduct.Product);
 
-            // Check if WEIGHING task already exists in DB for this product today
+            // Double check if WEIGHING task already exists in DB for this product today
             let newTask = await BatchProductTask.findOne({
                 where: {
                     batch_id: batchId,
@@ -654,7 +665,10 @@ export const assignNextTask = async (req, res) => {
                 });
             }
 
-            return await returnTask(newTask, 'NEW_TASK');
+            // Safety: never return an already DONE task
+            if (newTask && newTask.status !== 'DONE') {
+                return await returnTask(newTask, 'NEW_TASK');
+            }
         }
 
         // Priority 3: Join active work (ONLY CUTTING and manual DRYING: piece/gram. NEVER WEIGHING, SOAKING, or machine DRYING!)
@@ -708,15 +722,19 @@ export const startTaskStage = async (req, res) => {
         const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
         if (!task) return res.status(404).json({ success: false, message: "Task not found" });
 
+        if (task.status === 'DONE') {
+            return res.status(400).json({ success: false, message: "Task is already completed" });
+        }
+
         const allowsMultiple = isJointAllowed(task);
         if (!allowsMultiple) {
             const activeOtherAssignments = await TaskWorkerAssignment.findAll({
                 where: { task_id: taskId, worker_id: { [Op.ne]: workerId }, left_at: null }
             });
-            if (activeOtherAssignments.length > 0 && task.status === 'RUNNING') {
+            if (activeOtherAssignments.length > 0 && ['RUNNING', 'PAUSED'].includes(task.status)) {
                 return res.status(400).json({
                     success: false,
-                    message: `This ${task.stage} task is already running with another worker. Only 1 worker is allowed.`
+                    message: `This ${task.stage} task is already active with another worker. Only 1 worker is allowed.`
                 });
             }
         }

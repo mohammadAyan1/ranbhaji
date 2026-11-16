@@ -60,7 +60,7 @@ export const getTodayDeliveries = async (req, res) => {
                 {
                     model: Subscription,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                         { model: Package, attributes: ['id', 'name'] },
                         { model: Address }
                     ]
@@ -68,7 +68,7 @@ export const getTodayDeliveries = async (req, res) => {
                 {
                     model: WaterSubscription,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                         { model: Address },
                         { model: Product, as: 'Product' }
                     ]
@@ -83,7 +83,7 @@ export const getTodayDeliveries = async (req, res) => {
                 delivery_boy_id: deliveryBoyId
             },
             include: [
-                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                 { model: Address },
                 { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
             ]
@@ -119,7 +119,7 @@ export const getTodayDeliveries = async (req, res) => {
                 }
             }
 
-            if (!user) continue;
+            if (!user || user.status !== 'active') continue;
 
             if (defaultAddr) {
                 address_id = defaultAddr.id;
@@ -223,7 +223,7 @@ export const getTodayDeliveries = async (req, res) => {
 
         for (const ro of retailOrders) {
             const user = ro.User;
-            if (!user) continue;
+            if (!user || user.status !== 'active') continue;
 
             let addressStr = "No address provided";
             let address_id = null;
@@ -1147,7 +1147,7 @@ export const getProductDemands = async (req, res) => {
                     model: Subscription,
                     required: false,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                         { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
                         { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] }
                     ]
@@ -1156,7 +1156,7 @@ export const getProductDemands = async (req, res) => {
                     model: WaterSubscription,
                     required: false,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] }
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] }
                     ],
                     attributes: ['id', 'water_type', 'container', 'capacity_liters', 'bottles_per_delivery']
                 },
@@ -1169,7 +1169,7 @@ export const getProductDemands = async (req, res) => {
         const retailOrders = await RetailOrder.findAll({
             where: { delivery_date: dateStr, delivery_status: 'pending' },
             include: [
-                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                 { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] },
                 { model: Batch, required: false }
             ]
@@ -1182,6 +1182,7 @@ export const getProductDemands = async (req, res) => {
         const waterDemandsMap = {};
 
         const addWaterDemand = (sub, batchName, user) => {
+            if (!user || user.status !== 'active') return;
             const cap = parseFloat(sub.capacity_liters || 1);
             const bottles = parseInt(sub.bottles_per_delivery || 1);
             if (!waterDemandsMap[cap]) {
@@ -1259,6 +1260,11 @@ export const getProductDemands = async (req, res) => {
                 user = schedule.WaterSubscription.User;
             }
 
+            // CRITICAL: Skip deactivated/inactive users - their package orders should not generate demand!
+            if (!user || user.status !== 'active') {
+                continue;
+            }
+
             const dbItems = schedule.DeliveryItems || [];
             if (dbItems.length > 0) {
                 for (const item of dbItems) {
@@ -1315,6 +1321,10 @@ export const getProductDemands = async (req, res) => {
         for (const order of retailOrders) {
             const batchName = order.Batch ? order.Batch.name : null;
             const user = order.User;
+            // CRITICAL: Skip deactivated/inactive users
+            if (!user || user.status !== 'active') {
+                continue;
+            }
             const items = order.Items || [];
             for (const item of items) {
                 if (!item.Product) continue;
@@ -1487,7 +1497,7 @@ export const getAllOrdersForDate = async (req, res) => {
                 {
                     model: Subscription,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                         { model: Address },
                         { model: SubscriptionItem, as: 'Items', include: [{ model: Product }] },
                         { model: Package, include: [{ model: PackageSeasonalConfig, as: 'SeasonalConfig' }] }
@@ -1496,7 +1506,7 @@ export const getAllOrdersForDate = async (req, res) => {
                 {
                     model: WaterSubscription,
                     include: [
-                        { model: User, attributes: ['id', 'name', 'phone'] },
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                         { model: Address }
                     ]
                 },
@@ -1509,7 +1519,7 @@ export const getAllOrdersForDate = async (req, res) => {
             where: { delivery_date: dateStr, delivery_status: ['pending', 'ready_for_delivery'] },
             include: [
                 { model: Batch },
-                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                 { model: Address },
                 { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
             ]
@@ -1540,11 +1550,11 @@ export const getAllOrdersForDate = async (req, res) => {
         // Fetch all default addresses in one go to avoid N+1
         const allUsersIds = new Set();
         schedules.forEach(s => {
-            if (s.Subscription) allUsersIds.add(s.Subscription.User.id);
-            else if (s.WaterSubscription) allUsersIds.add(s.WaterSubscription.User.id);
+            const u = s.Subscription?.User || s.WaterSubscription?.User;
+            if (u && u.status === 'active') allUsersIds.add(u.id);
         });
         retailOrders.forEach(r => {
-            if (r.User) allUsersIds.add(r.User.id);
+            if (r.User && r.User.status === 'active') allUsersIds.add(r.User.id);
         });
         const defaultAddresses = await Address.findAll({
             where: { user_id: Array.from(allUsersIds), is_default: true }
@@ -1644,7 +1654,8 @@ export const getAllOrdersForDate = async (req, res) => {
                 user = s.WaterSubscription.User;
                 address = s.WaterSubscription.Address || defaultAddressMap[user?.id];
             }
-            if (!user) continue;
+            // CRITICAL: Skip deactivated/inactive users - do not show their orders in admin order views!
+            if (!user || user.status !== 'active') continue;
 
             const slot = s.delivery_time_slot || s.Subscription?.delivery_time_slot || null;
             const addrStr = formatAddress(address);
@@ -1826,7 +1837,8 @@ export const getAllOrdersForDate = async (req, res) => {
         // Process Retail Orders (Each retail order is a separate order entry)
         for (const r of retailOrders) {
             const user = r.User;
-            if (!user) continue;
+            // CRITICAL: Skip deactivated/inactive users
+            if (!user || user.status !== 'active') continue;
             const address = r.Address || defaultAddressMap[user?.id];
             const addrStr = formatAddress(address);
 
@@ -2309,7 +2321,7 @@ export const getAvailableOrders = async (req, res) => {
             include: [
                 {
                     model: Subscription,
-                    include: [{ model: User, attributes: ['name', 'phone', 'id'] }, { model: Address }]
+                    include: [{ model: User, attributes: ['name', 'phone', 'id', 'status'] }, { model: Address }]
                 },
                 { model: DeliveryItem, as: 'DeliveryItems', include: [Product] },
                 { model: Batch }
@@ -2319,8 +2331,9 @@ export const getAvailableOrders = async (req, res) => {
         // Group schedules by user to avoid duplicates on the frontend
         const groupedSchedulesMap = {};
         for (const schedule of schedules) {
-            const userId = schedule.Subscription?.User?.id;
-            if (!userId) continue;
+            const user = schedule.Subscription?.User;
+            if (!user || user.status !== 'active') continue;
+            const userId = user.id;
 
             if (!groupedSchedulesMap[userId]) {
                 groupedSchedulesMap[userId] = schedule.toJSON();
