@@ -257,10 +257,11 @@ export const createPurchase = async (req, res) => {
 
             const finalPricePerKg = purchasePricePerKg > 0 ? purchasePricePerKg : parseFloat(existingLog.purchase_price_per_kg || 0);
             const isPiece = product.unit === 'piece' || product.unit === 'pcs' || (product.category || '').toLowerCase() === 'water';
-            if (finalPricePerKg > 0) {
+            // Only update product base prices if they are not already set (protect original product creation prices)
+            if (finalPricePerKg > 0 && (!product.purchase_price_per_gm || parseFloat(product.purchase_price_per_gm) === 0)) {
                 productUpdate.purchase_price_per_gm = isPiece ? finalPricePerKg : finalPricePerKg / 1000;
             }
-            if (sellingPricePerKg !== null) {
+            if (sellingPricePerKg !== null && (!product.selling_price_per_gm || parseFloat(product.selling_price_per_gm) === 0)) {
                 productUpdate.selling_price_per_gm = sellingPricePerKg / (isPiece ? 1 : 1000);
             }
 
@@ -285,10 +286,11 @@ export const createPurchase = async (req, res) => {
             };
 
             const isPiece = product.unit === 'piece' || product.unit === 'pcs' || (product.category || '').toLowerCase() === 'water';
-            if (purchasePricePerKg > 0) {
+            // Only update product base prices if they are not already set (protect original product creation prices)
+            if (purchasePricePerKg > 0 && (!product.purchase_price_per_gm || parseFloat(product.purchase_price_per_gm) === 0)) {
                 updateData.purchase_price_per_gm = isPiece ? purchasePricePerKg : purchasePricePerKg / 1000;
             }
-            if (sellingPricePerKg !== null) {
+            if (sellingPricePerKg !== null && (!product.selling_price_per_gm || parseFloat(product.selling_price_per_gm) === 0)) {
                 updateData.selling_price_per_gm = sellingPricePerKg / (isPiece ? 1 : 1000);
             }
 
@@ -447,17 +449,27 @@ export const getStockSummary = async (req, res) => {
             const endDateTime = new Date(endDate);
             endDateTime.setHours(23, 59, 59, 999);
 
-            // 1. Calculate Purchased Qty
+            // 1. Calculate Purchased Qty and Average Buy Rate
             const purchases = await PurchaseLog.findAll({
                 where: { purchase_date: { [Op.between]: [startDateTime, endDateTime] } },
-                attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('quantity')), 'total_qty']],
+                attributes: [
+                    'product_id',
+                    [sequelize.fn('SUM', sequelize.col('quantity')), 'total_qty'],
+                    [sequelize.fn('SUM', sequelize.col('total_amount')), 'total_amount']
+                ],
                 group: ['product_id'],
                 raw: true
             });
 
             const purchaseMap = {};
             purchases.forEach(p => {
-                purchaseMap[p.product_id] = parseFloat(p.total_qty || 0);
+                const totalQty = parseFloat(p.total_qty || 0);
+                const totalAmt = parseFloat(p.total_amount || 0);
+                const avgBuyRatePerGm = totalQty > 0 ? (totalAmt / totalQty) : 0;
+                purchaseMap[p.product_id] = {
+                    totalQty,
+                    avgBuyRatePerGm
+                };
             });
 
             // Calculate Yesterday's Purchased Qty
@@ -481,12 +493,15 @@ export const getStockSummary = async (req, res) => {
                 yesterdayPurchaseMap[p.product_id] = parseFloat(p.total_qty || 0);
             });
 
-            // 2. Calculate Sold Qty
-            // 2a. Retail Orders (active users only)
+            // 2. Calculate Sold Qty (delivered orders only)
+            // 2a. Retail Orders (active users only, delivered orders)
             const retailItems = await RetailOrderItem.findAll({
                 include: [{
                     model: RetailOrder,
-                    where: { delivery_date: { [Op.between]: [startDate, endDate] } },
+                    where: {
+                        delivery_date: { [Op.between]: [startDate, endDate] },
+                        delivery_status: 'delivered'
+                    },
                     include: [{
                         model: User,
                         where: { status: 'active' },
@@ -504,11 +519,14 @@ export const getStockSummary = async (req, res) => {
                 salesMap[item.product_id] = (salesMap[item.product_id] || 0) + parseFloat(item.totalQty || 0);
             });
 
-            // 2b. Package Deliveries (DeliveryItem)
+            // 2b. Package Deliveries (DeliveryItem) - delivered schedules only
             const deliveryItems = await DeliveryItem.findAll({
                 include: [{
                     model: DeliverySchedule,
-                    where: { scheduled_date: { [Op.between]: [startDate, endDate] } },
+                    where: {
+                        scheduled_date: { [Op.between]: [startDate, endDate] },
+                        status: 'delivered'
+                    },
                     attributes: []
                 }],
                 attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('qty_gm')), 'totalQty']],
@@ -520,11 +538,14 @@ export const getStockSummary = async (req, res) => {
                 salesMap[item.product_id] = (salesMap[item.product_id] || 0) + parseFloat(item.totalQty || 0);
             });
 
-            // 2c. Package Deliveries (Seasonal Selections)
+            // 2c. Package Deliveries (Seasonal Selections) - delivered schedules only
             const seasonalItems = await ScheduleSeasonalSelection.findAll({
                 include: [{
                     model: DeliverySchedule,
-                    where: { scheduled_date: { [Op.between]: [startDate, endDate] } },
+                    where: {
+                        scheduled_date: { [Op.between]: [startDate, endDate] },
+                        status: 'delivered'
+                    },
                     attributes: []
                 }],
                 attributes: ['product_id', [sequelize.fn('SUM', sequelize.col('qty_gm')), 'totalQty']],
@@ -536,17 +557,36 @@ export const getStockSummary = async (req, res) => {
                 salesMap[item.product_id] = (salesMap[item.product_id] || 0) + parseFloat(item.totalQty || 0);
             });
 
-            // Apply to products
+            // Apply to products:
+            // When total_purchased_qty === 0, Current Avg Buy Rate = 0
+            // When total_sold_qty === 0, Current Avg Sell Rate = 0
             products = products.map(p => {
-                let purchased = purchaseMap[p.id] || 0;
-                let sold = salesMap[p.id] || 0;
-                let yesterday_purchased = yesterdayPurchaseMap[p.id] || 0;
+                const pData = purchaseMap[p.id] || { totalQty: 0, avgBuyRatePerGm: 0 };
+                const purchased = pData.totalQty;
+                const sold = salesMap[p.id] || 0;
+                const yesterday_purchased = yesterdayPurchaseMap[p.id] || 0;
+
+                const avgBuyRate = purchased > 0 ? (pData.avgBuyRatePerGm || p.purchase_price_per_gm) : 0;
+                const avgSellRate = sold > 0 ? (p.selling_price_per_gm || 0) : 0;
 
                 return {
                     ...p,
                     total_purchased_qty: purchased,
                     total_sold_qty: sold,
-                    yesterday_purchased_qty: yesterday_purchased
+                    yesterday_purchased_qty: yesterday_purchased,
+                    purchase_price_per_gm: avgBuyRate,
+                    selling_price_per_gm: avgSellRate
+                };
+            });
+        } else {
+            // No date filter specified:
+            products = products.map(p => {
+                const purchased = parseFloat(p.total_purchased_qty || 0);
+                const sold = parseFloat(p.total_sold_qty || 0);
+                return {
+                    ...p,
+                    purchase_price_per_gm: purchased > 0 ? p.purchase_price_per_gm : 0,
+                    selling_price_per_gm: sold > 0 ? p.selling_price_per_gm : 0
                 };
             });
         }
