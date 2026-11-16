@@ -1,21 +1,43 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config(); // fallback to cwd .env if any
 
 /**
  * Creates and returns a configured nodemailer transporter
  */
 export const getTransporter = () => {
-    const host = process.env.SMTP_HOST || 'mail.shreenari.com';
+    const rawHost = (process.env.SMTP_HOST || '').trim();
     const port = parseInt(process.env.SMTP_PORT || '465', 10);
     const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-    const user = process.env.SMTP_USER || process.env.EMAIL_USER || '';
-    const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS || '';
+    const user = (process.env.SMTP_USER || process.env.EMAIL_USER || '').trim();
+    const rawPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || '';
+    // Strip spaces from password (essential for Google 16-character App Passwords "abcd efgh ijkl mnop")
+    const pass = rawPass.replace(/\s+/g, '');
 
     if (!user || !pass) {
         console.warn('[MAILER] SMTP credentials (SMTP_USER / SMTP_PASS) are not set in .env. Emails may fail to deliver until configured.');
     }
 
+    // Auto-detect Gmail: if host mentions gmail, or if username ends with @gmail.com
+    const isGmail = rawHost.toLowerCase().includes('gmail.com') || user.toLowerCase().endsWith('@gmail.com');
+
+    if (isGmail) {
+        return nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user,
+                pass
+            }
+        });
+    }
+
+    const host = rawHost || 'mail.shreenari.com';
     return nodemailer.createTransport({
         host,
         port,
@@ -28,6 +50,25 @@ export const getTransporter = () => {
             rejectUnauthorized: false
         }
     });
+};
+
+/**
+ * Resolves safe From sender address matching the active mail transport
+ */
+export const getFromAddress = () => {
+    const user = (process.env.SMTP_USER || process.env.EMAIL_USER || '').trim();
+    const envFrom = (process.env.EMAIL_FROM || '').trim();
+    
+    // If authenticated via Gmail, sender address MUST be the Gmail user for Gmail SMTP to allow it
+    if (user.toLowerCase().endsWith('@gmail.com')) {
+        return `"RamBhaji Notifications" <${user}>`;
+    }
+
+    if (envFrom) {
+        return envFrom;
+    }
+
+    return '"RamBhaji Admin" <noreply@shreenari.com>';
 };
 
 /**
@@ -152,7 +193,7 @@ export const sendPurchaseDemandEmails = async (recipients = [], customUrl = null
     }
 
     const transporter = getTransporter();
-    const fromAddress = process.env.EMAIL_FROM || '"RamBhaji Admin" <noreply@shreenari.com>';
+    const fromAddress = getFromAddress();
     const purchaseUrl = customUrl || getPurchaseUrl();
 
     const tomorrow = new Date();
@@ -206,7 +247,7 @@ export const sendPurchaseDemandEmails = async (recipients = [], customUrl = null
  */
 export const sendTestEmail = async (targetEmail, targetName = 'Admin Tester') => {
     const transporter = getTransporter();
-    const fromAddress = process.env.EMAIL_FROM || '"RamBhaji Admin" <noreply@shreenari.com>';
+    const fromAddress = getFromAddress();
     const purchaseUrl = getPurchaseUrl();
 
     const todayStr = new Date().toLocaleDateString('en-IN', {
