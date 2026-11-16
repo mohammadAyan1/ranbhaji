@@ -33,6 +33,8 @@ export default function AdminUserHistory() {
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRetailDiscount, setShowRetailDiscount] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [addressForm, setAddressForm] = useState({
     address_line: "",
@@ -120,6 +122,8 @@ export default function AdminUserHistory() {
 
   // Fetch specific user analytics when a user is selected
   useEffect(() => {
+    setShowPassword(false);
+    setShowRetailDiscount(false);
     if (!selectedUserId) {
       setAnalytics(null);
       return;
@@ -562,7 +566,7 @@ export default function AdminUserHistory() {
             }} 
             className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors shadow-2xs"
           >
-            <span>🏷️</span> Set Retail Discount ({parseFloat(currentUserInfo?.discount_percentage || 0)}%)
+            <span>🏷️</span> Set Retail Discount
           </button>
           <button 
             onClick={() => {
@@ -653,21 +657,34 @@ export default function AdminUserHistory() {
 
             <div className="text-center">
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Retail Discount</p>
-              <button
-                onClick={() => {
-                  setDiscountPercent(currentUserInfo?.discount_percentage ?? "0");
-                  setShowDiscountModal(true);
-                }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition-all hover:scale-105 cursor-pointer ${
-                  parseFloat(currentUserInfo.discount_percentage || 0) > 0
-                    ? "bg-purple-100 text-purple-800 border-purple-300 shadow-2xs"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-purple-300 hover:text-purple-700"
-                }`}
-                title="Click to edit discount"
-              >
-                <span>🏷️</span>
-                <span>{parseFloat(currentUserInfo.discount_percentage || 0)}% OFF</span>
-              </button>
+              <div className="inline-flex items-center rounded-lg border shadow-2xs overflow-hidden transition-all bg-white border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowRetailDiscount(prev => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-bold transition-all cursor-pointer ${
+                    showRetailDiscount && parseFloat(currentUserInfo.discount_percentage || 0) > 0
+                      ? "bg-purple-100 text-purple-800"
+                      : "bg-white text-gray-600 hover:bg-gray-50 hover:text-purple-700"
+                  }`}
+                  title={showRetailDiscount ? "Click to hide discount" : "Click to view discount"}
+                >
+                  <span>{showRetailDiscount ? "🏷️" : "🔒"}</span>
+                  <span>{showRetailDiscount ? `${parseFloat(currentUserInfo.discount_percentage || 0)}% OFF` : "••••"}</span>
+                </button>
+                {showRetailDiscount && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscountPercent(currentUserInfo?.discount_percentage ?? "0");
+                      setShowDiscountModal(true);
+                    }}
+                    className="px-2 py-1 bg-purple-50 text-purple-700 hover:bg-purple-100 border-l border-purple-200 text-xs font-semibold cursor-pointer"
+                    title="Click to edit discount"
+                  >
+                    ✏️ Edit
+                  </button>
+                )}
+              </div>
             </div>
             <div className="text-center">
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">Water Discount</p>
@@ -692,9 +709,15 @@ export default function AdminUserHistory() {
             </div>
             <div className="text-right">
               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">User Password</p>
-              <p className="font-mono text-sm font-semibold text-gray-900 bg-white border border-gray-200 px-3 py-1 rounded-lg shadow-sm">
-                {currentUserInfo.actual_password || "Not Available"}
-              </p>
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-mono font-semibold bg-white border border-gray-200 shadow-2xs hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer text-gray-900"
+                title={showPassword ? "Click to hide password" : "Click to view password"}
+              >
+                <span>{showPassword ? "👁️" : "🔒"}</span>
+                <span>{showPassword ? (currentUserInfo.actual_password || "Not Available") : "••••••"}</span>
+              </button>
             </div>
           </div>
         </div>

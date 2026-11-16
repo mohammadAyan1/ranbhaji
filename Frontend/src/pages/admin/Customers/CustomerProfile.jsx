@@ -8,6 +8,7 @@ export default function CustomerProfile() {
     const navigate = useNavigate();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
         api.get(`/admin/user-analytics/customer-profile/${id}`)
@@ -47,9 +48,15 @@ export default function CustomerProfile() {
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1">User Password</p>
-                    <p className="font-mono text-sm font-semibold text-gray-900 bg-gray-50 border border-gray-200 px-3 py-1 rounded-lg shadow-sm">
-                        {user.actual_password || "Not Available"}
-                    </p>
+                    <button
+                        type="button"
+                        onClick={() => setShowPassword(prev => !prev)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-mono font-semibold bg-gray-50 border border-gray-200 shadow-2xs hover:bg-gray-100 hover:border-gray-300 transition-all cursor-pointer text-gray-900"
+                        title={showPassword ? "Click to hide password" : "Click to view password"}
+                    >
+                        <span>{showPassword ? "👁️" : "🔒"}</span>
+                        <span>{showPassword ? (user.actual_password || "Not Available") : "••••••"}</span>
+                    </button>
                 </div>
             </div>
 
