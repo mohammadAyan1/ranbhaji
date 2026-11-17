@@ -16,7 +16,7 @@ async function run() {
             allowNull: true,
             defaultValue: 0
         });
-        // 
+
 
         await queryInterface.addColumn('products', 'cutting_time', {
             type: sequelize.Sequelize.DECIMAL(10, 2),
