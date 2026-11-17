@@ -1,0 +1,60 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Frontend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: Frontend
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm install
+
+       # 👇 Ye naya step add karo
+      - name: Create .env
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env
+
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Deploy dist via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.MILESWEB_FTP_SERVER }}
+          username: ${{ secrets.MILESWEB_FTP_USERNAME }}
+          password: ${{ secrets.MILESWEB_FTP_PASSWORD }}
+          port: ${{ secrets.MILESWEB_FTP_PORT }}
+
+          local-dir: ./Frontend/dist/
+          server-dir: /deployments/frontend/
+
+          dangerous-clean-slate: false
+
+          exclude: |
+            **/.git*
+            **/.github/**
+            **/.env
+            **/*.zip
+            **/.vscode/**
+            **/.idea/**
+            **/README.md
+            **/.DS_Store
