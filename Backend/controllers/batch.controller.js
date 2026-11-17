@@ -217,8 +217,10 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
 
         const dbItems = schedule.DeliveryItems || [];
         if (dbItems.length > 0) {
+            const dbProductIds = new Set();
             for (const item of dbItems) {
                 if (!item.Product) continue;
+                dbProductIds.add(item.product_id);
                 if (schedule.is_returned_serving) {
                     if (item.will_purchase) {
                         addDemand(item.Product, parseFloat(item.qty_gm || 0), currentUser);
@@ -226,6 +228,13 @@ export const computeBatchDemandHelper = async (batch_id, date, options = {}) => 
                 } else {
                     addDemand(item.Product, parseFloat(item.qty_gm || 0), currentUser);
                 }
+            }
+            if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
+                schedule.SeasonalSelections.forEach(sel => {
+                    if (sel.Product && !dbProductIds.has(sel.product_id)) {
+                        addDemand(sel.Product, parseFloat(sel.qty_gm || 0), currentUser);
+                    }
+                });
             }
         } else {
             const sub = schedule.Subscription;

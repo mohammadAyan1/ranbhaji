@@ -1267,8 +1267,10 @@ export const getProductDemands = async (req, res) => {
 
             const dbItems = schedule.DeliveryItems || [];
             if (dbItems.length > 0) {
+                const dbProductIds = new Set();
                 for (const item of dbItems) {
                     if (!item.Product) continue;
+                    dbProductIds.add(item.product_id);
 
                     if (schedule.is_returned_serving) {
                         if (item.will_purchase) {
@@ -1277,6 +1279,15 @@ export const getProductDemands = async (req, res) => {
                         // If not will_purchase, we don't add to demand (since we'll supply it from existing stock)
                     } else {
                         addDemand(item.Product, parseFloat(item.qty_gm || 0), 'package', batchName, user);
+                    }
+                }
+
+                // If schedule ALSO has SeasonalSelections that aren't yet in dbItems, add them too!
+                const selections = schedule.SeasonalSelections || [];
+                for (const sel of selections) {
+                    if (!sel.Product) continue;
+                    if (!dbProductIds.has(sel.product_id)) {
+                        addDemand(sel.Product, parseFloat(sel.qty_gm || 0), 'package', batchName, user);
                     }
                 }
             } else {
@@ -1705,6 +1716,15 @@ export const getAllOrdersForDate = async (req, res) => {
                         if (item.Product) addSchedItem(item.Product, parseFloat(item.qty_gm || 0), 'package', item.packed_qty !== null ? parseFloat(item.packed_qty) : null);
                     } else {
                         await item.destroy().catch(e => console.error(e));
+                    }
+                }
+
+                // If schedule ALSO has SeasonalSelections that aren't yet in dbItems, include them!
+                const selections = s.SeasonalSelections || [];
+                for (const sel of selections) {
+                    if (sel.Product && !uniqueMap[sel.product_id]) {
+                        uniqueMap[sel.product_id] = true;
+                        addSchedItem(sel.Product, parseFloat(sel.qty_gm || 0), 'package', null);
                     }
                 }
             } else {
@@ -3171,20 +3191,23 @@ export const updateDeliveryScheduleItems = async (req, res) => {
             await ScheduleSeasonalSelection.bulkCreate(seasonalRows, { transaction: t });
         }
 
-        // 5. Update DeliveryItems for fixed items (if custom fixed items were provided)
-        if (inputFixed.length > 0) {
+        // 5. Update DeliveryItems for ALL items to deliver (both fixed and seasonal)
+        const allItemsToDeliver = [
+            ...inputFixed.filter(item => parseFloat(item.qty_gm || 0) > 0),
+            ...inputSeasonal.filter(item => parseFloat(item.qty_gm || 0) > 0)
+        ];
+
+        if (allItemsToDeliver.length > 0) {
             await DeliveryItem.destroy({
                 where: { schedule_id: id },
                 transaction: t
             });
-            const deliveryItemRows = inputFixed.filter(item => parseFloat(item.qty_gm || 0) > 0).map(item => ({
+            const deliveryItemRows = allItemsToDeliver.map(item => ({
                 schedule_id: id,
                 product_id: item.product_id,
                 qty_gm: item.qty_gm
             }));
-            if (deliveryItemRows.length > 0) {
-                await DeliveryItem.bulkCreate(deliveryItemRows, { transaction: t });
-            }
+            await DeliveryItem.bulkCreate(deliveryItemRows, { transaction: t });
         }
 
         await t.commit();
