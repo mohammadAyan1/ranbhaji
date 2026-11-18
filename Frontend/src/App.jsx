@@ -125,6 +125,7 @@ function App() {
         } />
 
         {/* ─── USER Routes ─────────────────────────────────────── */}
+        {/* ─── USER Routes ─────────────────────────────────────── */}
         <Route element={<ProtectedRoute roles={["user"]}><Layout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<UserDashboard />} />
           <Route path="/packages" element={<PackagesPage />} />

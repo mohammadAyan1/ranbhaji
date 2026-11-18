@@ -30,7 +30,7 @@ jobs:
        # 👇 Ye naya step add karo
       - name: Create .env
         run: |
-          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env
+          echo "VITE_API_URL=${{ secrets.MILESWEB_VITE_API_URL }}" > .env
 
 
       - name: Build Frontend
