@@ -28,19 +28,19 @@ export const generateDeliveryDates = (startDate, servicesPerMonth, cycles = 1, c
     // Gap means empty days between deliveries, so interval is gap + 1
     switch (servicesPerMonth) {
         case 5:
-            interval_days = 8; // 7 days gap
+            interval_days = 7; // 7 days gap included serving day
             break;
         case 6:
-            interval_days = 7; // 6 days gap (Assuming the second '5 serving' was a typo for 6)
+            interval_days = 6; // 6 days gap (Assuming the second '5 serving' was a typo for 6) included serving day
             break;
-        case 7:
-            interval_days = 6; // 5 days gap
-            break;
+        // case 7:
+        //     interval_days = 6; // 5 days gap included serving day
+        //     break;
         case 8:
-            interval_days = 5; // 4 days gap
+            interval_days = 4; // 4 days gap included serving day
             break;
         case 9:
-            interval_days = 4; // 3 days gap
+            interval_days = 3; // 3 days gap included serving day
             break;
         default:
             // For any other serving, calculate gap as (30 / services), then interval = gap + 1
