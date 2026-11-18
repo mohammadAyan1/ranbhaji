@@ -118,10 +118,37 @@ class Mutex {
     }
 }
 const syncMutex = new Mutex();
+const batchDemandSyncTimestamps = new Map();
+const BATCH_SYNC_TTL = 90 * 1000; // 90 seconds TTL to eliminate repetitive recalculations on every assign call
+
+export const invalidateBatchDemandSync = (batchId = null) => {
+    if (batchId) {
+        batchDemandSyncTimestamps.delete(parseInt(batchId));
+    } else {
+        batchDemandSyncTimestamps.clear();
+    }
+};
 
 export const syncBatchDemand = async (batchId, options = {}) => {
+    const numBatchId = parseInt(batchId);
+    // Fast path: if not forced and synced within last 90s, skip entirely
+    if (!options.force && batchDemandSyncTimestamps.has(numBatchId)) {
+        const lastSync = batchDemandSyncTimestamps.get(numBatchId);
+        if (Date.now() - lastSync < BATCH_SYNC_TTL) {
+            return;
+        }
+    }
+
     await syncMutex.lock();
     try {
+        // Double-check after acquiring lock
+        if (!options.force && batchDemandSyncTimestamps.has(numBatchId)) {
+            const lastSync = batchDemandSyncTimestamps.get(numBatchId);
+            if (Date.now() - lastSync < BATCH_SYNC_TTL) {
+                return;
+            }
+        }
+
         const now = new Date();
         now.setMinutes(now.getMinutes() + 330); // IST Offset
         const today = now.toISOString().split('T')[0];
@@ -154,7 +181,7 @@ export const syncBatchDemand = async (batchId, options = {}) => {
         const productIds = Object.keys(demandMap);
         const products = productIds.length > 0 ? await Product.findAll({
             where: { id: productIds },
-            attributes: ['id', 'category']
+            attributes: ['id', 'category', 'weighing_time_seconds']
         }) : [];
         const productCategories = {};
         products.forEach(p => productCategories[p.id] = p.category);
@@ -177,7 +204,47 @@ export const syncBatchDemand = async (batchId, options = {}) => {
         await BatchProductDemand.destroy({ where: { batch_id: batchId } });
         if (demandsToCreate.length > 0) {
             await BatchProductDemand.bulkCreate(demandsToCreate);
+
+            // PRE-CREATE WEIGHING TASKS for all demanded non-water products!
+            // When admin submits purchase log, WEIGHING tasks become INSTANTLY ready for workers without delay
+            try {
+                const existingTasks = await BatchProductTask.findAll({
+                    where: {
+                        batch_id: batchId,
+                        stage: 'WEIGHING',
+                        created_at: { [Op.gte]: startOfToday }
+                    },
+                    attributes: ['product_id']
+                });
+                const existingTaskProductIds = new Set(existingTasks.map(t => t.product_id));
+
+                const weighingTasksToCreate = [];
+                for (const d of demandsToCreate) {
+                    if (productCategories[d.product_id] === 'water') continue;
+                    if (!existingTaskProductIds.has(d.product_id)) {
+                        const prodObj = products.find(p => p.id === d.product_id);
+                        const duration = calculateWeighingDuration(prodObj);
+                        weighingTasksToCreate.push({
+                            batch_id: batchId,
+                            product_id: d.product_id,
+                            stage: 'WEIGHING',
+                            quantity_grams: d.quantity_grams,
+                            status: 'NOT_STARTED',
+                            duration_seconds: duration,
+                            remaining_seconds: duration
+                        });
+                    }
+                }
+
+                if (weighingTasksToCreate.length > 0) {
+                    await BatchProductTask.bulkCreate(weighingTasksToCreate);
+                }
+            } catch (taskErr) {
+                console.error("Pre-create WEIGHING tasks error in syncBatchDemand:", taskErr);
+            }
         }
+
+        batchDemandSyncTimestamps.set(numBatchId, Date.now());
     } finally {
         syncMutex.unlock();
     }
@@ -422,39 +489,18 @@ export const assignNextTask = async (req, res) => {
                 const product = d.Product;
                 const dryDuration = calculateDryingDuration(product, d.quantity_grams);
                 if (dryDuration > 0) {
-                    const existingDryTask = await BatchProductTask.findOne({
-                        where: {
-                            batch_id: batchId,
-                            product_id: d.product_id,
-                            stage: 'DRYING',
-                            created_at: { [Op.gte]: startOfTodayForTasks }
-                        },
-                        include: [
-                            { model: Product },
-                            { model: TaskWorkerAssignment, as: 'worker_assignments', required: false }
-                        ]
+                    const newDryTask = await BatchProductTask.create({
+                        batch_id: batchId,
+                        product_id: d.product_id,
+                        stage: 'DRYING',
+                        quantity_grams: d.quantity_grams,
+                        status: 'NOT_STARTED',
+                        duration_seconds: dryDuration,
+                        remaining_seconds: dryDuration
                     });
-
-                    if (existingDryTask) {
-                        tasks.push(existingDryTask);
-                    } else {
-                        const newDryTask = await BatchProductTask.create({
-                            batch_id: batchId,
-                            product_id: d.product_id,
-                            stage: 'DRYING',
-                            quantity_grams: d.quantity_grams,
-                            status: 'NOT_STARTED',
-                            duration_seconds: dryDuration,
-                            remaining_seconds: dryDuration
-                        });
-                        const loadedDryTask = await BatchProductTask.findByPk(newDryTask.id, {
-                            include: [
-                                { model: Product },
-                                { model: TaskWorkerAssignment, as: 'worker_assignments', required: false }
-                            ]
-                        });
-                        tasks.push(loadedDryTask);
-                    }
+                    newDryTask.Product = product;
+                    newDryTask.worker_assignments = [];
+                    tasks.push(newDryTask);
                 }
             }
         }
@@ -636,16 +682,8 @@ export const assignNextTask = async (req, res) => {
             const remainingQty = parseFloat(topProduct.quantity_grams);
             const duration = calculateWeighingDuration(topProduct.Product);
 
-            // Double check if WEIGHING task already exists in DB for this product today
-            let newTask = await BatchProductTask.findOne({
-                where: {
-                    batch_id: batchId,
-                    product_id: topProduct.product_id,
-                    stage: 'WEIGHING',
-                    created_at: { [Op.gte]: startOfTodayForTasks }
-                },
-                include: [{ model: Product }]
-            });
+            // Check if WEIGHING task already exists in memory
+            let newTask = tasks.find(t => t.product_id === topProduct.product_id && t.stage === 'WEIGHING');
 
             if (!newTask) {
                 // Create WEIGHING task
@@ -658,11 +696,8 @@ export const assignNextTask = async (req, res) => {
                     duration_seconds: duration,
                     remaining_seconds: duration
                 });
-
-                // Reload to get the Product association
-                newTask = await BatchProductTask.findByPk(newTask.id, {
-                    include: [{ model: Product }]
-                });
+                newTask.Product = topProduct.Product;
+                newTask.worker_assignments = [];
             }
 
             // Safety: never return an already DONE task

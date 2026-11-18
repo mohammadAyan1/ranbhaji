@@ -725,7 +725,15 @@ const BatchProductDemand = sequelize.define('BatchProductDemand', {
   batch_id: { type: DataTypes.INTEGER, allowNull: false },
   product_id: { type: DataTypes.INTEGER, allowNull: false },
   quantity_grams: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 }
-}, { tableName: 'batch_product_demands', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+}, {
+  tableName: 'batch_product_demands',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  indexes: [
+    { name: 'idx_bpd_batch_prod', fields: ['batch_id', 'product_id'] }
+  ]
+});
 
 BatchProductDemand.belongsTo(Batch, { foreignKey: 'batch_id' });
 Batch.hasMany(BatchProductDemand, { foreignKey: 'batch_id', as: 'demands' });
@@ -746,7 +754,18 @@ const BatchProductTask = sequelize.define('BatchProductTask', {
   completed_at: { type: DataTypes.DATE, allowNull: true },
   alarm_fired_at: { type: DataTypes.DATE, allowNull: true },
   drying_mode: { type: DataTypes.STRING(50), allowNull: true }
-}, { tableName: 'batch_product_tasks', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+}, {
+  tableName: 'batch_product_tasks',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  indexes: [
+    { name: 'idx_bpt_status_stage', fields: ['status', 'stage'] },
+    { name: 'idx_bpt_batch_created', fields: ['batch_id', 'created_at'] },
+    { name: 'idx_bpt_batch_prod_stage', fields: ['batch_id', 'product_id', 'stage'] },
+    { name: 'idx_bpt_batch_stage_status', fields: ['batch_id', 'stage', 'status'] }
+  ]
+});
 
 BatchProductTask.belongsTo(Batch, { foreignKey: 'batch_id' });
 Batch.hasMany(BatchProductTask, { foreignKey: 'batch_id', as: 'tasks' });
@@ -759,7 +778,17 @@ const TaskWorkerAssignment = sequelize.define('TaskWorkerAssignment', {
   worker_id: { type: DataTypes.INTEGER, allowNull: false },
   joined_at: { type: DataTypes.DATE, allowNull: false },
   left_at: { type: DataTypes.DATE, allowNull: true }
-}, { tableName: 'task_worker_assignments', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
+}, {
+  tableName: 'task_worker_assignments',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  indexes: [
+    { name: 'idx_twa_task_worker_left', fields: ['task_id', 'worker_id', 'left_at'] },
+    { name: 'idx_twa_worker_left', fields: ['worker_id', 'left_at'] },
+    { name: 'idx_twa_task_left', fields: ['task_id', 'left_at'] }
+  ]
+});
 
 TaskWorkerAssignment.belongsTo(BatchProductTask, { foreignKey: 'task_id', as: 'task' });
 BatchProductTask.hasMany(TaskWorkerAssignment, { foreignKey: 'task_id', as: 'worker_assignments' });

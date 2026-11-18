@@ -3,7 +3,7 @@ import path from "path";
 import { Op } from "sequelize";
 import { Product, PurchaseLog, RetailOrder, RetailOrderItem, DeliverySchedule, Subscription, SubscriptionItem, WaterSubscription, DeliveryItem, ScheduleSeasonalSelection, sequelize, ProductionBatch, Batch, User } from '../models/index.js';
 import { invalidateBatchDemandCache } from './batch.controller.js';
-import { syncBatchDemand } from './workerTask.controller.js';
+import { syncBatchDemand, invalidateBatchDemandSync } from './workerTask.controller.js';
 
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
@@ -319,6 +319,7 @@ export const createPurchase = async (req, res) => {
         // Invalidate demand cache & immediately sync demand for active batches
         try {
             invalidateBatchDemandCache();
+            invalidateBatchDemandSync();
             const activeBatches = await Batch.findAll({
                 where: { status: 'active', is_deleted: false },
                 attributes: ['id']
