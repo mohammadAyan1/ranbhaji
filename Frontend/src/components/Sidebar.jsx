@@ -130,6 +130,7 @@ const userLinks = [
 
 const deliveryLinks = [
   { to: "/delivery", label: "Today's Deliveries", icon: <Truck size={20} /> },
+  { to: "/admin/today-work/assign-delivery", label: "Assign Delivery Boy", icon: <UserCheck size={20} /> },
   { to: "/delivery/history", label: "Delivery History", icon: <Package size={20} /> },
   { to: "/delivery/worker-dashboard", label: "Production Work", icon: <ClipboardList size={20} /> },
 ];

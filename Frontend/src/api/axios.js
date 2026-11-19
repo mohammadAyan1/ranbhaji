@@ -17,8 +17,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
+      const isPublicPath =
+        window.location.pathname === "/admin/today-work/assign-delivery" ||
+        window.location.pathname === "/assign-delivery" ||
+        window.location.pathname === "/log-purchase" ||
+        (window.location.pathname === "/admin/products" && window.location.search.includes("tab=purchase"));
+
+      if (!isPublicPath) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

@@ -198,7 +198,8 @@ const DeliverySchedule = sequelize.define('DeliverySchedule', {
   delivery_remark: { type: DataTypes.STRING(255), allowNull: true },
   batch_id: { type: DataTypes.INTEGER, allowNull: true },
   delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true },
-  is_returned_serving: { type: DataTypes.BOOLEAN, defaultValue: false }
+  is_returned_serving: { type: DataTypes.BOOLEAN, defaultValue: false },
+  delivered_at: { type: DataTypes.DATE, allowNull: true }
 }, { tableName: 'delivery_schedule', timestamps: false });
 
 // 10. DELIVERY_ITEMS
@@ -507,7 +508,8 @@ const RetailOrder = sequelize.define('RetailOrder', {
   discount_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 0 },
   discount_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   subtotal: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
-  delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true }
+  delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true },
+  delivered_at: { type: DataTypes.DATE, allowNull: true }
 }, { tableName: 'retail_orders', timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 
 RetailOrder.belongsTo(User, { foreignKey: 'user_id' });

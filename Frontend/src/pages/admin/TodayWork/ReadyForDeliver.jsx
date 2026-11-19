@@ -204,6 +204,10 @@ export default function ReadyForDeliver() {
     const itemsText = u.addresses.flatMap(a => (a.items || []).map(i => `${i.name || ''} ${i.hindi_name || ''}`)).join(" ").toLowerCase();
     const addressesText = u.addresses.map(a => a.address || "").join(" ").toLowerCase();
     const hasPackageText = u.hasPackage ? "package yes" : "no";
+    const boyNames = (
+      (u.delivery_boy?.name || u.delivery_boy_name || "") + " " +
+      u.addresses.map(a => a.delivery_boy?.name || a.delivery_boy_name || "").join(" ")
+    ).toLowerCase();
 
     return (
       userName.includes(q) ||
@@ -213,7 +217,8 @@ export default function ReadyForDeliver() {
       addressBatchNames.includes(q) ||
       itemsText.includes(q) ||
       addressesText.includes(q) ||
-      hasPackageText.includes(q)
+      hasPackageText.includes(q) ||
+      boyNames.includes(q)
     );
   });
 
@@ -286,6 +291,7 @@ export default function ReadyForDeliver() {
                   <th className="p-4 font-semibold text-sm">Package Assigned</th>
                   <th className="p-4 font-semibold text-sm">Requested Time</th>
                   <th className="p-4 font-semibold text-sm">Total Items</th>
+                  <th className="p-4 font-semibold text-sm">Delivery Boy</th>
                   <th className="p-4 font-semibold text-sm text-right">Batch</th>
                 </tr>
               </thead>
@@ -350,6 +356,23 @@ export default function ReadyForDeliver() {
                           {u.totalItems.length} items
                         </span>
                       </td>
+                      <td className="p-4 cursor-pointer" onClick={() => toggleRow(orderKey)}>
+                        {(() => {
+                          const boyName = u.delivery_boy?.name || 
+                            u.delivery_boy_name || 
+                            (u.addresses || []).map(a => a.delivery_boy?.name || a.delivery_boy_name).find(Boolean);
+                          return boyName ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                              {boyName}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-400 italic">
+                              Unassigned
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="p-4 text-right">
                         <span className="text-fresh-700 font-medium bg-fresh-50 px-3 py-1.5 rounded-lg text-sm">
                           {u.batch_id ? batches.find(b => b.id === u.batch_id)?.name || 'Assigned' : 'Mixed Batches'}
@@ -359,7 +382,7 @@ export default function ReadyForDeliver() {
 
                     {expandedId === orderKey && (
                       <tr className="bg-gray-50/30">
-                        <td colSpan="6" className="p-0 border-l-2 border-fresh-500">
+                        <td colSpan="7" className="p-0 border-l-2 border-fresh-500">
                           <div className="p-6">
                             <div className="mb-6 space-y-6">
                               <h4 className="text-sm font-bold text-gray-700 flex items-center">

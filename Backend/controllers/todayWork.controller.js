@@ -14,9 +14,9 @@ export const getOrdersForBatch = async (req, res) => {
         const start = new Date(startStr);
         const end = new Date(new Date(endStr).setHours(23, 59, 59, 999));
 
-        // 1. Fetch Retail Orders that are pending or assigned to this batch
+        // 1. Fetch Retail Orders that are active (pending, ready, delivered) or assigned to this batch
         const retailWhere = {
-            delivery_status: { [Op.notIn]: ['delivered', 'cancelled'] },
+            delivery_status: { [Op.ne]: 'cancelled' },
             delivery_date: { [Op.between]: [startStr, endStr] }
         };
         if (batch_id === 'unassigned') retailWhere.batch_id = null;
@@ -31,9 +31,9 @@ export const getOrdersForBatch = async (req, res) => {
             order: [['created_at', 'DESC']]
         });
 
-        // 2. Fetch Active Subscriptions that need delivery from DeliverySchedule
+        // 2. Fetch Active Subscriptions (pending, ready, delivered) that need delivery from DeliverySchedule
         const subWhere = {
-            status: ['pending', 'ready_for_delivery'],
+            status: { [Op.ne]: 'skipped' },
             scheduled_date: { [Op.between]: [startStr, endStr] }
         };
         if (batch_id === 'unassigned') subWhere.batch_id = null;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, Link } from "react-router-dom";
+import { Outlet, Link, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { Menu, Monitor, X, LogIn } from "lucide-react";
 import useAuthStore from "../store/authStore";
@@ -8,6 +8,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isTvMode, setIsTvMode] = useState(false);
   const { token } = useAuthStore();
+  const location = useLocation();
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 text-gray-900 font-sans">
@@ -31,8 +32,30 @@ export default function Layout() {
         {/* Unauthenticated Header */}
         {!token && (
           <header className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white/95 backdrop-blur-md sticky top-0 z-30 shadow-xs">
-            <div className="flex items-center">
+            <div className="flex items-center gap-6">
               <img src="/logo.png" alt="RamBhaji Logo" className="h-10 w-auto max-w-[160px] object-contain" />
+              <div className="hidden sm:flex items-center gap-2">
+                <Link
+                  to="/log-purchase"
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                    location.pathname.includes("purchase") || location.pathname === "/log-purchase"
+                      ? "bg-fresh-100 text-fresh-700 font-bold"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  Today Purchases
+                </Link>
+                <Link
+                  to="/admin/today-work/assign-delivery"
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                    location.pathname.includes("assign-delivery")
+                      ? "bg-fresh-100 text-fresh-700 font-bold"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  Assign Delivery Boy
+                </Link>
+              </div>
             </div>
             <Link
               to="/login"

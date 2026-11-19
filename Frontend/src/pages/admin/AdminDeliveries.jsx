@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../../api/axios";
+import { Clock } from "lucide-react";
 
 export default function AdminDeliveries() {
   const [deliveries, setDeliveries] = useState([]);
@@ -280,9 +281,22 @@ export default function AdminDeliveries() {
                   const packageName = d.Subscription?.Package?.name ||
                     (d.WaterSubscription ? (d.WaterSubscription.Product?.name || d.WaterSubscription.product_name || `${d.WaterSubscription.water_type} Water (${d.WaterSubscription.container})`) : "Water Plan");
 
-                  const formattedDate = d.actual_delivery_date
-                    ? new Date(d.actual_delivery_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-                    : "No date";
+                  const rawDeliveryDateTime = d.delivered_at || d.actual_delivery_date;
+                  let formattedDate = "No date";
+                  let formattedTime = null;
+
+                  if (rawDeliveryDateTime) {
+                    const dt = new Date(rawDeliveryDateTime);
+                    if (!isNaN(dt.getTime())) {
+                      formattedDate = dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+                      if (d.delivered_at) {
+                        const str = String(d.delivered_at);
+                        if (str.includes("T") || str.includes(":")) {
+                          formattedTime = dt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+                        }
+                      }
+                    }
+                  }
 
                   const items = d.DeliveryItems || [];
                   const hasUnreturnedItems = items.some(i => i.return_status === 'none' && parseFloat(i.packed_qty ?? i.delivered_qty ?? i.qty_gm) > 0);
@@ -296,7 +310,15 @@ export default function AdminDeliveries() {
                         onClick={() => setExpandedId(isExpanded ? null : d.id)}
                       >
                         <td className="p-3">
-                          <span className="font-semibold text-gray-900">{formattedDate}</span>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-gray-900">{formattedDate}</span>
+                            {formattedTime && (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md mt-1 w-fit shadow-xs">
+                                <Clock size={11} className="text-emerald-600" />
+                                {formattedTime}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3">
                           <p className="text-gray-900 font-medium">{customer.name}</p>
@@ -423,6 +445,15 @@ export default function AdminDeliveries() {
                               <div>
                                 <h4 className="text-sm font-semibold text-gray-900 mb-3 border-b pb-2">Delivery Proof & Remarks</h4>
                                 <div className="space-y-4">
+                                  {formattedTime && (
+                                    <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg flex items-center justify-between text-xs">
+                                      <span className="text-emerald-800 font-medium">Delivered Time:</span>
+                                      <span className="text-emerald-900 font-bold flex items-center gap-1">
+                                        <Clock size={12} className="text-emerald-700" />
+                                        {formattedDate} at {formattedTime}
+                                      </span>
+                                    </div>
+                                  )}
                                   {(d.delivery_time_slot || d.Subscription?.delivery_time_slot) && (
                                     <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-lg flex items-center justify-between text-xs">
                                       <span className="text-amber-800 font-medium">Requested Time:</span>

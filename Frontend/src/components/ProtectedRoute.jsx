@@ -5,10 +5,14 @@ export const ProtectedRoute = ({ children, roles }) => {
   const { user, token } = useAuthStore();
   const location = useLocation();
 
-  // Allow unauthenticated access ONLY to log purchase tab
+  // Allow unauthenticated / unauthorized access to specific tabs:
+  // 1. Log Purchase tab (/admin/products?tab=purchase or /log-purchase)
+  // 2. Assign Delivery Boy tab (/admin/today-work/assign-delivery or /assign-delivery)
   const searchParams = new URLSearchParams(location.search);
   const isLogPurchaseTab = (location.pathname === "/admin/products" && searchParams.get("tab") === "purchase") || location.pathname === "/log-purchase";
-  if (!token && isLogPurchaseTab) {
+  const isAssignDeliveryTab = location.pathname === "/admin/today-work/assign-delivery" || location.pathname === "/assign-delivery";
+
+  if (isLogPurchaseTab || isAssignDeliveryTab) {
     return children;
   }
 

@@ -213,6 +213,7 @@ export default function AdminAllOrders() {
     if (statusFilter !== 'all') {
       if (statusFilter === 'pending' && !u.addresses?.some(a => a.status === 'pending')) return false;
       if (statusFilter === 'ready' && !u.addresses?.some(a => a.status === 'ready' || a.status === 'ready_for_delivery')) return false;
+      if (statusFilter === 'delivered' && !u.addresses?.some(a => a.status === 'delivered')) return false;
     }
 
     const orderType = u.order_type || (u.hasPackage ? 'subscription' : 'retail');
@@ -359,6 +360,19 @@ export default function AdminAllOrders() {
                                   #{u.order_number}
                                 </span>
                               )}
+                              {u.status === 'delivered' ? (
+                                <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded border border-green-200 font-bold">
+                                  Delivered
+                                </span>
+                              ) : u.status === 'ready_for_delivery' || u.status === 'ready' ? (
+                                <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200 font-bold">
+                                  Ready
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200 font-bold">
+                                  Pending
+                                </span>
+                              )}
                               {u.description && (
                                 <span className="text-gray-500 text-xs font-medium">
                                   • {u.description}
@@ -468,8 +482,18 @@ export default function AdminAllOrders() {
                                         <div className="flex flex-wrap items-center gap-2 mb-1">
                                           <p className="text-gray-600 uppercase tracking-wide text-xs">Delivery Address</p>
                                           {addrGrp.status === 'ready_for_delivery' && (
-                                            <span className="bg-green-500/20 text-green-400 text-[10px] px-2 py-0.5 rounded-full border border-green-500/30">
+                                            <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full border border-blue-200 font-semibold">
                                               Ready for Delivery
+                                            </span>
+                                          )}
+                                          {addrGrp.status === 'delivered' && (
+                                            <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full border border-green-200 font-semibold">
+                                              Delivered
+                                            </span>
+                                          )}
+                                          {addrGrp.status === 'pending' && (
+                                            <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full border border-amber-200 font-semibold">
+                                              Pending
                                             </span>
                                           )}
                                           {addrGrp.is_returned_serving && (

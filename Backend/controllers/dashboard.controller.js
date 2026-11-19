@@ -8,7 +8,7 @@ import {
 // Helper to calculate pending purchases (matches /admin/demands and Log Purchase tab)
 const calculatePendingDemands = async (dateStr) => {
     const schedules = await DeliverySchedule.findAll({
-        where: { scheduled_date: dateStr, status: 'pending' },
+        where: { scheduled_date: dateStr, status: { [Op.ne]: 'skipped' } },
         include: [
             {
                 model: Subscription, required: false,
@@ -23,7 +23,7 @@ const calculatePendingDemands = async (dateStr) => {
     });
 
     const retailOrders = await RetailOrder.findAll({
-        where: { delivery_date: dateStr, delivery_status: 'pending' },
+        where: { delivery_date: dateStr, delivery_status: { [Op.ne]: 'cancelled' } },
         include: [
             { model: User, attributes: ['id', 'status'] },
             { model: RetailOrderItem, as: 'Items' }

@@ -308,6 +308,7 @@ export const markDelivered = async (req, res) => {
             await ro.update({
                 delivery_status: 'delivered',
                 actual_delivery_date: new Date().toISOString().split('T')[0],
+                delivered_at: new Date(),
                 delivery_photo_url: photo_url,
                 delivery_remark: remark
             }, { transaction: t });
@@ -527,6 +528,7 @@ export const markDelivered = async (req, res) => {
         await schedule.update({
             status: 'delivered',
             actual_delivery_date: new Date().toISOString().split('T')[0],
+            delivered_at: new Date(),
             delivery_boy_id: req.user.id,
             delivery_remark: remark || null,
             delivery_photo_url: photo_url || null
@@ -989,9 +991,12 @@ export const getCompletedDeliveries = async (req, res) => {
             }
         }
 
-        // Ensure delivery_time_slot is set on each delivery
+        // Ensure delivery_time_slot and delivered_at are set on each delivery
         for (const delivery of deliveriesData) {
             delivery.delivery_time_slot = delivery.delivery_time_slot || delivery.Subscription?.delivery_time_slot || null;
+            if (!delivery.delivered_at && delivery.actual_delivery_date) {
+                delivery.delivered_at = delivery.actual_delivery_date;
+            }
         }
 
         // Fetch all distinct delivery boys who have completed at least one delivery
@@ -1141,7 +1146,7 @@ export const getProductDemands = async (req, res) => {
         }
 
         const schedules = await DeliverySchedule.findAll({
-            where: { scheduled_date: dateStr, status: 'pending' },
+            where: { scheduled_date: dateStr, status: { [Op.ne]: 'skipped' } },
             include: [
                 {
                     model: Subscription,
@@ -1167,7 +1172,7 @@ export const getProductDemands = async (req, res) => {
         });
 
         const retailOrders = await RetailOrder.findAll({
-            where: { delivery_date: dateStr, delivery_status: 'pending' },
+            where: { delivery_date: dateStr, delivery_status: { [Op.ne]: 'cancelled' } },
             include: [
                 { model: User, attributes: ['id', 'name', 'phone', 'status'] },
                 { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] },
@@ -1501,10 +1506,23 @@ export const getAllOrdersForDate = async (req, res) => {
             dateStr = today.toISOString().split('T')[0];
         }
 
+        const isDispatchMode = req.query.dispatch === 'true' || req.query.dispatch === true;
+        const statusParam = req.query.status;
+
+        let statusFilter = ['pending', 'ready_for_delivery'];
+        if (!isDispatchMode) {
+            // In "All Orders" view, show all scheduled orders for the day (pending, ready, delivered)
+            statusFilter = ['pending', 'ready_for_delivery', 'delivered'];
+        }
+        if (statusParam && statusParam !== 'all') {
+            statusFilter = Array.isArray(statusParam) ? statusParam : [statusParam];
+        }
+
         const schedules = await DeliverySchedule.findAll({
-            where: { scheduled_date: dateStr, status: ['pending', 'ready_for_delivery'] },
+            where: { scheduled_date: dateStr, status: statusFilter },
             include: [
                 { model: Batch },
+                { model: User, as: 'DeliveryBoy', attributes: ['id', 'name', 'phone'] },
                 {
                     model: Subscription,
                     include: [
@@ -1527,10 +1545,11 @@ export const getAllOrdersForDate = async (req, res) => {
         });
 
         const retailOrders = await RetailOrder.findAll({
-            where: { delivery_date: dateStr, delivery_status: ['pending', 'ready_for_delivery'] },
+            where: { delivery_date: dateStr, delivery_status: statusFilter },
             include: [
                 { model: Batch },
                 { model: User, attributes: ['id', 'name', 'phone', 'status'] },
+                { model: User, as: 'DeliveryBoy', attributes: ['id', 'name', 'phone'] },
                 { model: Address },
                 { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
             ]
@@ -1579,8 +1598,6 @@ export const getAllOrdersForDate = async (req, res) => {
             if (!addr) return "No Address Provided";
             return `${addr.address_line}${addr.landmark ? ', ' + addr.landmark : ''}, ${addr.city} - ${addr.pincode}`;
         };
-
-        const isDispatchMode = req.query.dispatch === 'true' || req.query.dispatch === true;
 
         // Fetch all batch IDs from schedules and retail orders to check task stages
         const allBatchIds = new Set();
@@ -1818,11 +1835,16 @@ export const getAllOrdersForDate = async (req, res) => {
                 }
             }
 
+            const boyInfo = s.DeliveryBoy ? { id: s.DeliveryBoy.id, name: s.DeliveryBoy.name, phone: s.DeliveryBoy.phone } : null;
+            const boyName = s.DeliveryBoy ? s.DeliveryBoy.name : null;
+
             const addresses = [{
                 address: addrStr,
                 batch_id: s.batch_id,
                 delivery_time_slot: slot,
                 delivery_boy_id: s.delivery_boy_id,
+                delivery_boy: boyInfo,
+                delivery_boy_name: boyName,
                 status: s.status,
                 scheduleIds: [s.id],
                 retailOrderIds: [],
@@ -1847,6 +1869,8 @@ export const getAllOrdersForDate = async (req, res) => {
                 batch_id: s.batch_id,
                 delivery_time_slot: slot,
                 delivery_boy_id: s.delivery_boy_id,
+                delivery_boy: boyInfo,
+                delivery_boy_name: boyName,
                 allScheduleIds: [s.id],
                 allRetailOrderIds: [],
                 totalItems: totalItems,
@@ -1911,11 +1935,16 @@ export const getAllOrdersForDate = async (req, res) => {
                     if (totalItems.length === 0) continue;
                 }
             }
+            const boyInfo = r.DeliveryBoy ? { id: r.DeliveryBoy.id, name: r.DeliveryBoy.name, phone: r.DeliveryBoy.phone } : null;
+            const boyName = r.DeliveryBoy ? r.DeliveryBoy.name : null;
+
             const addresses = [{
                 address: addrStr,
                 batch_id: r.batch_id,
                 delivery_time_slot: r.delivery_time_slot || null,
                 delivery_boy_id: r.delivery_boy_id,
+                delivery_boy: boyInfo,
+                delivery_boy_name: boyName,
                 status: r.delivery_status,
                 scheduleIds: [],
                 retailOrderIds: [r.id],
@@ -1935,6 +1964,8 @@ export const getAllOrdersForDate = async (req, res) => {
                 batch_id: r.batch_id,
                 delivery_time_slot: r.delivery_time_slot || null,
                 delivery_boy_id: r.delivery_boy_id,
+                delivery_boy: boyInfo,
+                delivery_boy_name: boyName,
                 allScheduleIds: [],
                 allRetailOrderIds: [r.id],
                 totalItems: totalItems,
@@ -3051,6 +3082,7 @@ export const updateDeliveryScheduleStatus = async (req, res) => {
 
         if (status === 'delivered') {
             updateData.actual_delivery_date = schedule.scheduled_date || new Date().toISOString().split('T')[0];
+            updateData.delivered_at = new Date();
             if (oldStatus !== 'delivered' && schedule.Subscription) {
                 const sub = schedule.Subscription;
                 const newCompleted = (sub.services_completed || 0) + 1;
@@ -3062,6 +3094,7 @@ export const updateDeliveryScheduleStatus = async (req, res) => {
             }
         } else if (oldStatus === 'delivered' && status !== 'delivered') {
             updateData.actual_delivery_date = null;
+            updateData.delivered_at = null;
             if (schedule.Subscription) {
                 const sub = schedule.Subscription;
                 const newCompleted = Math.max(0, (sub.services_completed || 0) - 1);

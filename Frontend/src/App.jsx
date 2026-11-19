@@ -192,6 +192,7 @@ function App() {
           <Route path="/admin/today-work/missing" element={<Missing />} />
           <Route path="/admin/today-work/ready" element={<ReadyForDeliver />} />
           <Route path="/admin/today-work/assign-delivery" element={<AssignDeliveryBoy />} />
+          <Route path="/assign-delivery" element={<AssignDeliveryBoy />} />
           <Route path="/admin/today-work/dispatch" element={<DispatchOrders />} />
           <Route path="/admin/today-work/return-item" element={<ReturnItem />} />
 

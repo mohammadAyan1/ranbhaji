@@ -26,10 +26,10 @@ router.get("/admin/deliveries", requireAuth, requireRole(["admin"]), getComplete
 router.get("/admin/returns", requireAuth, requireRole(["admin"]), getReturns);
 router.get("/admin/demands", optionalAuth, getProductDemands);
 router.get("/admin/seasonal-selections", requireAuth, requireRole(["admin"]), getAdminSeasonalSelections);
-router.get("/admin/orders", requireAuth, requireRole(["admin"]), getAllOrdersForDate);
+router.get("/admin/orders", optionalAuth, getAllOrdersForDate);
 router.put("/admin/orders/assign-batch", requireAuth, requireRole(["admin"]), assignBatch);
-router.get("/admin/present-delivery-boys", requireAuth, requireRole(["admin"]), getPresentDeliveryBoys);
-router.put("/admin/orders/assign-delivery-boy", requireAuth, requireRole(["admin"]), assignDeliveryBoy);
+router.get("/admin/present-delivery-boys", optionalAuth, getPresentDeliveryBoys);
+router.put("/admin/orders/assign-delivery-boy", optionalAuth, assignDeliveryBoy);
 router.put("/admin/orders/pack", requireAuth, requireRole(["admin"]), packOrders);
 router.put("/admin/orders/requested-time", requireAuth, requireRole(["admin"]), updateRequestedTime);
 router.put("/admin/delivery-schedules/:id/status", requireAuth, requireRole(["admin"]), updateDeliveryScheduleStatus);
