@@ -85,9 +85,28 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-fade-in max-w-7xl mx-auto">
-      <div>
-        <h1 className="page-header flex items-center gap-2">Admin Dashboard <ShieldAlert className="text-red-600" size={28} /></h1>
-        <p className="page-sub">Live operations overview and quick navigation</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="page-header flex items-center gap-2">
+            Admin Dashboard <ShieldAlert className="text-red-600" size={28} />
+          </h1>
+          <p className="page-sub">Live operations overview and quick navigation</p>
+        </div>
+
+        {/* Current Date Display */}
+        <div className="flex items-center gap-2.5 px-4 py-2 bg-white rounded-xl border border-gray-200/90 shadow-sm text-gray-700 self-start sm:self-auto">
+          <Calendar className="text-green-600 w-5 h-5 flex-shrink-0" />
+          <div className="text-sm">
+            <span className="font-semibold text-gray-900">
+              {new Date().toLocaleDateString("en-IN", {
+                weekday: "long",
+                day: "numeric",
+                month: "short",
+                year: "numeric"
+              })}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Main Operational Metrics */}

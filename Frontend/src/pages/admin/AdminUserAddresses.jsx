@@ -14,7 +14,7 @@ export default function AdminUserAddresses() {
   const [formData, setFormData] = useState({
     user_id: "",
     address_line: "",
-    city: "Nagpur",
+    city: "Bhopal",
     pincode: "",
     landmark: "",
     zone: ""
@@ -56,7 +56,7 @@ export default function AdminUserAddresses() {
       await api.post("/addresses/admin/create", formData);
       setMsg("✅ Address added successfully!");
       setShowModal(false);
-      setFormData({ user_id: "", address_line: "", city: "Nagpur", pincode: "", landmark: "", zone: "" });
+      setFormData({ user_id: "", address_line: "", city: "Bhopal", pincode: "", landmark: "", zone: "" });
       fetchUsers();
     } catch (err) {
       setMsg(`❌ Failed to add address: ${err.response?.data?.message || err.message}`);

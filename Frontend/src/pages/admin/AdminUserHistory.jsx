@@ -38,7 +38,7 @@ export default function AdminUserHistory() {
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [addressForm, setAddressForm] = useState({
     address_line: "",
-    city: "Nagpur",
+    city: "Bhopal",
     pincode: "",
     landmark: "",
     zone: ""
@@ -46,7 +46,7 @@ export default function AdminUserHistory() {
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [batches, setBatches] = useState([]);
-  
+
   const [batchFormData, setBatchFormData] = useState({
     sub_id: "",
     is_water: false,
@@ -253,7 +253,7 @@ export default function AdminUserHistory() {
         ...formData
       });
       setActionMsg("✅ Package action successful!");
-      
+
       // Refresh analytics
       setLoading(true);
       const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
@@ -478,7 +478,7 @@ export default function AdminUserHistory() {
       const endpoint = batchFormData.is_water ? `/admin/water/${batchFormData.sub_id}/batch` : `/admin/subscriptions/${batchFormData.sub_id}/batch`;
       await api.patch(endpoint, { batch_id: batchFormData.batch_id });
       setActionMsg("✅ Batch updated successfully!");
-      
+
       // Refresh analytics
       setLoading(true);
       const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
@@ -505,7 +505,7 @@ export default function AdminUserHistory() {
         ...addressForm
       });
       setActionMsg("✅ Address added successfully!");
-      
+
       setLoading(true);
       const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
       setAnalytics(res.data.analytics);
@@ -514,7 +514,7 @@ export default function AdminUserHistory() {
       setLoading(false);
 
       setShowAddressModal(false);
-      setAddressForm({ address_line: "", city: "Nagpur", pincode: "", landmark: "", zone: "" });
+      setAddressForm({ address_line: "", city: "Bhopal", pincode: "", landmark: "", zone: "" });
     } catch (err) {
       setActionMsg(`❌ Action failed: ${err.response?.data?.message || err.message}`);
     } finally {
@@ -529,11 +529,11 @@ export default function AdminUserHistory() {
           <h1 className="page-header">User Purchase History 🔍</h1>
           <p className="page-sub">Deep dive into a specific user's packages and retail orders</p>
         </div>
-        
+
         <div className="flex flex-col bg-white p-2 rounded-xl shadow-sm border border-gray-100 min-w-[250px]">
           <label className="text-gray-500 text-[10px] font-bold uppercase tracking-wider px-1">Select User</label>
-          <select 
-            value={selectedUserId} 
+          <select
+            value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
             className="input text-sm py-1.5 px-3 border-none shadow-none focus:ring-0 cursor-pointer"
           >
@@ -559,23 +559,23 @@ export default function AdminUserHistory() {
           <button onClick={() => setShowAddressModal(true)} className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100">
             <span>📍</span> Add Address
           </button>
-          <button 
+          <button
             onClick={() => {
               setDiscountPercent(currentUserInfo?.discount_percentage ?? "0");
               setShowDiscountModal(true);
-            }} 
+            }}
             className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors shadow-2xs"
           >
             <span>🏷️</span> Set Retail Discount
           </button>
-          <button 
+          <button
             onClick={() => {
               setWaterDiscountError("");
               const firstId = waterProducts.length > 0 ? waterProducts[0].id.toString() : "";
               setWaterDiscountForm({ product_id: firstId, discount_percentage: "", bottles_count: "1" });
               setShowWaterDiscountModal(true);
               fetchFreshWaterDiscounts();
-            }} 
+            }}
             className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100 transition-colors shadow-2xs"
           >
             <span>💧</span> Set Water Discount ({waterDiscounts.length} Tier{waterDiscounts.length === 1 ? '' : 's'})
@@ -661,11 +661,10 @@ export default function AdminUserHistory() {
                 <button
                   type="button"
                   onClick={() => setShowRetailDiscount(prev => !prev)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-bold transition-all cursor-pointer ${
-                    showRetailDiscount && parseFloat(currentUserInfo.discount_percentage || 0) > 0
-                      ? "bg-purple-100 text-purple-800"
-                      : "bg-white text-gray-600 hover:bg-gray-50 hover:text-purple-700"
-                  }`}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-bold transition-all cursor-pointer ${showRetailDiscount && parseFloat(currentUserInfo.discount_percentage || 0) > 0
+                    ? "bg-purple-100 text-purple-800"
+                    : "bg-white text-gray-600 hover:bg-gray-50 hover:text-purple-700"
+                    }`}
                   title={showRetailDiscount ? "Click to hide discount" : "Click to view discount"}
                 >
                   <span>{showRetailDiscount ? "🏷️" : "🔒"}</span>
@@ -696,11 +695,10 @@ export default function AdminUserHistory() {
                   setShowWaterDiscountModal(true);
                   fetchFreshWaterDiscounts();
                 }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition-all hover:scale-105 cursor-pointer ${
-                  waterDiscounts.length > 0
-                    ? "bg-sky-100 text-sky-800 border-sky-300 shadow-2xs"
-                    : "bg-white text-gray-500 border-gray-200 hover:border-sky-300 hover:text-sky-700"
-                }`}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold border transition-all hover:scale-105 cursor-pointer ${waterDiscounts.length > 0
+                  ? "bg-sky-100 text-sky-800 border-sky-300 shadow-2xs"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-sky-300 hover:text-sky-700"
+                  }`}
                 title="Click to view & configure water discount tiers"
               >
                 <span>💧</span>
@@ -746,17 +744,17 @@ export default function AdminUserHistory() {
               <button onClick={() => { setShowAssignModal(false); setShowRenewModal(false); }} className="text-gray-400 hover:text-gray-600">✖</button>
             </div>
             {actionMsg && (
-                <div className={`mx-6 mt-4 p-3 rounded-lg text-sm border ${actionMsg.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                    {actionMsg}
-                </div>
+              <div className={`mx-6 mt-4 p-3 rounded-lg text-sm border ${actionMsg.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                {actionMsg}
+              </div>
             )}
             <form onSubmit={(e) => handleAction(e, showAssignModal ? 'assign' : 'renew')} className="p-6 space-y-4">
               <div>
                 <label className="label text-xs uppercase tracking-wider mb-1 block">Select Package</label>
-                <select 
-                  className="input w-full text-sm" 
-                  value={formData.package_id} 
-                  onChange={e => setFormData({...formData, package_id: e.target.value})}
+                <select
+                  className="input w-full text-sm"
+                  value={formData.package_id}
+                  onChange={e => setFormData({ ...formData, package_id: e.target.value })}
                   required
                 >
                   <option value="">-- Choose Package --</option>
@@ -765,14 +763,14 @@ export default function AdminUserHistory() {
                   ))}
                 </select>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label text-xs uppercase tracking-wider mb-1 block">Plan Type</label>
-                  <select 
-                    className="input w-full text-sm" 
-                    value={formData.type} 
-                    onChange={e => setFormData({...formData, type: e.target.value})}
+                  <select
+                    className="input w-full text-sm"
+                    value={formData.type}
+                    onChange={e => setFormData({ ...formData, type: e.target.value })}
                   >
                     <option value="monthly">Monthly</option>
                     <option value="yearly">Yearly (-25%)</option>
@@ -780,11 +778,11 @@ export default function AdminUserHistory() {
                 </div>
                 <div>
                   <label className="label text-xs uppercase tracking-wider mb-1 block">Start Date</label>
-                  <input 
-                    type="date" 
-                    className="input w-full text-sm" 
-                    value={formData.start_date} 
-                    onChange={e => setFormData({...formData, start_date: e.target.value})}
+                  <input
+                    type="date"
+                    className="input w-full text-sm"
+                    value={formData.start_date}
+                    onChange={e => setFormData({ ...formData, start_date: e.target.value })}
                     required
                   />
                 </div>
@@ -792,10 +790,10 @@ export default function AdminUserHistory() {
 
               <div>
                 <label className="label text-xs uppercase tracking-wider mb-1 block">Select Delivery Address</label>
-                <select 
-                  className="input w-full text-sm" 
-                  value={formData.address_id} 
-                  onChange={e => setFormData({...formData, address_id: e.target.value})}
+                <select
+                  className="input w-full text-sm"
+                  value={formData.address_id}
+                  onChange={e => setFormData({ ...formData, address_id: e.target.value })}
                   required
                 >
                   <option value="">-- Choose User's Address --</option>
@@ -806,7 +804,7 @@ export default function AdminUserHistory() {
                   ))}
                 </select>
                 {(!selectedUser?.Addresses || selectedUser.Addresses.length === 0) && (
-                    <p className="text-xs text-red-500 mt-1">This user has no saved addresses. Please create one in User Addresses tab first.</p>
+                  <p className="text-xs text-red-500 mt-1">This user has no saved addresses. Please create one in User Addresses tab first.</p>
                 )}
               </div>
 
@@ -830,17 +828,17 @@ export default function AdminUserHistory() {
               <button onClick={() => setShowBatchModal(false)} className="text-gray-400 hover:text-gray-600">✖</button>
             </div>
             {actionMsg && (
-                <div className={`mx-6 mt-4 p-3 rounded-lg text-sm border ${actionMsg.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                    {actionMsg}
-                </div>
+              <div className={`mx-6 mt-4 p-3 rounded-lg text-sm border ${actionMsg.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                {actionMsg}
+              </div>
             )}
             <form onSubmit={handleBatchUpdate} className="p-6 space-y-4">
               <div>
                 <label className="label text-xs uppercase tracking-wider mb-1 block">Select Batch</label>
-                <select 
-                  className="input w-full text-sm" 
-                  value={batchFormData.batch_id} 
-                  onChange={e => setBatchFormData({...batchFormData, batch_id: e.target.value})}
+                <select
+                  className="input w-full text-sm"
+                  value={batchFormData.batch_id}
+                  onChange={e => setBatchFormData({ ...batchFormData, batch_id: e.target.value })}
                   required
                 >
                   <option value="">-- Choose Batch --</option>
@@ -872,8 +870,8 @@ export default function AdminUserHistory() {
                 </h2>
                 <p className="text-xs text-purple-200 mt-0.5">{currentUserInfo?.name} ({currentUserInfo?.phone})</p>
               </div>
-              <button 
-                onClick={() => setShowDiscountModal(false)} 
+              <button
+                onClick={() => setShowDiscountModal(false)}
                 className="text-white hover:bg-white/20 p-1.5 rounded-full transition-colors"
               >
                 ✕
@@ -932,11 +930,10 @@ export default function AdminUserHistory() {
                       type="button"
                       key={val}
                       onClick={() => setDiscountPercent(val.toString())}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
-                        parseFloat(discountPercent) === val
-                          ? "bg-purple-600 text-white border-purple-600 shadow-xs"
-                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-purple-50 hover:border-purple-200"
-                      }`}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${parseFloat(discountPercent) === val
+                        ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                        : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-purple-50 hover:border-purple-200"
+                        }`}
                     >
                       {val === 0 ? "No Discount (0%)" : `${val}%`}
                     </button>
@@ -977,8 +974,8 @@ export default function AdminUserHistory() {
                 </h2>
                 <p className="text-xs text-sky-100 mt-0.5">{currentUserInfo?.name} ({currentUserInfo?.phone})</p>
               </div>
-              <button 
-                onClick={() => setShowWaterDiscountModal(false)} 
+              <button
+                onClick={() => setShowWaterDiscountModal(false)}
                 className="text-white hover:bg-white/20 p-1.5 rounded-full transition-colors"
               >
                 ✕
@@ -1029,8 +1026,8 @@ export default function AdminUserHistory() {
                       const isHighestForProduct = productTiers.length > 0 && bottles === Math.max(...productTiers.map(d => parseInt(d.bottles_count)));
 
                       return (
-                        <div 
-                          key={tier.id} 
+                        <div
+                          key={tier.id}
                           className="flex items-center justify-between p-3 rounded-xl border border-sky-100 bg-gradient-to-r from-sky-50/60 to-white hover:border-sky-300 transition-all shadow-2xs"
                         >
                           <div className="space-y-1">
@@ -1131,11 +1128,10 @@ export default function AdminUserHistory() {
                         type="button"
                         key={val}
                         onClick={() => setWaterDiscountForm(prev => ({ ...prev, discount_percentage: val.toString() }))}
-                        className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border transition-all ${
-                          parseFloat(waterDiscountForm.discount_percentage) === val
-                            ? 'bg-sky-600 text-white border-sky-600'
-                            : 'bg-white text-gray-600 border-gray-200 hover:bg-sky-50 hover:border-sky-200'
-                        }`}
+                        className={`text-[11px] px-2 py-0.5 rounded-md font-semibold border transition-all ${parseFloat(waterDiscountForm.discount_percentage) === val
+                          ? 'bg-sky-600 text-white border-sky-600'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-sky-50 hover:border-sky-200'
+                          }`}
                       >
                         {val}%
                       </button>
@@ -1169,8 +1165,8 @@ export default function AdminUserHistory() {
                   {/* Quick bottle selectors */}
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {[1, 2, 3, 4, 5].map(b => {
-                      const alreadyUsed = waterDiscounts.some(d => 
-                        parseInt(d.product_id) === parseInt(waterDiscountForm.product_id) && 
+                      const alreadyUsed = waterDiscounts.some(d =>
+                        parseInt(d.product_id) === parseInt(waterDiscountForm.product_id) &&
                         parseInt(d.bottles_count) === b
                       );
                       return (
@@ -1178,13 +1174,12 @@ export default function AdminUserHistory() {
                           type="button"
                           key={b}
                           onClick={() => setWaterDiscountForm(prev => ({ ...prev, bottles_count: b.toString() }))}
-                          className={`text-[11px] px-2.5 py-1 rounded-md font-semibold border transition-all ${
-                            parseInt(waterDiscountForm.bottles_count) === b
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                              : alreadyUsed
+                          className={`text-[11px] px-2.5 py-1 rounded-md font-semibold border transition-all ${parseInt(waterDiscountForm.bottles_count) === b
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : alreadyUsed
                               ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
                               : 'bg-white text-gray-700 border-gray-200 hover:bg-blue-50 hover:border-blue-200'
-                          }`}
+                            }`}
                           title={alreadyUsed ? `${b} bottle tier already exists for selected product` : ""}
                         >
                           {b} Bottle{b > 1 ? 's' : ''} {alreadyUsed ? '(Exists)' : ''}
@@ -1429,9 +1424,8 @@ export default function AdminUserHistory() {
                     return (
                       <div
                         key={sp.product_id}
-                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                          isSelected ? 'border-emerald-300 bg-emerald-50/50' : 'border-gray-200 bg-white hover:border-gray-300'
-                        }`}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${isSelected ? 'border-emerald-300 bg-emerald-50/50' : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
                       >
                         <div>
                           <p className={`font-semibold text-xs ${isSelected ? 'text-emerald-900 font-bold' : 'text-gray-800'}`}>
@@ -1503,9 +1497,8 @@ export default function AdminUserHistory() {
                     type="button"
                     onClick={handleSaveServingItems}
                     disabled={savingServingItems || isOverBudget}
-                    className={`btn-primary text-xs px-6 py-2 flex items-center gap-2 ${
-                      isOverBudget ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-fresh-600 hover:bg-fresh-500 cursor-pointer'
-                    }`}
+                    className={`btn-primary text-xs px-6 py-2 flex items-center gap-2 ${isOverBudget ? 'bg-gray-400 cursor-not-allowed opacity-60' : 'bg-fresh-600 hover:bg-fresh-500 cursor-pointer'
+                      }`}
                   >
                     {savingServingItems ? (
                       <span>Saving...</span>
@@ -1531,7 +1524,7 @@ export default function AdminUserHistory() {
         const currentFormatted = currentRawDate ? new Date(currentRawDate).toLocaleDateString("en-IN", {
           weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
         }) : "N/A";
-        
+
         const isSundaySelected = rescheduleModal.newDate ? (new Date(rescheduleModal.newDate + 'T00:00:00').getDay() === 0) : false;
 
         return (
@@ -1645,7 +1638,7 @@ export default function AdminUserHistory() {
         <div className="space-y-6">
           {/* Quick Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div 
+            <div
               onClick={() => setShowWalletModal(true)}
               className="card bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 shadow-2xs hover:shadow-md transition-shadow cursor-pointer"
               title="Click to adjust wallet"
@@ -1674,7 +1667,7 @@ export default function AdminUserHistory() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
+
             {/* 1. Package History */}
             <div className="card flex flex-col h-full">
               <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -1703,11 +1696,10 @@ export default function AdminUserHistory() {
                               </span>
                             )}
                             {pkg.status && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                                pkg.status === 'active' ? 'bg-green-100 text-green-700' :
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${pkg.status === 'active' ? 'bg-green-100 text-green-700' :
                                 pkg.status === 'completed' ? 'bg-gray-200 text-gray-700' :
-                                'bg-yellow-100 text-yellow-700'
-                              }`}>
+                                  'bg-yellow-100 text-yellow-700'
+                                }`}>
                                 {pkg.status}
                               </span>
                             )}
@@ -1738,12 +1730,12 @@ export default function AdminUserHistory() {
                       <div className="p-3 bg-white">
                         {pkg.is_water && (
                           <div className="flex gap-2 mb-2">
-                             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">
-                               Container: {pkg.container}
-                             </span>
-                             <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold border border-indigo-200">
-                               Frequency: {pkg.frequency}
-                             </span>
+                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200">
+                              Container: {pkg.container}
+                            </span>
+                            <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold border border-indigo-200">
+                              Frequency: {pkg.frequency}
+                            </span>
                           </div>
                         )}
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Package Services (Products)</p>
@@ -1763,13 +1755,13 @@ export default function AdminUserHistory() {
                           <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Subscription Timeline</p>
                           <ul className="text-[11px] text-gray-600 space-y-1 list-disc list-inside ml-1">
                             {pkg.history && pkg.history.length > 0 ? (
-                               pkg.history.map((hDate, hi) => (
-                                 <li key={hi}>
-                                   {hi === 0 ? <span className="font-semibold text-gray-800">Package Register Date:</span> : <span className="font-semibold text-blue-700">Renewed ({hi}):</span>} {new Date(hDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
-                                 </li>
-                               ))
+                              pkg.history.map((hDate, hi) => (
+                                <li key={hi}>
+                                  {hi === 0 ? <span className="font-semibold text-gray-800">Package Register Date:</span> : <span className="font-semibold text-blue-700">Renewed ({hi}):</span>} {new Date(hDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </li>
+                              ))
                             ) : (
-                               <li>No history available</li>
+                              <li>No history available</li>
                             )}
                           </ul>
                         </div>
@@ -1885,12 +1877,11 @@ export default function AdminUserHistory() {
                                           value={serving.status}
                                           disabled={statusUpdatingId === serving.id}
                                           onChange={(e) => handleUpdateServingStatus(serving.id, e.target.value)}
-                                          className={`text-xs font-semibold px-2 py-1 rounded-lg border cursor-pointer ${
-                                            serving.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-300' :
+                                          className={`text-xs font-semibold px-2 py-1 rounded-lg border cursor-pointer ${serving.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-300' :
                                             serving.status === 'ready_for_delivery' ? 'bg-blue-50 text-blue-700 border-blue-300' :
-                                            serving.status === 'skipped' ? 'bg-gray-100 text-gray-600 border-gray-300' :
-                                            'bg-amber-50 text-amber-700 border-amber-300'
-                                          }`}
+                                              serving.status === 'skipped' ? 'bg-gray-100 text-gray-600 border-gray-300' :
+                                                'bg-amber-50 text-amber-700 border-amber-300'
+                                            }`}
                                         >
                                           <option value="pending">⏳ Pending</option>
                                           <option value="ready_for_delivery">🚚 Ready for Delivery</option>
@@ -1920,7 +1911,7 @@ export default function AdminUserHistory() {
                                               key={`fi_${fIdx}`}
                                               className="bg-white border border-gray-200 text-gray-700 text-[10px] px-2 py-0.5 rounded-md font-medium"
                                             >
-                                              {fi.name} <strong className="text-gray-900">{fi.qty_gm >= 1000 ? `${(fi.qty_gm/1000).toFixed(2)}kg` : `${fi.qty_gm}${fi.unit || 'g'}`}</strong>
+                                              {fi.name} <strong className="text-gray-900">{fi.qty_gm >= 1000 ? `${(fi.qty_gm / 1000).toFixed(2)}kg` : `${fi.qty_gm}${fi.unit || 'g'}`}</strong>
                                             </span>
                                           ))
                                         ) : null}
@@ -1932,7 +1923,7 @@ export default function AdminUserHistory() {
                                               key={`si_${sIdx2}`}
                                               className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] px-2 py-0.5 rounded-md font-medium flex items-center gap-1"
                                             >
-                                              <span className="text-emerald-500">🌿</span> {si.name} <strong className="text-emerald-900">{si.qty_gm >= 1000 ? `${(si.qty_gm/1000).toFixed(2)}kg` : `${si.qty_gm}${si.unit || 'g'}`}</strong>
+                                              <span className="text-emerald-500">🌿</span> {si.name} <strong className="text-emerald-900">{si.qty_gm >= 1000 ? `${(si.qty_gm / 1000).toFixed(2)}kg` : `${si.qty_gm}${si.unit || 'g'}`}</strong>
                                             </span>
                                           ))
                                         ) : (
@@ -1985,17 +1976,16 @@ export default function AdminUserHistory() {
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                            {new Date(order.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                            {new Date(order.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </p>
                           <p className="text-[10px] text-gray-400 mt-0.5">Order #{order.orderId}</p>
                         </div>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                          order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                        }`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
                           {order.status}
                         </span>
                       </div>
-                      
+
                       <div className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
                         <div className="flex flex-col gap-1.5">
                           {order.items.map((item, i) => (
@@ -2046,7 +2036,7 @@ export default function AdminUserHistory() {
             <p className="text-sm text-gray-500 mb-4">
               A complete aggregation of every product this user has received, broken down by source (Retail vs. Packages).
             </p>
-            
+
             {analytics.totalProducts.length === 0 ? (
               <p className="text-gray-500 text-sm italic py-4">No product quantities recorded.</p>
             ) : (
@@ -2156,8 +2146,8 @@ export default function AdminUserHistory() {
         </div>
       )}
 
-      <AdjustWalletModal 
-        isOpen={showWalletModal} 
+      <AdjustWalletModal
+        isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
         user={selectedUser}
         onSuccess={() => {
@@ -2187,27 +2177,27 @@ export default function AdminUserHistory() {
             <form onSubmit={handleAddAddress} className="p-6 space-y-4">
               <div>
                 <label className="label text-xs uppercase tracking-wider mb-1 block">Address Line</label>
-                <textarea 
-                  className="input w-full text-sm" 
+                <textarea
+                  className="input w-full text-sm"
                   rows="2"
-                  value={addressForm.address_line} 
-                  onChange={e => setAddressForm({...addressForm, address_line: e.target.value})}
+                  value={addressForm.address_line}
+                  onChange={e => setAddressForm({ ...addressForm, address_line: e.target.value })}
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label text-xs uppercase tracking-wider mb-1 block">City</label>
-                  <input type="text" className="input w-full text-sm" value={addressForm.city} onChange={e => setAddressForm({...addressForm, city: e.target.value})} required />
+                  <input type="text" className="input w-full text-sm" value={addressForm.city} onChange={e => setAddressForm({ ...addressForm, city: e.target.value })} required />
                 </div>
                 <div>
                   <label className="label text-xs uppercase tracking-wider mb-1 block">Pincode</label>
-                  <input type="text" className="input w-full text-sm" value={addressForm.pincode} onChange={e => setAddressForm({...addressForm, pincode: e.target.value})} required />
+                  <input type="text" className="input w-full text-sm" value={addressForm.pincode} onChange={e => setAddressForm({ ...addressForm, pincode: e.target.value })} required />
                 </div>
               </div>
               <div>
                 <label className="label text-xs uppercase tracking-wider mb-1 block">Landmark (Optional)</label>
-                <input type="text" className="input w-full text-sm" value={addressForm.landmark} onChange={e => setAddressForm({...addressForm, landmark: e.target.value})} />
+                <input type="text" className="input w-full text-sm" value={addressForm.landmark} onChange={e => setAddressForm({ ...addressForm, landmark: e.target.value })} />
               </div>
               <button type="submit" disabled={saving} className="btn-primary w-full py-3">
                 {saving ? "Saving..." : "Add Address"}
@@ -2225,7 +2215,7 @@ export default function AdminUserHistory() {
               <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
                 <span>📍</span> Saved Addresses ({userAddresses.length})
               </h3>
-              <button 
+              <button
                 onClick={() => setShowAllAddressesModal(false)}
                 className="text-gray-400 hover:text-gray-600 p-1 rounded-lg text-lg"
               >

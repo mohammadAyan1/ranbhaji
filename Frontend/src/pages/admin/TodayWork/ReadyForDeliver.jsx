@@ -22,7 +22,7 @@ export default function ReadyForDeliver() {
 
   const [expandedId, setExpandedId] = useState(null);
   const [packedQuantities, setPackedQuantities] = useState({});
-  const [uncheckedItems, setUncheckedItems] = useState({});
+  const [checkedItems, setCheckedItems] = useState({});
 
   // Requested Time editing state
   const [editingOrderTime, setEditingOrderTime] = useState(null);
@@ -76,34 +76,34 @@ export default function ReadyForDeliver() {
       const { data } = await api.get(`/admin/orders?date=${date}&dispatch=true`);
       if (data.success) {
         const rawUsers = data.users || [];
-        const processedUsers = rawUsers.map(u => {
-          const filteredAddresses = (u.addresses || []).map(addrGrp => {
-            const completedItems = (addrGrp.items || []).filter(item => item.is_production_completed === true);
-            return {
-              ...addrGrp,
-              items: completedItems
-            };
-          });
-          const allCompletedItems = filteredAddresses.flatMap(a => a.items);
-          return {
-            ...u,
-            addresses: filteredAddresses,
-            totalItems: allCompletedItems
-          };
-        }).filter(u => u.totalItems && u.totalItems.length > 0);
+        setUsers(rawUsers);
 
-        setUsers(processedUsers);
-        const initialUnchecked = {};
-        processedUsers.forEach(u => {
-          u.addresses.forEach((addrGrp, idx) => {
-            addrGrp.items.forEach(item => {
-              if (item.isPackedSet && parseFloat(item.packedQty) === 0 && parseFloat(item.totalQty) > 0) {
-                initialUnchecked[`${u.user.id}-${idx}-${item.id}`] = true;
+        const initialChecked = {};
+        const initialPacked = {};
+
+        rawUsers.forEach(u => {
+          const orderKey = u.uniqueId || `${u.user.id}-${u.order_number || ''}`;
+          (u.addresses || []).forEach((addrGrp, idx) => {
+            const isOrderAlreadyPacked = addrGrp.status === 'ready_for_delivery' || (addrGrp.items || []).some(i => i.isPackedSet);
+
+            (addrGrp.items || []).forEach(item => {
+              const itemKey = `${orderKey}-${idx}-${item.id}`;
+              if (isOrderAlreadyPacked) {
+                // If order was already saved as ready_for_delivery or packed, keep packed items checked and 0-qty items unchecked!
+                const isPacked = item.isPackedSet ? (parseFloat(item.packedQty) > 0) : false;
+                initialChecked[itemKey] = isPacked;
+                initialPacked[itemKey] = item.isPackedSet ? item.packedQty : item.totalQty;
+              } else {
+                // By default UNCHECKED as requested
+                initialChecked[itemKey] = false;
+                initialPacked[itemKey] = item.totalQty;
               }
             });
           });
         });
-        setUncheckedItems(initialUnchecked);
+
+        setCheckedItems(initialChecked);
+        setPackedQuantities(initialPacked);
       }
     } catch (err) {
       alert('Failed to load orders');
@@ -127,28 +127,57 @@ export default function ReadyForDeliver() {
     }));
   };
 
-  const handleCheckChange = (orderKey, addressIdx, itemId, checked) => {
-    setUncheckedItems(prev => ({
+  const handleCheckChange = (orderKey, addressIdx, itemId, checked, totalQty) => {
+    const itemKey = `${orderKey}-${addressIdx}-${itemId}`;
+    setCheckedItems(prev => ({
       ...prev,
-      [`${orderKey}-${addressIdx}-${itemId}`]: !checked
+      [itemKey]: checked
     }));
+    setPackedQuantities(prev => ({
+      ...prev,
+      [itemKey]: checked ? (prev[itemKey] && parseFloat(prev[itemKey]) > 0 ? prev[itemKey] : totalQty) : 0
+    }));
+  };
+
+  const handleSelectCompletedOnly = (orderKey, addressIdx, itemsList) => {
+    setCheckedItems(prev => {
+      const next = { ...prev };
+      itemsList.forEach(item => {
+        const itemKey = `${orderKey}-${addressIdx}-${item.id}`;
+        next[itemKey] = Boolean(item.is_production_completed);
+      });
+      return next;
+    });
+    setPackedQuantities(prev => {
+      const next = { ...prev };
+      itemsList.forEach(item => {
+        const itemKey = `${orderKey}-${addressIdx}-${item.id}`;
+        if (item.is_production_completed) {
+          next[itemKey] = item.totalQty;
+        } else {
+          next[itemKey] = 0;
+        }
+      });
+      return next;
+    });
   };
 
   const handleMarkReady = async (orderKey, addressIdx, itemsList, scheduleIds, retailOrderIds) => {
     try {
       const itemsPayload = itemsList.map(item => {
-        const isUnchecked = uncheckedItems[`${orderKey}-${addressIdx}-${item.id}`];
-        const packedQty = packedQuantities[`${orderKey}-${addressIdx}-${item.id}`] ?? item.packedQty ?? 0;
+        const itemKey = `${orderKey}-${addressIdx}-${item.id}`;
+        const isChecked = Boolean(checkedItems[itemKey]);
+        const packedQty = isChecked ? (packedQuantities[itemKey] ?? item.totalQty ?? 0) : 0;
         return {
           id: item.id,
           packedQty: packedQty,
-          isChecked: !isUnchecked
+          isChecked: isChecked
         };
       });
 
       const hasInvalidItem = itemsPayload.some(item => item.isChecked && parseFloat(item.packedQty || 0) === 0);
       if (hasInvalidItem) {
-        alert("Please enter a Packed Quantity for checked items, or uncheck the product.");
+        alert("Please enter a Packed Quantity greater than 0 for checked items, or uncheck the product.");
         return;
       }
 
@@ -157,10 +186,10 @@ export default function ReadyForDeliver() {
         retailOrderIds,
         items: itemsPayload
       });
-      alert('Orders marked as Ready for Delivery');
+      alert('Order updated successfully!');
       fetchOrders();
     } catch (err) {
-      alert('Failed to mark as ready');
+      alert(err.response?.data?.message || 'Failed to update order');
     }
   };
 
@@ -432,18 +461,34 @@ export default function ReadyForDeliver() {
                                             </tr>
                                           </thead>
                                           <tbody className="divide-y divide-gray-50">
-                                            {addrGrp.items.map((item, i) => (
-                                              <tr key={i} className={`hover:bg-gray-50 transition-colors text-gray-700 ${uncheckedItems[`${orderKey}-${idx}-${item.id}`] ? 'opacity-50 line-through' : ''}`}>
+                                            {addrGrp.items.map((item, i) => {
+                                              const itemKey = `${orderKey}-${idx}-${item.id}`;
+                                              const isChecked = Boolean(checkedItems[itemKey]);
+                                              return (
+                                              <tr key={i} className={`hover:bg-gray-50 transition-colors text-gray-700 ${!isChecked ? 'opacity-60 bg-gray-50/40' : 'bg-white'}`}>
                                                 <td className="p-3 pl-4">
                                                   <input
                                                     type="checkbox"
                                                     className="w-4 h-4 text-fresh-500 bg-gray-100 border-gray-300 rounded focus:ring-fresh-500 cursor-pointer"
-                                                    checked={!uncheckedItems[`${orderKey}-${idx}-${item.id}`]}
-                                                    onChange={(e) => handleCheckChange(orderKey, idx, item.id, e.target.checked)}
+                                                    checked={isChecked}
+                                                    onChange={(e) => handleCheckChange(orderKey, idx, item.id, e.target.checked, item.totalQty)}
                                                   />
                                                 </td>
                                                 <td className="p-3 font-medium text-gray-900">
-                                                  {item.name} {item.hindi_name ? <span className="text-gray-500 font-normal text-xs ml-1">({item.hindi_name})</span> : ""}
+                                                  <div className="flex items-center gap-2 flex-wrap">
+                                                    <span>{item.name} {item.hindi_name ? <span className="text-gray-500 font-normal text-xs ml-1">({item.hindi_name})</span> : ""}</span>
+                                                    {item.is_production_completed ? (
+                                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded shadow-2xs">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                        Kitchen Done
+                                                      </span>
+                                                    ) : (
+                                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded shadow-2xs">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                        Kitchen Pending
+                                                      </span>
+                                                    )}
+                                                  </div>
                                                 </td>
                                                 <td className="p-3 text-purple-600 font-medium">
                                                   {item.packageQty > 0 ? formatQuantity(item.packageQty, item.unit) : '-'}
@@ -457,20 +502,24 @@ export default function ReadyForDeliver() {
                                                 <td className="p-3 pl-4 flex items-center gap-2">
                                                   <input
                                                     type="number"
-                                                    className="input-field py-1 px-2 text-sm w-20 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-fresh-500"
-                                                    value={packedQuantities[`${orderKey}-${idx}-${item.id}`] ?? (item.packedQty || 0)}
+                                                    className={`input-field py-1 px-2 text-sm w-20 border rounded-lg outline-none transition-colors ${isChecked ? 'bg-white border-gray-300 focus:border-fresh-500 font-semibold' : 'bg-gray-100 border-gray-200 text-gray-400'}`}
+                                                    value={packedQuantities[itemKey] ?? (isChecked ? (item.packedQty || item.totalQty) : 0)}
                                                     onChange={(e) => handlePackedQtyChange(orderKey, idx, item.id, e.target.value)}
                                                   />
                                                   <button
                                                     title="Auto-fill total required"
-                                                    onClick={() => handlePackedQtyChange(orderKey, idx, item.id, item.totalQty)}
+                                                    onClick={() => {
+                                                      handleCheckChange(orderKey, idx, item.id, true, item.totalQty);
+                                                      handlePackedQtyChange(orderKey, idx, item.id, item.totalQty);
+                                                    }}
                                                     className="bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md px-2 py-1 text-xs font-medium transition-colors border border-blue-100"
                                                   >
                                                     Fill
                                                   </button>
                                                 </td>
                                               </tr>
-                                            ))}
+                                            );
+                                            })}
                                           </tbody>
                                         </table>
                                       </div>
@@ -481,19 +530,62 @@ export default function ReadyForDeliver() {
                                       </div>
                                     )}
 
-                                    <div className="mt-5 flex justify-end">
-                                      <button
-                                        disabled={addrGrp.items.length === 0}
-                                        onClick={() => handleMarkReady(orderKey, idx, addrGrp.items, addrGrp.scheduleIds, addrGrp.retailOrderIds)}
-                                        className={`py-2 px-6 text-sm font-semibold rounded-xl transition-all ${
-                                          addrGrp.items.length === 0
-                                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                            : "btn-primary"
-                                        }`}
-                                      >
-                                        {addrGrp.status === 'ready_for_delivery' ? 'Update Ready for Delivery' : 'Mark Ready for Delivery'}
-                                      </button>
-                                    </div>
+                                    {/* Worker Completed Products Panel & Actions */}
+                                    {(() => {
+                                      const completedItems = (addrGrp.items || []).filter(i => i.is_production_completed);
+                                      return (
+                                        <div className="mt-5 p-4 rounded-xl bg-gray-50 border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                              <span className="text-xs font-bold text-gray-800 uppercase tracking-wide">
+                                                Worker Completed Products (in this order):
+                                              </span>
+                                            </div>
+                                            {completedItems.length > 0 ? (
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                {completedItems.map((cItem, cIdx) => (
+                                                  <span 
+                                                    key={cIdx} 
+                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-100/90 text-emerald-800 border border-emerald-300 shadow-2xs"
+                                                  >
+                                                    <span className="text-emerald-600 font-bold">✓</span>
+                                                    <span>{cItem.name}</span>
+                                                    <span className="text-[11px] text-emerald-700 font-mono">({formatQuantity(cItem.totalQty, cItem.unit)})</span>
+                                                  </span>
+                                                ))}
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleSelectCompletedOnly(orderKey, idx, addrGrp.items)}
+                                                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-300 px-3 py-1 rounded-lg transition-all shadow-xs cursor-pointer ml-1 hover:border-emerald-400"
+                                                  title="Click to check only worker-completed items"
+                                                >
+                                                  ✓ Check Completed Items
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <p className="text-xs text-amber-700 font-medium italic bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 inline-block">
+                                                ⏳ No products in this order have completed all kitchen stages yet.
+                                              </p>
+                                            )}
+                                          </div>
+
+                                          <div className="shrink-0 flex items-center justify-end">
+                                            <button
+                                              disabled={addrGrp.items.length === 0}
+                                              onClick={() => handleMarkReady(orderKey, idx, addrGrp.items, addrGrp.scheduleIds, addrGrp.retailOrderIds)}
+                                              className={`py-2 px-6 text-sm font-semibold rounded-xl transition-all ${
+                                                addrGrp.items.length === 0
+                                                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                                  : "btn-primary"
+                                              }`}
+                                            >
+                                              {addrGrp.status === 'ready_for_delivery' ? 'Update Ready for Delivery' : 'Mark Ready for Delivery'}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 ))}
                               </div>

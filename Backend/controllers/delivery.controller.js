@@ -1809,30 +1809,19 @@ export const getAllOrdersForDate = async (req, res) => {
             }));
 
             if (isDispatchMode) {
-                // If the order is ALREADY marked ready_for_delivery, it has been verified/packed and should always be visible in Dispatch!
-                if (s.status === 'ready_for_delivery') {
-                    totalItems = totalItems.map(i => ({ ...i, is_production_completed: true }));
-                } else {
-                    const allItems = Object.values(itemsMap);
-                    const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && (i.packageQty > 0 || i.retailQty > 0));
+                const isWaterOnly = totalItems.every(i => (i.category || '').toLowerCase() === 'water');
+                const hasAnyCompletedItem = totalItems.some(i => i.is_production_completed);
+                const isAlreadyReady = s.status === 'ready_for_delivery' || s.status === 'delivered';
 
-                    if (hasVegetables) {
-                        const schedBatchTasks = s.batch_id ? (allBatchTasksByBatch[s.batch_id] || []) : [];
-                        const batchHasTasks = schedBatchTasks.length > 0;
-                        const batchAllTasksDone = batchHasTasks && schedBatchTasks.every(t => t.status === 'DONE');
-                        const batchHasIncompleteTasks = !batchHasTasks || schedBatchTasks.some(t => t.status !== 'DONE');
-
-                        // If ALL tasks in the batch are DONE, kitchen work for this batch is 100% complete!
-                        if (!batchAllTasksDone) {
-                            const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
-                            if (hasIncompleteVegetable || batchHasIncompleteTasks) {
-                                continue;
-                            }
-                        }
-                    }
-                    totalItems = totalItems.filter(i => i.is_production_completed);
-                    if (totalItems.length === 0) continue;
+                // Order should be visible in Dispatch if:
+                // 1. It is already marked ready_for_delivery / delivered, OR
+                // 2. It has at least one item whose kitchen production is completed, OR
+                // 3. It is a water-only order
+                if (!isAlreadyReady && !isWaterOnly && !hasAnyCompletedItem) {
+                    continue;
                 }
+                // We keep ALL items in totalItems (do not filter out incomplete items),
+                // so admin can see all demanded items, see which ones are ready, and check/pack accordingly!
             }
 
             const boyInfo = s.DeliveryBoy ? { id: s.DeliveryBoy.id, name: s.DeliveryBoy.name, phone: s.DeliveryBoy.phone } : null;
@@ -1912,27 +1901,12 @@ export const getAllOrdersForDate = async (req, res) => {
 
             let totalItems = Object.values(itemsMap);
             if (isDispatchMode) {
-                if (r.delivery_status === 'ready_for_delivery') {
-                    totalItems = totalItems.map(i => ({ ...i, is_production_completed: true }));
-                } else {
-                    const allItems = Object.values(itemsMap);
-                    const hasVegetables = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && i.retailQty > 0);
+                const isWaterOnly = totalItems.every(i => (i.category || '').toLowerCase() === 'water');
+                const hasAnyCompletedItem = totalItems.some(i => i.is_production_completed);
+                const isAlreadyReady = r.delivery_status === 'ready_for_delivery' || r.delivery_status === 'delivered';
 
-                    if (hasVegetables) {
-                        const retailBatchTasks = r.batch_id ? (allBatchTasksByBatch[r.batch_id] || []) : [];
-                        const batchHasTasks = retailBatchTasks.length > 0;
-                        const batchAllTasksDone = batchHasTasks && retailBatchTasks.every(t => t.status === 'DONE');
-                        const batchHasIncompleteTasks = !batchHasTasks || retailBatchTasks.some(t => t.status !== 'DONE');
-
-                        if (!batchAllTasksDone) {
-                            const hasIncompleteVegetable = allItems.some(i => (i.category || '').toLowerCase() !== 'water' && !i.is_production_completed);
-                            if (hasIncompleteVegetable || batchHasIncompleteTasks) {
-                                continue;
-                            }
-                        }
-                    }
-                    totalItems = totalItems.filter(i => i.is_production_completed);
-                    if (totalItems.length === 0) continue;
+                if (!isAlreadyReady && !isWaterOnly && !hasAnyCompletedItem) {
+                    continue;
                 }
             }
             const boyInfo = r.DeliveryBoy ? { id: r.DeliveryBoy.id, name: r.DeliveryBoy.name, phone: r.DeliveryBoy.phone } : null;
@@ -2127,11 +2101,11 @@ export const packOrders = async (req, res) => {
                         // Revert any previously created MissedProductLog and next-day carry-over
                         if (type === 'package') {
                             const schedule = parent;
-                            const existingMissed = await MissedProductLog.findOne({
+                            const existingMissedList = await MissedProductLog.findAll({
                                 where: { source_type: 'subscription', source_id: schedule.id, product_id: item.product_id }
                             });
 
-                            if (existingMissed) {
+                            for (const existingMissed of existingMissedList) {
                                 const scheduleDateObj = new Date(schedule.scheduled_date);
                                 scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
                                 if (scheduleDateObj.getDay() === 0) {
@@ -2195,13 +2169,12 @@ export const packOrders = async (req, res) => {
                         }
                     }
                 } else {
-                    // Unchecked
+                    // Unchecked (Product missed from this delivery)
                     for (const { type, item, parent } of productItems) {
                         await item.update({ packed_qty: 0 });
 
                         if (type === 'package') {
                             const schedule = parent;
-                            // Next-day delivery logic
                             const scheduleDateObj = new Date(schedule.scheduled_date);
                             scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
                             if (scheduleDateObj.getDay() === 0) {
@@ -2209,6 +2182,85 @@ export const packOrders = async (req, res) => {
                             }
                             const tomorrowStr = scheduleDateObj.toISOString().split('T')[0];
 
+                            // Check if a MissedProductLog ALREADY exists for this schedule and product
+                            const existingMissed = await MissedProductLog.findOne({
+                                where: {
+                                    source_type: 'subscription',
+                                    source_id: schedule.id,
+                                    product_id: item.product_id
+                                }
+                            });
+
+                            if (!existingMissed) {
+                                let nextSchedule = await DeliverySchedule.findOne({
+                                    where: {
+                                        subscription_id: schedule.subscription_id,
+                                        scheduled_date: tomorrowStr
+                                    }
+                                });
+
+                                if (!nextSchedule) {
+                                    nextSchedule = await DeliverySchedule.create({
+                                        subscription_id: schedule.subscription_id,
+                                        scheduled_date: tomorrowStr,
+                                        status: 'pending',
+                                        is_locked: false,
+                                        is_returned_serving: false
+                                    });
+                                }
+
+                                const existingNextItem = await DeliveryItem.findOne({
+                                    where: { schedule_id: nextSchedule.id, product_id: item.product_id }
+                                });
+                                if (existingNextItem) {
+                                    await existingNextItem.update({ qty_gm: parseFloat(existingNextItem.qty_gm) + parseFloat(item.qty_gm) });
+                                } else {
+                                    await DeliveryItem.create({
+                                        schedule_id: nextSchedule.id,
+                                        product_id: item.product_id,
+                                        qty_gm: item.qty_gm,
+                                        packed_qty: null
+                                    });
+                                }
+
+                                // Log the missed product carry-over (single entry)
+                                const subForLog = schedule.subscription_id ? await Subscription.findByPk(schedule.subscription_id) : null;
+                                await MissedProductLog.create({
+                                    user_id: subForLog ? subForLog.user_id : null,
+                                    product_id: item.product_id,
+                                    missed_date: schedule.scheduled_date,
+                                    missed_qty: item.qty_gm,
+                                    next_schedule_date: tomorrowStr,
+                                    source_type: 'subscription',
+                                    source_id: schedule.id
+                                });
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Not specified in payload: treat as unchecked (packed_qty: 0) and log missed once
+                for (const { type, item, parent } of productItems) {
+                    await item.update({ packed_qty: 0 });
+
+                    if (type === 'package') {
+                        const schedule = parent;
+                        const scheduleDateObj = new Date(schedule.scheduled_date);
+                        scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
+                        if (scheduleDateObj.getDay() === 0) {
+                            scheduleDateObj.setDate(scheduleDateObj.getDate() + 1);
+                        }
+                        const tomorrowStr = scheduleDateObj.toISOString().split('T')[0];
+
+                        const existingMissed = await MissedProductLog.findOne({
+                            where: {
+                                source_type: 'subscription',
+                                source_id: schedule.id,
+                                product_id: item.product_id
+                            }
+                        });
+
+                        if (!existingMissed) {
                             let nextSchedule = await DeliverySchedule.findOne({
                                 where: {
                                     subscription_id: schedule.subscription_id,
@@ -2240,7 +2292,6 @@ export const packOrders = async (req, res) => {
                                 });
                             }
 
-                            // Log the missed product carry-over
                             const subForLog = schedule.subscription_id ? await Subscription.findByPk(schedule.subscription_id) : null;
                             await MissedProductLog.create({
                                 user_id: subForLog ? subForLog.user_id : null,
@@ -2253,12 +2304,6 @@ export const packOrders = async (req, res) => {
                             });
                         }
                     }
-                }
-            } else {
-                // Default if not specified in payload
-                for (const { type, item } of productItems) {
-                    const demanded = parseFloat(type === 'retail' ? (item.quantity || 0) : (item.qty_gm || 0));
-                    await item.update({ packed_qty: demanded });
                 }
             }
         }

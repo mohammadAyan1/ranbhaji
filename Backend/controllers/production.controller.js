@@ -750,7 +750,8 @@ export const getDetailedWorkerLogs = async (req, res) => {
                     completed_at: null,
                     alarm_fired_at: null,
                     role: 'Initiator',
-                    duration_seconds: task.duration_seconds
+                    duration_seconds: task.duration_seconds,
+                    working_duration_seconds: null
                 });
                 return;
             }
@@ -822,7 +823,7 @@ export const getDetailedWorkerLogs = async (req, res) => {
                 // Calculate completed_at
                 let workerCompletedAt = null;
                 if (task.status === 'DONE') {
-                    workerCompletedAt = lastAssignment.left_at || task.completed_at;
+                    workerCompletedAt = lastAssignment.left_at || task.completed_at || task.updated_at;
                 } else if (lastAssignment.left_at) {
                     workerCompletedAt = lastAssignment.left_at;
                 } else {
@@ -838,6 +839,16 @@ export const getDetailedWorkerLogs = async (req, res) => {
                     }
                 }
 
+                // Calculate actual working duration (time spent between started_at and completed_at)
+                let workingDurationSeconds = null;
+                if (workerStartedAt && workerCompletedAt) {
+                    const diffMs = new Date(workerCompletedAt).getTime() - new Date(workerStartedAt).getTime();
+                    workingDurationSeconds = Math.max(0, Math.round(diffMs / 1000));
+                } else if (workerStartedAt && ['RUNNING', 'ALARM'].includes(task.status)) {
+                    const diffMs = Date.now() - new Date(workerStartedAt).getTime();
+                    workingDurationSeconds = Math.max(0, Math.round(diffMs / 1000));
+                }
+
                 logs.push({
                     worker_name: workerName,
                     worker_id: workerId,
@@ -851,7 +862,8 @@ export const getDetailedWorkerLogs = async (req, res) => {
                     completed_at: workerCompletedAt,
                     alarm_fired_at: task.alarm_fired_at,
                     role: isInitiator ? 'Initiator' : 'Helper',
-                    duration_seconds: task.duration_seconds
+                    duration_seconds: task.duration_seconds,
+                    working_duration_seconds: workingDurationSeconds
                 });
             });
         });

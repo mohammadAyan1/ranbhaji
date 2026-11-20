@@ -103,6 +103,36 @@ const LiveTimer = ({ startedAt, expectedMinutes }) => {
   );
 };
 
+const formatActualWorkDuration = (log) => {
+  // If backend provided working_duration_seconds
+  if (log.working_duration_seconds !== undefined && log.working_duration_seconds !== null) {
+    const s = Number(log.working_duration_seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const remS = s % 60;
+    return `${m}m ${remS}s`;
+  }
+
+  // Calculate from completed_at and started_at
+  if (log.started_at && log.completed_at) {
+    const diff = Math.max(0, Math.round((new Date(log.completed_at).getTime() - new Date(log.started_at).getTime()) / 1000));
+    if (diff < 60) return `${diff}s`;
+    const m = Math.floor(diff / 60);
+    const remS = diff % 60;
+    return `${m}m ${remS}s`;
+  }
+
+  // If currently RUNNING or ALARM
+  if (log.started_at && (log.status === 'RUNNING' || log.status === 'ALARM')) {
+    const diff = Math.max(0, Math.round((Date.now() - new Date(log.started_at).getTime()) / 1000));
+    const m = Math.floor(diff / 60);
+    const remS = diff % 60;
+    return `${m > 0 ? `${m}m ` : ''}${remS}s (Running)`;
+  }
+
+  return '-';
+};
+
 export default function AdminProduction() {
   const [batches, setBatches] = useState([]);
   const [rawLogs, setRawLogs] = useState([]);
@@ -312,20 +342,21 @@ export default function AdminProduction() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker Name</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task Details</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned At</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started At</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed / Left</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker Name</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task Details</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned At</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started At</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed At</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider bg-emerald-50/70 border-x border-emerald-100">Working Time</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Duration</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {loadingLogs ? (
                   <tr>
-                    <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan="9" className="px-6 py-12 text-center text-gray-500">
                       <div className="flex items-center justify-center gap-2">
                         <div className="animate-spin rounded-full h-5 w-5 border-2 border-green-600 border-t-transparent" />
                         <span>Fetching worker logs...</span>
@@ -334,7 +365,7 @@ export default function AdminProduction() {
                   </tr>
                 ) : displayedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-6 py-8 text-center text-gray-500 italic">No worker logs available for the selected filters.</td>
+                    <td colSpan="9" className="px-6 py-8 text-center text-gray-500 italic">No worker logs available for the selected filters.</td>
                   </tr>
                 ) : (
                   displayedLogs.map((log, index) => {
@@ -343,22 +374,24 @@ export default function AdminProduction() {
                       .replace(/busket_arrange/gi, 'basket arrange')
                       .replace(/busket\s*arrange/gi, 'basket arrange');
 
+                    const workDur = formatActualWorkDuration(log);
+
                     return (
                       <tr key={index} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{log.worker_name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-800">
+                        <td className="px-5 py-4 whitespace-nowrap font-medium text-gray-900">{log.worker_name}</td>
+                        <td className="px-5 py-4 whitespace-nowrap text-gray-800">
                           <div className="flex items-center gap-3">
                             <TaskProductThumbnail image={log.product_image} name={log.product_name} />
                             <span className="font-medium text-gray-800">{formattedTask}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 text-xs font-bold rounded-full ${log.role === 'Initiator' ? 'bg-indigo-100 text-indigo-800' : 'bg-pink-100 text-pink-800'
                             }`}>
                             {log.role}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 text-xs font-bold rounded-full ${log.status === 'DONE' ? 'bg-green-100 text-green-800' :
                             log.status === 'ALARM' ? 'bg-red-100 text-red-800' :
                               log.status === 'NOT_STARTED' ? 'bg-gray-100 text-gray-700 border border-gray-300' :
@@ -367,7 +400,7 @@ export default function AdminProduction() {
                             {log.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-500">
                           {log.assigned_at ? (
                             <div>
                               <span className="font-medium text-gray-800">{new Date(log.assigned_at).toLocaleTimeString()}</span>
@@ -375,24 +408,45 @@ export default function AdminProduction() {
                             </div>
                           ) : '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-500">
                           {log.started_at ? (
                             <div>
                               <span className="font-medium text-gray-800">{new Date(log.started_at).toLocaleTimeString()}</span>
                               <span className="block text-xs text-gray-400">{new Date(log.started_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
                             </div>
-                          ) : '-'}
+                          ) : (
+                            <span className="text-gray-400 italic text-xs">Not Started</span>
+                          )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-500">
                           {log.completed_at ? (
                             <div>
                               <span className="font-medium text-gray-800">{new Date(log.completed_at).toLocaleTimeString()}</span>
                               <span className="block text-xs text-gray-400">{new Date(log.completed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
                             </div>
+                          ) : log.status === 'RUNNING' ? (
+                            <span className="text-blue-600 font-medium text-xs">In Progress</span>
                           ) : '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {log.duration_seconds > 0 ? `${Math.floor(log.duration_seconds / 60)}m ${log.duration_seconds % 60}s` : '-'}
+                        <td className="px-5 py-4 whitespace-nowrap bg-emerald-50/25 border-x border-emerald-100/60">
+                          {workDur === '-' ? (
+                            <span className="text-gray-400 text-sm font-medium">-</span>
+                          ) : workDur.includes('Running') ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200 animate-pulse">
+                              ⏳ {workDur}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
+                              ⏱️ {workDur}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {log.duration_seconds > 0 ? (
+                            <span className="font-medium text-gray-700">
+                              {Math.floor(log.duration_seconds / 60)}m {log.duration_seconds % 60}s
+                            </span>
+                          ) : '-'}
                         </td>
                       </tr>
                     );
