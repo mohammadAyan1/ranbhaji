@@ -2,7 +2,9 @@ import React, { useEffect, useState } from "react";
 import api from "../../api/axios";
 
 export default function AdminReturns() {
+  const [rawReturns, setRawReturns] = useState([]);
   const [returns, setReturns] = useState([]);
+  const [returnTypeFilter, setReturnTypeFilter] = useState("all"); // "all" | "full" | "item"
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState(null); // zoom modal
@@ -17,45 +19,63 @@ export default function AdminReturns() {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  const getISTDate = (offsetDays = 0) => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 330);
+    if (offsetDays !== 0) now.setDate(now.getDate() + offsetDays);
+    return now.toISOString().split('T')[0];
+  };
+
   // Filters
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(() => getISTDate(0));
+  const [toDate, setToDate] = useState(() => getISTDate(0));
   const [orderId, setOrderId] = useState("");
   const [allTime, setAllTime] = useState(false);
 
-  const fetchReturns = async () => {
+  const processReturns = (items, filterType) => {
+    const grouped = {};
+    (items || []).forEach(r => {
+      if (filterType === "full" && !r.is_full_return) return;
+      if (filterType === "item" && r.is_full_return) return;
+
+      const scheduleId = r.DeliverySchedule?.id || "unknown";
+      if (!grouped[scheduleId]) {
+        grouped[scheduleId] = {
+          schedule: r.DeliverySchedule,
+          isFullReturn: !!r.is_full_return,
+          items: []
+        };
+      }
+      grouped[scheduleId].items.push(r);
+    });
+
+    return Object.values(grouped).sort((a, b) => {
+      if (!a.schedule || !b.schedule) return 0;
+      const dateA = a.schedule.actual_delivery_date || a.schedule.scheduled_date || 0;
+      const dateB = b.schedule.actual_delivery_date || b.schedule.scheduled_date || 0;
+      return new Date(dateB) - new Date(dateA) || b.schedule.id - a.schedule.id;
+    });
+  };
+
+  const fetchReturns = async (customParams = null) => {
     setLoading(true);
     try {
       let params = {};
-      if (orderId) params.order_id = orderId;
-      if (fromDate && toDate) {
-        params.from_date = fromDate;
-        params.to_date = toDate;
+      if (customParams) {
+        params = { ...customParams };
+      } else {
+        if (orderId) params.order_id = orderId;
+        if (fromDate && toDate) {
+          params.from_date = fromDate;
+          params.to_date = toDate;
+        }
+        if (allTime) params.all_time = true;
       }
-      if (allTime) params.all_time = true;
 
       const res = await api.get("/admin/returns", { params });
-
-      // Group returns by order
-      const grouped = {};
-      (res.data.returns || []).forEach(r => {
-        if (!r.is_full_return) return; // Only show FULL returns here
-        const scheduleId = r.DeliverySchedule?.id || "unknown";
-        if (!grouped[scheduleId]) {
-          grouped[scheduleId] = {
-            schedule: r.DeliverySchedule,
-            items: []
-          };
-        }
-        grouped[scheduleId].items.push(r);
-      });
-
-      const groupedArray = Object.values(grouped).sort((a, b) => {
-        if (!a.schedule || !b.schedule) return 0;
-        return new Date(b.schedule.actual_delivery_date) - new Date(a.schedule.actual_delivery_date) || b.schedule.id - a.schedule.id;
-      });
-
-      setReturns(groupedArray);
+      const raw = res.data.returns || [];
+      setRawReturns(raw);
+      setReturns(processReturns(raw, returnTypeFilter));
     } catch (err) {
       setMsg(`❌ Failed to fetch returns: ${err.response?.data?.message || err.message}`);
     } finally {
@@ -64,8 +84,40 @@ export default function AdminReturns() {
   };
 
   useEffect(() => {
-    fetchReturns();
+    setReturns(processReturns(rawReturns, returnTypeFilter));
+  }, [returnTypeFilter, rawReturns]);
+
+  useEffect(() => {
+    fetchReturns({ from_date: getISTDate(0), to_date: getISTDate(0) });
   }, []);
+
+  const handleQuickFilter = (type) => {
+    if (type === 'today') {
+      const today = getISTDate(0);
+      setFromDate(today);
+      setToDate(today);
+      setAllTime(false);
+      setOrderId("");
+      fetchReturns({ from_date: today, to_date: today });
+    } else if (type === 'yesterday') {
+      const yesterday = getISTDate(-1);
+      setFromDate(yesterday);
+      setToDate(yesterday);
+      setAllTime(false);
+      setOrderId("");
+      fetchReturns({ from_date: yesterday, to_date: yesterday });
+    } else if (type === 'all') {
+      setAllTime(true);
+      setFromDate("");
+      setToDate("");
+      setOrderId("");
+      fetchReturns({ all_time: true });
+    }
+  };
+
+  const allItemCount = rawReturns.length;
+  const fullItemCount = rawReturns.filter(r => r.is_full_return).length;
+  const itemReturnCount = rawReturns.filter(r => !r.is_full_return).length;
 
   // Listen for Escape key to close the photo zoom modal
   useEffect(() => {
@@ -121,7 +173,7 @@ export default function AdminReturns() {
         <p className="page-sub">Review and process customer product return and refund requests</p>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
             <label className="label">Order ID</label>
@@ -136,19 +188,68 @@ export default function AdminReturns() {
             <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
           </div>
           <div className="flex gap-2">
-            <button className="btn-primary flex-1" onClick={fetchReturns}>Filter</button>
             <button
-              className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+              className="btn-primary flex-1"
               onClick={() => {
-                setAllTime(!allTime);
-                setOrderId("");
-                setFromDate("");
-                setToDate("");
+                setAllTime(false);
+                fetchReturns({
+                  ...(orderId ? { order_id: orderId } : {}),
+                  ...(fromDate ? { from_date: fromDate } : {}),
+                  ...(toDate ? { to_date: toDate } : {}),
+                });
+              }}
+            >
+              Filter
+            </button>
+            <button
+              className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white font-bold' : 'bg-gray-100 text-gray-700'}`}
+              onClick={() => {
+                if (allTime) {
+                  handleQuickFilter('today');
+                } else {
+                  handleQuickFilter('all');
+                }
               }}
             >
               {allTime ? "All Time: ON" : "All Time"}
             </button>
           </div>
+        </div>
+
+        {/* Quick Date Presets */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+          <span className="text-xs font-semibold text-gray-400 mr-1">Quick Filter:</span>
+          <button
+            type="button"
+            onClick={() => handleQuickFilter('today')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+              fromDate === getISTDate(0) && toDate === getISTDate(0) && !allTime
+                ? "bg-green-600 text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickFilter('yesterday')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+              fromDate === getISTDate(-1) && toDate === getISTDate(-1) && !allTime
+                ? "bg-amber-600 text-white"
+                : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
+            }`}
+          >
+            Yesterday (20 Nov)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickFilter('all')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+              allTime ? "bg-blue-600 text-white" : "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+            }`}
+          >
+            All Pending Returns
+          </button>
         </div>
       </div>
 
@@ -157,6 +258,43 @@ export default function AdminReturns() {
           {msg}
         </div>
       )}
+
+      {/* Return Type Filter Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setReturnTypeFilter("all")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            returnTypeFilter === "all"
+              ? "bg-gray-900 text-white shadow-sm"
+              : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          All Returns ({allItemCount} items)
+        </button>
+        <button
+          type="button"
+          onClick={() => setReturnTypeFilter("full")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            returnTypeFilter === "full"
+              ? "bg-red-600 text-white shadow-sm"
+              : "bg-white border border-red-200 text-red-700 hover:bg-red-50"
+          }`}
+        >
+          Full Order Returns ({fullItemCount} items)
+        </button>
+        <button
+          type="button"
+          onClick={() => setReturnTypeFilter("item")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            returnTypeFilter === "item"
+              ? "bg-amber-600 text-white shadow-sm"
+              : "bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
+          }`}
+        >
+          Item Returns ({itemReturnCount} items)
+        </button>
+      </div>
 
       {/* Zoom Photo Modal */}
       {selectedPhoto && (
@@ -188,10 +326,26 @@ export default function AdminReturns() {
 
       {/* Returns List */}
       {returns.length === 0 ? (
-        <div className="card text-center py-16 text-gray-500">
-          <p className="text-5xl mb-4">🎉</p>
-          <p className="text-lg font-medium text-gray-900">All caught up!</p>
-          <p>No return requests are in the queue.</p>
+        <div className="card text-center py-16 text-gray-500 space-y-2">
+          <p className="text-5xl mb-2">🎉</p>
+          <p className="text-lg font-bold text-gray-900">No return requests found</p>
+          <p className="text-sm text-gray-500">
+            No returns found for the selected date. Click{" "}
+            <button
+              onClick={() => handleQuickFilter('yesterday')}
+              className="text-amber-700 font-bold underline hover:text-amber-800"
+            >
+              Yesterday (20 Nov)
+            </button>{" "}
+            or{" "}
+            <button
+              onClick={() => handleQuickFilter('all')}
+              className="text-blue-700 font-bold underline hover:text-blue-800"
+            >
+              All Pending Returns
+            </button>{" "}
+            to view past returns.
+          </p>
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -225,7 +379,18 @@ export default function AdminReturns() {
                           {isExpanded ? '▼' : '▶'}
                         </td>
                         <td className="p-4">
-                          <div className="font-bold text-gray-900 text-base">Order #{schedule.id}</div>
+                          <div className="font-bold text-gray-900 text-base flex items-center gap-2">
+                            Order #{schedule.id}
+                            {group.isFullReturn ? (
+                              <span className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-red-200">
+                                📦 Full Order Return
+                              </span>
+                            ) : (
+                              <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-amber-200">
+                                🛍️ Item Return
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-gray-500 font-medium">Delivered: {formattedDate}</div>
                         </td>
                         <td className="p-4">
@@ -244,8 +409,10 @@ export default function AdminReturns() {
                           <td colSpan="4" className="p-0 border-l-2 border-red-500">
                             <div className="p-6">
                               <h4 className="text-sm font-bold text-gray-700 flex items-center mb-4">
-                                <span className="bg-red-100 text-red-600 p-1.5 rounded-lg mr-2">📦</span>
-                                Full Order Return ({orderSource})
+                                <span className="bg-red-100 text-red-600 p-1.5 rounded-lg mr-2">
+                                  {group.isFullReturn ? '📦' : '🛍️'}
+                                </span>
+                                {group.isFullReturn ? 'Full Order Return' : 'Item Return(s)'} ({orderSource})
                               </h4>
                               <div className="overflow-x-auto rounded-lg border border-gray-100">
                                 <table className="w-full text-sm mt-2 bg-white">

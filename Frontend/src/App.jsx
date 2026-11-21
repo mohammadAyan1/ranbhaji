@@ -48,6 +48,7 @@ import Attendance from "./pages/admin/Attendance";
 import AdminProduction from "./pages/admin/AdminProduction";
 import AdminReferrals from "./pages/admin/AdminReferrals";
 import EmailRegister from "./pages/admin/EmailRegister";
+import AdminHeroSection from "./pages/admin/AdminHeroSection";
 
 // Reports
 import ItemPurchaseReport from "./pages/admin/Reports/ItemPurchaseReport";
@@ -177,6 +178,7 @@ function App() {
           <Route path="/admin/closing-stock" element={<AdminClosingStock />} />
           <Route path="/admin/attendance" element={<Attendance />} />
           <Route path="/admin/email-register" element={<EmailRegister />} />
+          <Route path="/admin/hero-section" element={<AdminHeroSection />} />
 
           {/* Master */}
           <Route path="/admin/master/categories" element={<AdminCategories />} />

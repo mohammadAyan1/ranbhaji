@@ -4,7 +4,7 @@ import useAuthStore from "../store/authStore";
 import {
   LayoutDashboard, ShoppingBag, Package, RefreshCw, Users, MapPin,
   Truck, BarChart3, Leaf, Undo2, ClipboardList, Calculator,
-  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings, Activity, ChevronDown, Database, Briefcase, Mail
+  ShoppingCart, Layers, ListOrdered, Wallet, Droplet, Bell, X, LogOut, TrendingUp, UserCheck, Scale, Settings, Activity, ChevronDown, Database, Briefcase, Mail, Sparkles
 } from "lucide-react";
 
 const adminLinks = [
@@ -25,6 +25,7 @@ const adminLinks = [
       { to: "/admin/master/wallets", label: "Wallet" },
       // { to: "/admin/waste", label: "Waste" },
       { to: "/admin/closing-stock", label: "Closing Stock" },
+      { to: "/admin/hero-section", label: "Hero Banner" },
     ]
   },
   {
@@ -111,6 +112,12 @@ const adminLinks = [
     icon: <Mail size={20} />,
     isCollapsible: false,
     to: "/admin/email-register"
+  },
+  {
+    label: "Hero Banner",
+    icon: <Sparkles size={20} className="text-amber-500" />,
+    isCollapsible: false,
+    to: "/admin/hero-section"
   }
 ];
 

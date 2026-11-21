@@ -318,7 +318,38 @@ export const checkAlarms = async (req, res) => {
             return res.status(200).json({ success: true, task: alarmTasks[0] });
         }
 
-        return res.status(200).json({ success: true, task: null });
+        // Also check if any joint task has a pending completion request for this worker to review
+        const pendingPromptTask = await BatchProductTask.findOne({
+            where: {
+                batch_id: batchId,
+                status: { [Op.in]: ['RUNNING', 'PAUSED'] },
+                completion_requested_by: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: workerId }] },
+                created_at: { [Op.gte]: startOfToday }
+            },
+            include: [
+                { model: Product },
+                { model: User, as: 'completion_requester', attributes: ['id', 'name'] },
+                {
+                    model: TaskWorkerAssignment,
+                    as: 'worker_assignments',
+                    where: { worker_id: workerId, left_at: null }
+                }
+            ]
+        });
+
+        let completionPrompt = null;
+        if (pendingPromptTask) {
+            completionPrompt = {
+                taskId: pendingPromptTask.id,
+                stage: pendingPromptTask.stage,
+                productName: pendingPromptTask.Product?.name,
+                requestedByWorkerId: pendingPromptTask.completion_requested_by,
+                requestedByWorkerName: pendingPromptTask.completion_requester?.name || 'Partner Worker',
+                message: `${pendingPromptTask.completion_requester?.name || 'Partner Worker'} ne kam ko complete kar diya hai. Kya ye kam poora ho gaya hai?`
+            };
+        }
+
+        return res.status(200).json({ success: true, task: null, completion_prompt: completionPrompt });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -980,13 +1011,74 @@ export const completeTask = async (req, res) => {
         const { taskId } = req.params;
         const workerId = req.user.id;
 
-        const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
+        const task = await BatchProductTask.findByPk(taskId, {
+            include: [{ model: Product }]
+        });
         if (!task) return res.status(404).json({ success: false, message: "Task not found" });
 
         // If already completed (e.g. double click), return immediately
         if (task.status === 'DONE') {
-            return res.status(200).json({ success: true, task, message: "Task is already completed." });
+            return res.status(200).json({ success: true, status: 'DONE', task, message: "Task is already completed." });
         }
+
+        // Check if this task is a joint task with multiple active workers
+        const allowsJoint = isJointAllowed(task);
+        const activeAssignments = await TaskWorkerAssignment.findAll({
+            where: { task_id: taskId, left_at: null },
+            include: [{ model: User, as: 'worker', attributes: ['id', 'name'] }]
+        });
+
+        // If joint task AND there are multiple active workers working together:
+        if (allowsJoint && activeAssignments.length > 1) {
+            // Did another worker already request completion?
+            if (task.completion_requested_by && task.completion_requested_by !== workerId) {
+                // Both workers have now confirmed completion! Complete the task!
+                task.completion_requested_by = null;
+                task.completion_requested_at = null;
+                task.completion_rejected_by = null;
+                task.completion_rejected_at = null;
+                await task.save();
+
+                const result = await handleStageCompletion(task);
+                return res.status(200).json({
+                    success: true,
+                    status: 'DONE',
+                    mutual_confirmed: true,
+                    message: "Task completed successfully with mutual agreement from both workers.",
+                    task: result.task,
+                    nextTask: result.nextTask
+                });
+            }
+
+            // Otherwise, this worker is requesting completion. Set pending request for the other worker(s) to confirm:
+            task.completion_requested_by = workerId;
+            task.completion_requested_at = new Date();
+            task.completion_rejected_by = null;
+            task.completion_rejected_at = null;
+            await task.save();
+
+            const otherWorkers = activeAssignments
+                .filter(a => a.worker_id !== workerId)
+                .map(a => ({ id: a.worker_id, name: a.worker?.name || 'Partner Worker' }));
+
+            return res.status(200).json({
+                success: true,
+                requires_confirmation: true,
+                pending_confirmation: true,
+                status: task.status,
+                task,
+                message: "Work marked complete. Waiting for partner worker to confirm.",
+                requested_by: { id: workerId, name: req.user.name },
+                waiting_for: otherWorkers
+            });
+        }
+
+        // For single-worker tasks or single active worker: complete immediately
+        task.completion_requested_by = null;
+        task.completion_requested_at = null;
+        task.completion_rejected_by = null;
+        task.completion_rejected_at = null;
+        await task.save();
 
         const result = await handleStageCompletion(task);
 
@@ -999,7 +1091,154 @@ export const completeTask = async (req, res) => {
             });
         }
 
-        res.status(200).json({ success: true, task: result.task, nextTask: result.nextTask });
+        res.status(200).json({ success: true, status: 'DONE', task: result.task, nextTask: result.nextTask });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Worker responds to completion request (HA / YES or NA / NO)
+export const respondTaskCompletion = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const workerId = req.user.id;
+        const { agree, confirm, action, response, cancel } = req.body;
+
+        const task = await BatchProductTask.findByPk(taskId, {
+            include: [
+                { model: Product },
+                { model: User, as: 'completion_requester', attributes: ['id', 'name'] }
+            ]
+        });
+        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+
+        if (task.status === 'DONE') {
+            return res.status(200).json({ success: true, status: 'DONE', message: "Task is already completed." });
+        }
+
+        if (!task.completion_requested_by) {
+            return res.status(400).json({
+                success: false,
+                message: "No pending completion request on this task."
+            });
+        }
+
+        // Requester can cancel their own completion request
+        if (task.completion_requested_by === workerId) {
+            if (cancel === true || agree === false || confirm === false || action === 'cancel' || response === 'no') {
+                task.completion_requested_by = null;
+                task.completion_requested_at = null;
+                await task.save();
+                return res.status(200).json({
+                    success: true,
+                    status: task.status,
+                    message: "Completion request cancelled by initiator."
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                message: "You cannot confirm your own completion request. Your partner worker must confirm it."
+            });
+        }
+
+        // The partner worker responding: YES or NO
+        const isApproved = agree === true || confirm === true || action === 'confirm' || action === 'agree' || response === 'yes' || response === true;
+
+        if (isApproved) {
+            // WORKER AGREED (HA): Complete the task!
+            task.completion_requested_by = null;
+            task.completion_requested_at = null;
+            task.completion_rejected_by = null;
+            task.completion_rejected_at = null;
+            await task.save();
+
+            const result = await handleStageCompletion(task);
+
+            return res.status(200).json({
+                success: true,
+                confirmed: true,
+                status: 'DONE',
+                message: "Both workers agreed. Task completed successfully.",
+                task: result.task,
+                nextTask: result.nextTask
+            });
+        } else {
+            // WORKER REJECTED (NA): Work is NOT complete yet!
+            const rejectingUser = await User.findByPk(workerId, { attributes: ['id', 'name'] });
+            task.completion_rejected_by = workerId;
+            task.completion_rejected_at = new Date();
+            task.completion_requested_by = null;
+            task.completion_requested_at = null;
+            await task.save();
+
+            return res.status(200).json({
+                success: true,
+                confirmed: false,
+                status: task.status,
+                message: `${rejectingUser?.name || 'Partner worker'} reported work is still pending. Continuing task.`,
+                task
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Check completion status & modal prompt for a task
+export const getTaskCompletionStatus = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const workerId = req.user.id;
+
+        const task = await BatchProductTask.findByPk(taskId, {
+            include: [
+                { model: Product },
+                { model: User, as: 'completion_requester', attributes: ['id', 'name'] },
+                { model: User, as: 'completion_rejecter', attributes: ['id', 'name'] },
+                {
+                    model: TaskWorkerAssignment,
+                    as: 'worker_assignments',
+                    where: { left_at: null },
+                    required: false,
+                    include: [{ model: User, as: 'worker', attributes: ['id', 'name'] }]
+                }
+            ]
+        });
+        if (!task) return res.status(404).json({ success: false, message: "Task not found" });
+
+        const activeWorkers = (task.worker_assignments || []).map(a => ({
+            id: a.worker_id,
+            name: a.worker?.name || 'Worker'
+        }));
+
+        const isRequester = task.completion_requested_by === workerId;
+        const requesterName = task.completion_requester?.name || 'Partner Worker';
+        const hasPendingCompletion = !!task.completion_requested_by;
+
+        let promptModal = false;
+        let modalMessage = null;
+
+        if (hasPendingCompletion && !isRequester) {
+            promptModal = true;
+            modalMessage = `${requesterName} ne kam ko complete kar diya hai. Kya ye kam poora ho gaya hai?`;
+        }
+
+        res.status(200).json({
+            success: true,
+            task_id: task.id,
+            stage: task.stage,
+            status: task.status,
+            active_workers: activeWorkers,
+            has_pending_completion: hasPendingCompletion,
+            prompt_modal: promptModal,
+            modal_message: modalMessage,
+            completion_requested_by: task.completion_requested_by,
+            completion_requester_name: requesterName,
+            completion_requested_at: task.completion_requested_at,
+            completion_rejected_by: task.completion_rejected_by,
+            completion_rejecter_name: task.completion_rejecter?.name,
+            completion_rejected_at: task.completion_rejected_at
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1162,11 +1401,42 @@ export const triggerAlarm = async (req, res) => {
 export const syncTask = async (req, res) => {
     try {
         const { taskId } = req.params;
-        const task = await BatchProductTask.findByPk(taskId, { include: [{ model: Product }] });
+        const workerId = req.user?.id;
+        const task = await BatchProductTask.findByPk(taskId, {
+            include: [
+                { model: Product },
+                { model: User, as: 'completion_requester', attributes: ['id', 'name'] },
+                { model: User, as: 'completion_rejecter', attributes: ['id', 'name'] }
+            ]
+        });
 
         if (!task) return res.status(404).json({ success: false, message: "Task not found" });
 
-        res.status(200).json({ success: true, task });
+        const isRequester = task.completion_requested_by === workerId;
+        const requesterName = task.completion_requester?.name || 'Partner Worker';
+        const hasPendingCompletion = !!task.completion_requested_by;
+
+        let promptModal = false;
+        let modalMessage = null;
+        if (hasPendingCompletion && !isRequester) {
+            promptModal = true;
+            modalMessage = `${requesterName} ne kam ko complete kar diya hai. Kya ye kam poora ho gaya hai?`;
+        }
+
+        res.status(200).json({
+            success: true,
+            task,
+            pending_completion: hasPendingCompletion,
+            prompt_modal: promptModal,
+            modal_message: modalMessage,
+            is_completion_requester: isRequester,
+            completion_requested_by: task.completion_requested_by,
+            completion_requester_name: requesterName,
+            completion_requested_at: task.completion_requested_at,
+            completion_rejected_by: task.completion_rejected_by,
+            completion_rejecter_name: task.completion_rejecter?.name,
+            completion_rejected_at: task.completion_rejected_at
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

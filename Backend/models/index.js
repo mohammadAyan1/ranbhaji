@@ -755,7 +755,11 @@ const BatchProductTask = sequelize.define('BatchProductTask', {
   paused_at: { type: DataTypes.DATE, allowNull: true },
   completed_at: { type: DataTypes.DATE, allowNull: true },
   alarm_fired_at: { type: DataTypes.DATE, allowNull: true },
-  drying_mode: { type: DataTypes.STRING(50), allowNull: true }
+  drying_mode: { type: DataTypes.STRING(50), allowNull: true },
+  completion_requested_by: { type: DataTypes.INTEGER, allowNull: true },
+  completion_requested_at: { type: DataTypes.DATE, allowNull: true },
+  completion_rejected_by: { type: DataTypes.INTEGER, allowNull: true },
+  completion_rejected_at: { type: DataTypes.DATE, allowNull: true }
 }, {
   tableName: 'batch_product_tasks',
   timestamps: true,
@@ -773,6 +777,8 @@ BatchProductTask.belongsTo(Batch, { foreignKey: 'batch_id' });
 Batch.hasMany(BatchProductTask, { foreignKey: 'batch_id', as: 'tasks' });
 BatchProductTask.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(BatchProductTask, { foreignKey: 'product_id' });
+BatchProductTask.belongsTo(User, { foreignKey: 'completion_requested_by', as: 'completion_requester' });
+BatchProductTask.belongsTo(User, { foreignKey: 'completion_rejected_by', as: 'completion_rejecter' });
 
 const TaskWorkerAssignment = sequelize.define('TaskWorkerAssignment', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -820,6 +826,24 @@ const RegisteredEmail = sequelize.define('RegisteredEmail', {
   status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' }
 }, {
   tableName: 'registered_emails',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
+// WEBSITE HERO SECTION BANNER (DYNAMIC HERO COMPONENT FOR NEXT.JS WEBSITE)
+const HeroSection = sequelize.define('HeroSection', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  badge_text: { type: DataTypes.STRING(255), allowNull: true, defaultValue: 'MANGO SEASON SPECIAL' },
+  title: { type: DataTypes.STRING(255), allowNull: false, defaultValue: 'Dashheri & Langra have arrived' },
+  description: { type: DataTypes.TEXT, allowNull: true, defaultValue: 'Bring home naturally sweet fruits and pesticide-free vegetables, sorted fresh and delivered with care.' },
+  image_url: { type: DataTypes.STRING(500), allowNull: true, defaultValue: '/uploads/hero-banner-mango.jpg' },
+  button_text: { type: DataTypes.STRING(100), allowNull: true, defaultValue: 'Shop Now' },
+  button_link: { type: DataTypes.STRING(255), allowNull: true, defaultValue: '/products' },
+  is_active: { type: DataTypes.BOOLEAN, defaultValue: true },
+  order: { type: DataTypes.INTEGER, defaultValue: 0 }
+}, {
+  tableName: 'hero_sections',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at'
@@ -873,6 +897,7 @@ export {
   BatchProductTask,
   TaskWorkerAssignment,
   PushToken,
-  RegisteredEmail
+  RegisteredEmail,
+  HeroSection
 };
 

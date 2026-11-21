@@ -716,48 +716,75 @@ export const getDetailedWorkerLogs = async (req, res) => {
             if (task.status === 'NOT_STARTED') {
                 // Find currently active worker (left_at is null)
                 let activeWorkerEntry = null;
+                const inactiveEntries = [];
                 for (const [workerId, workerAssignments] of workerMap.entries()) {
                     const hasActive = workerAssignments.some(a => !a.left_at);
                     if (hasActive) {
                         activeWorkerEntry = { workerId, workerAssignments };
-                        break;
+                    } else {
+                        inactiveEntries.push({ workerId, workerAssignments });
                     }
                 }
 
                 // If no worker is currently active (all previous backed out), pick the most recent assignment
-                if (!activeWorkerEntry) {
-                    const lastAssignment = sortedAssignments[sortedAssignments.length - 1];
-                    activeWorkerEntry = {
-                        workerId: lastAssignment.worker_id,
-                        workerAssignments: workerMap.get(lastAssignment.worker_id)
-                    };
+                if (!activeWorkerEntry && inactiveEntries.length > 0) {
+                    activeWorkerEntry = inactiveEntries.pop();
                 }
 
-                const firstAssignment = activeWorkerEntry.workerAssignments[0];
-                const workerName = firstAssignment.worker ? firstAssignment.worker.name : 'Unknown';
+                const activeWorkerName = activeWorkerEntry?.workerAssignments[0]?.worker?.name || 'Another Worker';
 
-                // For NOT_STARTED tasks: started_at is null, completed_at is ALWAYS null!
-                logs.push({
-                    worker_name: workerName,
-                    worker_id: activeWorkerEntry.workerId,
-                    task: `${prod ? prod.name : 'Unknown'} - ${stageName}`,
-                    product_id: prod?.id || null,
-                    product_name: prod ? prod.name : 'Unknown',
-                    product_image: prod?.image_url || null,
-                    status: 'NOT_STARTED',
-                    assigned_at: firstAssignment.joined_at,
-                    started_at: null,
-                    completed_at: null,
-                    alarm_fired_at: null,
-                    role: 'Initiator',
-                    duration_seconds: task.duration_seconds,
-                    working_duration_seconds: null
+                // Push unstarted workers who were assigned but left/reassigned before task started
+                inactiveEntries.forEach(entry => {
+                    const firstA = entry.workerAssignments[0];
+                    const lastA = entry.workerAssignments[entry.workerAssignments.length - 1];
+                    const wName = firstA.worker ? firstA.worker.name : 'Unknown';
+                    logs.push({
+                        worker_name: wName,
+                        worker_id: entry.workerId,
+                        task: `${prod ? prod.name : 'Unknown'} - ${stageName}`,
+                        product_id: prod?.id || null,
+                        product_name: prod ? prod.name : 'Unknown',
+                        product_image: prod?.image_url || null,
+                        status: 'NOT_STARTED',
+                        assigned_at: firstA.joined_at,
+                        started_at: null,
+                        completed_at: null,
+                        alarm_fired_at: null,
+                        role: 'Not Started',
+                        duration_seconds: task.duration_seconds,
+                        working_duration_seconds: null,
+                        assign_to_start_seconds: null,
+                        taken_over_by: activeWorkerName,
+                        taken_over_at: lastA.left_at,
+                        taken_over_started_at: null
+                    });
                 });
+
+                if (activeWorkerEntry) {
+                    const firstAssignment = activeWorkerEntry.workerAssignments[0];
+                    const workerName = firstAssignment.worker ? firstAssignment.worker.name : 'Unknown';
+                    logs.push({
+                        worker_name: workerName,
+                        worker_id: activeWorkerEntry.workerId,
+                        task: `${prod ? prod.name : 'Unknown'} - ${stageName}`,
+                        product_id: prod?.id || null,
+                        product_name: prod ? prod.name : 'Unknown',
+                        product_image: prod?.image_url || null,
+                        status: 'NOT_STARTED',
+                        assigned_at: firstAssignment.joined_at,
+                        started_at: null,
+                        completed_at: null,
+                        alarm_fired_at: null,
+                        role: 'Initiator',
+                        duration_seconds: task.duration_seconds,
+                        working_duration_seconds: null,
+                        assign_to_start_seconds: null
+                    });
+                }
                 return;
             }
 
             // CASE 2: Task has started (RUNNING, ALARM, PAUSED, DONE)
-            // Filter out workers who left BEFORE the task was ever started, provided other workers worked on it
             const participatingWorkers = [];
             const taskStartTime = task.started_at ? new Date(task.started_at).getTime() : null;
 
@@ -779,8 +806,10 @@ export const getDetailedWorkerLogs = async (req, res) => {
                 });
             });
 
-            // If some workers actually participated after start, filter out those who left before start
+            // Separate active participants from unstarted workers
             let activeParticipants = participatingWorkers.filter(p => !p.leftBeforeStart);
+            const unstartedWorkers = participatingWorkers.filter(p => p.leftBeforeStart);
+
             if (activeParticipants.length === 0) {
                 activeParticipants = participatingWorkers; // Fallback if all left before start
             }
@@ -802,7 +831,42 @@ export const getDetailedWorkerLogs = async (req, res) => {
 
             // Sort active participants by joined time
             activeParticipants.sort((a, b) => a.joinedTime - b.joinedTime);
-            const initiatorWorkerId = activeParticipants[0].workerId;
+            const initiatorWorker = activeParticipants[0];
+            const initiatorWorkerId = initiatorWorker?.workerId;
+            const initiatorName = initiatorWorker?.firstAssignment?.worker ? initiatorWorker.firstAssignment.worker.name : 'Unknown';
+
+            // Push unstarted workers (assigned, but another worker took over and started the task)
+            unstartedWorkers.forEach(p => {
+                const workerName = p.firstAssignment.worker ? p.firstAssignment.worker.name : 'Unknown';
+                // Find who specifically took over next
+                const nextAssignment = sortedAssignments.find(a =>
+                    a.worker_id !== p.workerId &&
+                    new Date(a.joined_at).getTime() >= p.joinedTime
+                );
+                const takeoverWorkerName = nextAssignment?.worker ? nextAssignment.worker.name : initiatorName;
+                const takeoverAt = p.lastAssignment.left_at || nextAssignment?.joined_at || task.started_at;
+
+                logs.push({
+                    worker_name: workerName,
+                    worker_id: p.workerId,
+                    task: `${prod ? prod.name : 'Unknown'} - ${stageName}`,
+                    product_id: prod?.id || null,
+                    product_name: prod ? prod.name : 'Unknown',
+                    product_image: prod?.image_url || null,
+                    status: 'NOT_STARTED',
+                    assigned_at: p.firstAssignment.joined_at,
+                    started_at: null,
+                    completed_at: null,
+                    alarm_fired_at: null,
+                    role: 'Not Started',
+                    duration_seconds: task.duration_seconds,
+                    working_duration_seconds: null,
+                    assign_to_start_seconds: null,
+                    taken_over_by: takeoverWorkerName,
+                    taken_over_at: takeoverAt,
+                    taken_over_started_at: task.started_at
+                });
+            });
 
             activeParticipants.forEach((p) => {
                 const { workerId, firstAssignment, lastAssignment, joinedTime } = p;
@@ -849,6 +913,13 @@ export const getDetailedWorkerLogs = async (req, res) => {
                     workingDurationSeconds = Math.max(0, Math.round(diffMs / 1000));
                 }
 
+                // Calculate assign_to_start_seconds (time between assigned_at and started_at)
+                let assignToStartSeconds = null;
+                if (firstAssignment.joined_at && workerStartedAt) {
+                    const diffMs = new Date(workerStartedAt).getTime() - new Date(firstAssignment.joined_at).getTime();
+                    assignToStartSeconds = Math.max(0, Math.round(diffMs / 1000));
+                }
+
                 logs.push({
                     worker_name: workerName,
                     worker_id: workerId,
@@ -863,7 +934,8 @@ export const getDetailedWorkerLogs = async (req, res) => {
                     alarm_fired_at: task.alarm_fired_at,
                     role: isInitiator ? 'Initiator' : 'Helper',
                     duration_seconds: task.duration_seconds,
-                    working_duration_seconds: workingDurationSeconds
+                    working_duration_seconds: workingDurationSeconds,
+                    assign_to_start_seconds: assignToStartSeconds
                 });
             });
         });

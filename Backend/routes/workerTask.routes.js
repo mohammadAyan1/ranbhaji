@@ -2,7 +2,8 @@ import express from 'express';
 import {
     getTodayBatches, getBatchDemand, assignNextTask, startTaskStage,
     pauseTask, resumeTask, completeTask, acknowledgeAlarm, joinTask, triggerAlarm, checkAlarms, syncTask,
-    getTaskBuckets, getMyActiveTasks, getStuckTasks, forceCompleteTask, getMyTaskHistory
+    getTaskBuckets, getMyActiveTasks, getStuckTasks, forceCompleteTask, getMyTaskHistory,
+    respondTaskCompletion, getTaskCompletionStatus
 } from '../controllers/workerTask.controller.js';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware.js';
 
@@ -25,6 +26,9 @@ router.post('/tasks/:taskId/start', startTaskStage);
 router.post('/tasks/:taskId/pause', pauseTask);
 router.post('/tasks/:taskId/resume', resumeTask);
 router.post('/tasks/:taskId/complete', completeTask);
+router.post('/tasks/:taskId/respond-completion', respondTaskCompletion); // Worker confirms (YES) or rejects (NO) completion
+router.post('/tasks/:taskId/confirm-completion', respondTaskCompletion); // Alias for convenience
+router.get('/tasks/:taskId/completion-status', getTaskCompletionStatus); // Check completion request & modal status
 router.post('/tasks/:taskId/acknowledge', acknowledgeAlarm);
 router.post('/tasks/:taskId/join', joinTask);
 router.post('/tasks/:taskId/force-complete', forceCompleteTask); // dashboard force-complete for stuck tasks

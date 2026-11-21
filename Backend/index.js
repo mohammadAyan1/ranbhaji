@@ -43,6 +43,7 @@ import referralRoutes from "./routes/referral.route.js";
 import closingStockRoutes from "./routes/closingStock.route.js";
 import workerTaskRoutes from "./routes/workerTask.routes.js";
 import registeredEmailRoutes from "./routes/registeredEmail.route.js";
+import heroSectionRoutes from "./routes/heroSection.route.js";
 // Utilities
 import { startCronJobs } from "./utils/cronJobs.js";
 import { seedDatabase } from "./utils/seed.js";
@@ -131,6 +132,8 @@ app.use("/api/worker-tasks", workerTaskRoutes);
 app.use("/api/registered-emails", registeredEmailRoutes);
 // notification
 app.use('/api/notifications', notificationRouter);
+app.use('/api/hero-section', heroSectionRoutes);
+app.use('/api/hero', heroSectionRoutes);
 
 
 // 404 fallback

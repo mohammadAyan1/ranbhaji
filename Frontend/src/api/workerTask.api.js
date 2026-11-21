@@ -45,6 +45,16 @@ export const completeTask = async (taskId) => {
     return res.data;
 };
 
+export const respondTaskCompletion = async (taskId, agree) => {
+    const res = await api.post(`/worker-tasks/tasks/${taskId}/respond-completion`, { agree });
+    return res.data;
+};
+
+export const getTaskCompletionStatus = async (taskId) => {
+    const res = await api.get(`/worker-tasks/tasks/${taskId}/completion-status`);
+    return res.data;
+};
+
 export const acknowledgeAlarm = async (taskId) => {
     const res = await api.post(`/worker-tasks/tasks/${taskId}/acknowledge`);
     return res.data;

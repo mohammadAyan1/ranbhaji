@@ -124,7 +124,9 @@ const calculatePendingDemands = async (dateStr) => {
 // GET /api/admin/dashboard-stats
 export const getDashboardStats = async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 330);
+        const today = now.toISOString().split('T')[0];
 
         // Fetch today's schedules and retail orders with User status to exclude deactivated users
         const todaySchedules = await DeliverySchedule.findAll({
@@ -165,9 +167,21 @@ export const getDashboardStats = async (req, res) => {
         // 1. Orders Today (Active Retail + Active Schedules scheduled for today)
         const ordersToday = activeRetailOrders.length + activeSchedules.length;
 
-        // 2. Pending Returns
+        // 2. Pending Returns (Today only)
         const pendingReturns = await DeliveryItem.count({
-            where: { return_status: 'requested' }
+            where: { return_status: 'requested' },
+            include: [
+                {
+                    model: DeliverySchedule,
+                    required: true,
+                    where: {
+                        [Op.or]: [
+                            { actual_delivery_date: today },
+                            { scheduled_date: today }
+                        ]
+                    }
+                }
+            ]
         });
 
         // 3. Missing Items Today (MissedProductLog)

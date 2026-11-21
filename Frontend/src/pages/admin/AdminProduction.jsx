@@ -103,6 +103,27 @@ const LiveTimer = ({ startedAt, expectedMinutes }) => {
   );
 };
 
+const formatAssignToStartDuration = (log) => {
+  if (log.assign_to_start_seconds !== undefined && log.assign_to_start_seconds !== null) {
+    const s = Number(log.assign_to_start_seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const remS = s % 60;
+    return `${m}m ${remS}s`;
+  }
+
+  // Calculate from started_at and assigned_at if not directly provided
+  if (log.assigned_at && log.started_at) {
+    const diff = Math.max(0, Math.round((new Date(log.started_at).getTime() - new Date(log.assigned_at).getTime()) / 1000));
+    if (diff < 60) return `${diff}s`;
+    const m = Math.floor(diff / 60);
+    const remS = diff % 60;
+    return `${m}m ${remS}s`;
+  }
+
+  return '-';
+};
+
 const formatActualWorkDuration = (log) => {
   // If backend provided working_duration_seconds
   if (log.working_duration_seconds !== undefined && log.working_duration_seconds !== null) {
@@ -348,6 +369,7 @@ export default function AdminProduction() {
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned At</th>
                   <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started At</th>
+                  <th scope="col" className="px-5 py-3 text-left text-xs font-bold text-amber-800 uppercase tracking-wider bg-amber-50/70 border-x border-amber-100">Assign → Start</th>
                   <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed At</th>
                   <th scope="col" className="px-5 py-3 text-left text-xs font-bold text-emerald-800 uppercase tracking-wider bg-emerald-50/70 border-x border-emerald-100">Working Time</th>
                   <th scope="col" className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Duration</th>
@@ -356,7 +378,7 @@ export default function AdminProduction() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loadingLogs ? (
                   <tr>
-                    <td colSpan="9" className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan="10" className="px-6 py-12 text-center text-gray-500">
                       <div className="flex items-center justify-center gap-2">
                         <div className="animate-spin rounded-full h-5 w-5 border-2 border-green-600 border-t-transparent" />
                         <span>Fetching worker logs...</span>
@@ -365,7 +387,7 @@ export default function AdminProduction() {
                   </tr>
                 ) : displayedLogs.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="px-6 py-8 text-center text-gray-500 italic">No worker logs available for the selected filters.</td>
+                    <td colSpan="10" className="px-6 py-8 text-center text-gray-500 italic">No worker logs available for the selected filters.</td>
                   </tr>
                 ) : (
                   displayedLogs.map((log, index) => {
@@ -375,6 +397,7 @@ export default function AdminProduction() {
                       .replace(/busket\s*arrange/gi, 'basket arrange');
 
                     const workDur = formatActualWorkDuration(log);
+                    const assignStartDur = formatAssignToStartDuration(log);
 
                     return (
                       <tr key={index} className="hover:bg-gray-50 transition-colors">
@@ -386,43 +409,83 @@ export default function AdminProduction() {
                           </div>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${log.role === 'Initiator' ? 'bg-indigo-100 text-indigo-800' : 'bg-pink-100 text-pink-800'
-                            }`}>
+                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                            log.role === 'Initiator' ? 'bg-indigo-100 text-indigo-800' :
+                            log.role === 'Not Started' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                            'bg-pink-100 text-pink-800'
+                          }`}>
                             {log.role}
                           </span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${log.status === 'DONE' ? 'bg-green-100 text-green-800' :
+                          <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                            log.status === 'DONE' ? 'bg-green-100 text-green-800' :
                             log.status === 'ALARM' ? 'bg-red-100 text-red-800' :
-                              log.status === 'NOT_STARTED' ? 'bg-gray-100 text-gray-700 border border-gray-300' :
-                                'bg-blue-100 text-blue-800'
-                            }`}>
-                            {log.status}
+                            log.status === 'NOT_STARTED' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {log.status === 'NOT_STARTED' ? 'NOT STARTED' : log.status}
                           </span>
+                          {log.taken_over_by && (
+                            <div className="text-[10px] text-amber-700 font-semibold mt-1">
+                              Taken by <strong>{log.taken_over_by}</strong>
+                            </div>
+                          )}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-500">
                           {log.assigned_at ? (
                             <div>
-                              <span className="font-medium text-gray-800">{new Date(log.assigned_at).toLocaleTimeString()}</span>
-                              <span className="block text-xs text-gray-400">{new Date(log.assigned_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+                              <span className="font-medium text-gray-800">
+                                {new Date(log.assigned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                              <span className="block text-xs text-gray-400">
+                                {new Date(log.assigned_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
                             </div>
                           ) : '-'}
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-500">
                           {log.started_at ? (
                             <div>
-                              <span className="font-medium text-gray-800">{new Date(log.started_at).toLocaleTimeString()}</span>
-                              <span className="block text-xs text-gray-400">{new Date(log.started_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+                              <span className="font-medium text-gray-800">
+                                {new Date(log.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                              <span className="block text-xs text-gray-400">
+                                {new Date(log.started_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
+                            </div>
+                          ) : log.taken_over_by ? (
+                            <div>
+                              <span className="text-gray-400 italic text-xs block">Not Started</span>
+                              <div className="mt-1 text-[11px] bg-amber-50 text-amber-900 border border-amber-200 rounded px-2 py-1 leading-tight">
+                                <div>Taken by <strong>{log.taken_over_by}</strong>: {log.taken_over_at ? new Date(log.taken_over_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}</div>
+                                {log.taken_over_started_at && (
+                                  <div className="text-[10px] text-amber-700 font-medium">Started: {new Date(log.taken_over_started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+                                )}
+                              </div>
                             </div>
                           ) : (
                             <span className="text-gray-400 italic text-xs">Not Started</span>
                           )}
                         </td>
+                        <td className="px-5 py-4 whitespace-nowrap bg-amber-50/20 border-x border-amber-100/60">
+                          {assignStartDur === '-' ? (
+                            <span className="text-gray-400 text-sm font-medium">-</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                              ⚡ {assignStartDur}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-500">
                           {log.completed_at ? (
                             <div>
-                              <span className="font-medium text-gray-800">{new Date(log.completed_at).toLocaleTimeString()}</span>
-                              <span className="block text-xs text-gray-400">{new Date(log.completed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+                              <span className="font-medium text-gray-800">
+                                {new Date(log.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                              <span className="block text-xs text-gray-400">
+                                {new Date(log.completed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
                             </div>
                           ) : log.status === 'RUNNING' ? (
                             <span className="text-blue-600 font-medium text-xs">In Progress</span>

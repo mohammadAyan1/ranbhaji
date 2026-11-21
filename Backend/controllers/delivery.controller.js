@@ -1038,17 +1038,31 @@ export const getReturns = async (req, res) => {
 
         if (order_id) {
             scheduleWhere.id = order_id;
-        } else if (all_time === 'true') {
+        } else if (all_time === 'true' || all_time === true) {
             // no date filter
         } else if (from_date && to_date) {
-            scheduleWhere.actual_delivery_date = {
-                [Op.between]: [`${from_date}`, `${to_date}`]
-            };
+            scheduleWhere[Op.or] = [
+                { actual_delivery_date: { [Op.between]: [`${from_date}`, `${to_date}`] } },
+                { scheduled_date: { [Op.between]: [`${from_date}`, `${to_date}`] } }
+            ];
+        } else if (from_date) {
+            scheduleWhere[Op.or] = [
+                { actual_delivery_date: { [Op.gte]: `${from_date}` } },
+                { scheduled_date: { [Op.gte]: `${from_date}` } }
+            ];
+        } else if (to_date) {
+            scheduleWhere[Op.or] = [
+                { actual_delivery_date: { [Op.lte]: `${to_date}` } },
+                { scheduled_date: { [Op.lte]: `${to_date}` } }
+            ];
         } else {
-            const todayStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }).split(',')[0];
-            const [m, d, y] = todayStr.split('/');
-            const todayFormatted = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-            scheduleWhere.actual_delivery_date = todayFormatted;
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 330);
+            const todayFormatted = now.toISOString().split('T')[0];
+            scheduleWhere[Op.or] = [
+                { actual_delivery_date: todayFormatted },
+                { scheduled_date: todayFormatted }
+            ];
         }
 
         if (delivery_boy_id) {
@@ -1056,6 +1070,7 @@ export const getReturns = async (req, res) => {
         }
 
         const subWhere = user_id ? { user_id } : undefined;
+        const hasScheduleWhere = Reflect.ownKeys(scheduleWhere).length > 0;
 
         const returns = await DeliveryItem.findAll({
             where: itemWhere,
@@ -1063,7 +1078,7 @@ export const getReturns = async (req, res) => {
                 { model: Product },
                 {
                     model: DeliverySchedule,
-                    where: Object.keys(scheduleWhere).length ? scheduleWhere : undefined,
+                    where: hasScheduleWhere ? scheduleWhere : undefined,
                     required: true,
                     include: [
                         { model: Subscription, required: !!user_id, where: subWhere, include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Package, attributes: ['id', 'name'] }] },

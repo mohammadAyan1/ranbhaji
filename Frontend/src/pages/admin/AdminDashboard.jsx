@@ -7,7 +7,15 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     Promise.all([api.get("/admin/dashboard-stats"), api.get("/admin/users")])
@@ -93,16 +101,27 @@ export default function AdminDashboard() {
           <p className="page-sub">Live operations overview and quick navigation</p>
         </div>
 
-        {/* Current Date Display */}
-        <div className="flex items-center gap-2.5 px-4 py-2 bg-white rounded-xl border border-gray-200/90 shadow-sm text-gray-700 self-start sm:self-auto">
-          <Calendar className="text-green-600 w-5 h-5 flex-shrink-0" />
-          <div className="text-sm">
-            <span className="font-semibold text-gray-900">
-              {new Date().toLocaleDateString("en-IN", {
+        {/* Current Date & Running Live Time Display */}
+        <div className="flex flex-col items-start sm:items-end gap-1.5 self-start sm:self-auto">
+          <div className="flex items-center gap-2 px-3.5 py-1.5 bg-white rounded-xl border border-gray-200/90 shadow-2xs text-gray-700">
+            <Calendar className="text-green-600 w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-semibold text-gray-900">
+              {currentTime.toLocaleDateString("en-IN", {
                 weekday: "long",
                 day: "numeric",
                 month: "short",
                 year: "numeric"
+              })}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl border border-emerald-200/80 shadow-2xs text-gray-700">
+            <Clock className="text-emerald-600 w-3.5 h-3.5 flex-shrink-0 animate-pulse" />
+            <span className="text-xs font-bold text-emerald-800 font-mono tracking-wider">
+              {currentTime.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true
               })}
             </span>
           </div>

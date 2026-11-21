@@ -19,22 +19,33 @@ export default function ReturnItem() {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  const getISTDate = (offsetDays = 0) => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 330);
+    if (offsetDays !== 0) now.setDate(now.getDate() + offsetDays);
+    return now.toISOString().split('T')[0];
+  };
+
   // Filters
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(() => getISTDate(0));
+  const [toDate, setToDate] = useState(() => getISTDate(0));
   const [orderId, setOrderId] = useState("");
   const [allTime, setAllTime] = useState(false);
 
-  const fetchReturns = async () => {
+  const fetchReturns = async (customParams = null) => {
     setLoading(true);
     try {
       let params = {};
-      if (orderId) params.order_id = orderId;
-      if (fromDate && toDate) {
-        params.from_date = fromDate;
-        params.to_date = toDate;
+      if (customParams) {
+        params = { ...customParams };
+      } else {
+        if (orderId) params.order_id = orderId;
+        if (fromDate && toDate) {
+          params.from_date = fromDate;
+          params.to_date = toDate;
+        }
+        if (allTime) params.all_time = true;
       }
-      if (allTime) params.all_time = true;
 
       const res = await api.get("/admin/returns", { params });
 
@@ -66,8 +77,32 @@ export default function ReturnItem() {
   };
 
   useEffect(() => {
-    fetchReturns();
+    fetchReturns({ from_date: getISTDate(0), to_date: getISTDate(0) });
   }, []);
+
+  const handleQuickFilter = (type) => {
+    if (type === 'today') {
+      const today = getISTDate(0);
+      setFromDate(today);
+      setToDate(today);
+      setAllTime(false);
+      setOrderId("");
+      fetchReturns({ from_date: today, to_date: today });
+    } else if (type === 'yesterday') {
+      const yesterday = getISTDate(-1);
+      setFromDate(yesterday);
+      setToDate(yesterday);
+      setAllTime(false);
+      setOrderId("");
+      fetchReturns({ from_date: yesterday, to_date: yesterday });
+    } else if (type === 'all') {
+      setAllTime(true);
+      setFromDate("");
+      setToDate("");
+      setOrderId("");
+      fetchReturns({ all_time: true });
+    }
+  };
 
   useEffect(() => {
     if (!selectedPhoto) return;
@@ -131,7 +166,7 @@ export default function ReturnItem() {
         <p className="page-sub">Review and process partial item return requests</p>
       </div>
 
-      <div className="card p-4">
+      <div className="card p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
             <label className="label">Order ID</label>
@@ -146,19 +181,68 @@ export default function ReturnItem() {
             <input type="date" className="input" value={toDate} onChange={e => setToDate(e.target.value)} disabled={allTime || orderId} />
           </div>
           <div className="flex gap-2">
-            <button className="btn-primary flex-1" onClick={fetchReturns}>Filter</button>
             <button
-              className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+              className="btn-primary flex-1"
               onClick={() => {
-                setAllTime(!allTime);
-                setOrderId("");
-                setFromDate("");
-                setToDate("");
+                setAllTime(false);
+                fetchReturns({
+                  ...(orderId ? { order_id: orderId } : {}),
+                  ...(fromDate ? { from_date: fromDate } : {}),
+                  ...(toDate ? { to_date: toDate } : {}),
+                });
+              }}
+            >
+              Filter
+            </button>
+            <button
+              className={`btn flex-1 ${allTime ? 'bg-fresh-500 text-white font-bold' : 'bg-gray-100 text-gray-700'}`}
+              onClick={() => {
+                if (allTime) {
+                  handleQuickFilter('today');
+                } else {
+                  handleQuickFilter('all');
+                }
               }}
             >
               {allTime ? "All Time: ON" : "All Time"}
             </button>
           </div>
+        </div>
+
+        {/* Quick Date Presets */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+          <span className="text-xs font-semibold text-gray-400 mr-1">Quick Filter:</span>
+          <button
+            type="button"
+            onClick={() => handleQuickFilter('today')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+              fromDate === getISTDate(0) && toDate === getISTDate(0) && !allTime
+                ? "bg-green-600 text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickFilter('yesterday')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+              fromDate === getISTDate(-1) && toDate === getISTDate(-1) && !allTime
+                ? "bg-amber-600 text-white"
+                : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
+            }`}
+          >
+            Yesterday (20 Nov)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickFilter('all')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${
+              allTime ? "bg-blue-600 text-white" : "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+            }`}
+          >
+            All Pending Item Returns
+          </button>
         </div>
       </div>
 
