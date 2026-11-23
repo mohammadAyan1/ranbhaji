@@ -548,9 +548,24 @@ export const assignNextTask = async (req, res) => {
             ['NOT_STARTED', 'RUNNING', 'PAUSED', 'ALARM'].includes(t.status)
         );
 
+        // 3. Every demanded product must have completed its final required pre-bucket stage (DRYING, CUTTING, or WEIGHING)
+        const productsWithIncompleteFinalStage = demands.filter(d => {
+            const product = d.Product;
+            const dryDuration = calculateDryingDuration(product, d.quantity_grams);
+            const cutDuration = calculateCuttingDuration(product, d.quantity_grams);
+            const targetFinalStage = dryDuration > 0 ? 'DRYING' : (cutDuration > 0 ? 'CUTTING' : 'WEIGHING');
+            const hasCompletedFinalStage = tasks.some(t =>
+                t.product_id === d.product_id &&
+                t.stage === targetFinalStage &&
+                t.status === 'DONE'
+            );
+            return !hasCompletedFinalStage;
+        });
+
         const isBatchProcessingComplete = demands.length > 0 &&
             unweighedProductsForCheck.length === 0 &&
-            activePipelineTasks.length === 0;
+            activePipelineTasks.length === 0 &&
+            productsWithIncompleteFinalStage.length === 0;
 
         if (isBatchProcessingComplete) {
             // Find which demanded products do NOT yet have a BUCKET_ARRANGE task today
@@ -879,7 +894,7 @@ export const handleStageCompletion = async (task) => {
     );
 
     // Create the NEXT stage task in NOT_STARTED state
-    const stageOrder = ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING', 'BUCKET_ARRANGE'];
+    const stageOrder = ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'];
     const currentIdx = stageOrder.indexOf(task.stage);
 
     let nextTask = null;
@@ -892,21 +907,6 @@ export const handleStageCompletion = async (task) => {
             if (nextStage === 'SOAKING') duration = calculateSoakingDuration(product);
             else if (nextStage === 'CUTTING') duration = calculateCuttingDuration(product, task.quantity_grams);
             else if (nextStage === 'DRYING') duration = calculateDryingDuration(product, task.quantity_grams);
-            else if (nextStage === 'BUCKET_ARRANGE') {
-                try {
-                    const now = new Date();
-                    now.setMinutes(now.getMinutes() + 330);
-                    const dateStr = now.toISOString().split('T')[0];
-                    const demandMap = await computeBatchDemandHelper(task.batch_id, dateStr);
-                    const prodDemand = demandMap ? demandMap[task.product_id] : null;
-                    let userCount = prodDemand && prodDemand.usersMap ? Object.keys(prodDemand.usersMap).length : 0;
-                    if (userCount === 0) userCount = 1;
-                    const baseTime = product ? (product.weighing_time_seconds || 30) : 30;
-                    duration = baseTime * userCount;
-                } catch (e) {
-                    duration = 30;
-                }
-            }
 
             if (duration === 0 && ['SOAKING', 'DRYING'].includes(nextStage)) {
                 // skip zero-duration waiting stages
