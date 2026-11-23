@@ -330,7 +330,7 @@ export default function AdminAllOrders() {
                   <th className="p-4 font-semibold">Order Details & Customer</th>
                   <th className="p-4 font-semibold">Order Type</th>
                   <th className="p-4 font-semibold">Total Items</th>
-                  <th className="p-4 font-semibold text-right">Assign All</th>
+                  <th className="p-4 font-semibold text-right">Assign Batch</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -399,47 +399,12 @@ export default function AdminAllOrders() {
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        {currentUser?.role === 'admin' ? (
-                          <div className="text-right flex flex-col items-end gap-2">
-                            <div>
-                              <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Batch</p>
-                              {/* <select
-                                className="input-field py-1 text-sm bg-gray-50 border-gray-200"
-                                value={u.batch_id || ""}
-                                onChange={(e) => handleAssignBatch(u.allScheduleIds, u.allRetailOrderIds, e.target.value)}
-                              >
-                                <option value="">Unassigned</option>
-                                {batches.map(b => (
-                                  <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                              </select> */}
-                              <p className="text-xs text-gray-500 mt-1">
-                                {u.batch_id ? batches.find(b => b.id === u.batch_id)?.name || 'Assigned' : 'Unassigned'}
-                              </p>
-                            </div>
-
-                            <div>
-                              <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Boy</p>
-                              {/* <select
-                                className="input-field py-1 text-sm bg-gray-50 border-gray-200"
-                                value={u.delivery_boy_id || ""}
-                                onChange={(e) => handleAssignDeliveryBoy(u.allScheduleIds, u.allRetailOrderIds, e.target.value)}
-                              >
-                                <option value="">Unassigned</option>
-                                {deliveryBoys.map(boy => (
-                                  <option key={boy.id} value={boy.id}>{boy.name}</option>
-                                ))}
-                              </select> */}
-                              <p className="text-xs text-gray-500 mt-1">
-                                {u.delivery_boy_id ? deliveryBoys.find(b => b.id === u.delivery_boy_id)?.name || 'Assigned' : 'Unassigned'}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-gray-600 text-sm">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Assign Batch</p>
+                          <p className="text-xs text-gray-500 font-medium">
                             {u.batch_id ? batches.find(b => b.id === u.batch_id)?.name || 'Assigned' : 'Unassigned'}
-                          </span>
-                        )}
+                          </p>
+                        </div>
                       </td>
                     </tr>
 
@@ -504,38 +469,11 @@ export default function AdminAllOrders() {
                                         </div>
                                         <p className="font-medium text-gray-900">{addrGrp.address}</p>
                                       </div>
-                                      <div className="text-right flex flex-col items-end gap-2">
+                                      <div className="text-right flex flex-col items-end gap-1">
                                         <div>
-                                          <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Batch</p>
-                                          <select
-                                            className="input-field py-1 text-sm bg-gray-50 border-gray-200"
-                                            value={addrGrp.batch_id || ""}
-                                            onChange={(e) => handleAssignBatch(addrGrp.scheduleIds, addrGrp.retailOrderIds, e.target.value)}
-                                          >
-                                            <option value="">Unassigned</option>
-                                            {batches.map(b => (
-                                              <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                          </select>
-                                          <p className="text-xs text-gray-500 mt-1">
+                                          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Assign Batch</p>
+                                          <p className="text-xs text-gray-500 font-medium">
                                             {addrGrp.batch_id ? batches.find(b => b.id === addrGrp.batch_id)?.name || 'Assigned' : 'Unassigned'}
-                                          </p>
-                                        </div>
-
-                                        <div>
-                                          <p className="text-sm text-gray-600 uppercase tracking-wide text-xs mb-1">Assign Boy</p>
-                                          <select
-                                            className="input-field py-1 text-sm bg-gray-50 border-gray-200"
-                                            value={addrGrp.delivery_boy_id || ""}
-                                            onChange={(e) => handleAssignDeliveryBoy(addrGrp.scheduleIds, addrGrp.retailOrderIds, e.target.value)}
-                                          >
-                                            <option value="">Unassigned</option>
-                                            {deliveryBoys.map(boy => (
-                                              <option key={boy.id} value={boy.id}>{boy.name}</option>
-                                            ))}
-                                          </select>
-                                          <p className="text-xs text-gray-500 mt-1">
-                                            {addrGrp.delivery_boy_id ? deliveryBoys.find(b => b.id === addrGrp.delivery_boy_id)?.name || 'Assigned' : 'Unassigned'}
                                           </p>
                                         </div>
                                       </div>
@@ -546,26 +484,16 @@ export default function AdminAllOrders() {
                                         <table className="w-full text-sm text-left min-w-[500px]">
                                           <thead className="bg-white/50 text-gray-600 text-xs">
                                             <tr>
-                                              <th className="p-2 pl-4 w-8"></th>
-                                              <th className="p-2">Item Name</th>
+                                              <th className="p-2 pl-4">Item Name</th>
                                               <th className="p-2 text-blue-400">Package Qty</th>
                                               <th className="p-2 text-purple-400">Retail Qty</th>
-                                              <th className="p-2 text-right">Total</th>
-                                              <th className="p-2 pl-4 w-24">Packed Qty</th>
+                                              <th className="p-2 pr-4 text-right">Total</th>
                                             </tr>
                                           </thead>
                                           <tbody className="divide-y divide-gray-700/50">
                                             {addrGrp.items.map((item, i) => (
-                                              <tr key={i} className={`hover:bg-gray-700/20 text-gray-700 ${uncheckedItems[`${u.user.id}-${idx}-${item.id}`] ? 'opacity-50 line-through' : ''}`}>
-                                                <td className="p-2 pl-4">
-                                                  <input
-                                                    type="checkbox"
-                                                    className="w-4 h-4 text-fresh-500 bg-gray-100 border-gray-600 rounded focus:ring-fresh-500 cursor-pointer"
-                                                    checked={!uncheckedItems[`${u.user.id}-${idx}-${item.id}`]}
-                                                    onChange={(e) => handleCheckChange(u.user.id, idx, item.id, e.target.checked)}
-                                                  />
-                                                </td>
-                                                <td className="p-2 font-medium">
+                                              <tr key={i} className="hover:bg-gray-50 text-gray-700">
+                                                <td className="p-2 pl-4 font-medium">
                                                   {item.name} {item.hindi_name ? <span className="text-gray-500 font-normal text-xs">({item.hindi_name})</span> : ""}
                                                 </td>
                                                 <td className="p-2 text-blue-600">
@@ -588,23 +516,8 @@ export default function AdminAllOrders() {
                                                 <td className="p-2 text-purple-300">
                                                   {item.retailQty > 0 ? formatQuantity(item.retailQty, item.unit) : '-'}
                                                 </td>
-                                                <td className="p-2 text-right font-medium">
+                                                <td className="p-2 pr-4 text-right font-medium">
                                                   {formatQuantity(item.totalQty, item.unit)}
-                                                </td>
-                                                <td className="p-2 pl-4 flex items-center gap-1">
-                                                  <input
-                                                    type="number"
-                                                    className="input-field py-1 px-2 text-xs w-20"
-                                                    value={packedQuantities[`${u.user.id}-${idx}-${item.id}`] ?? (item.packedQty || 0)}
-                                                    onChange={(e) => handlePackedQtyChange(u.user.id, idx, item.id, e.target.value)}
-                                                  />
-                                                  <button
-                                                    title="Auto-fill total required"
-                                                    onClick={() => handlePackedQtyChange(u.user.id, idx, item.id, item.totalQty)}
-                                                    className="bg-blue-100 hover:bg-blue-200 text-blue-600 rounded px-1.5 py-1 text-[10px] transition-colors border border-blue-200"
-                                                  >
-                                                    Fill
-                                                  </button>
                                                 </td>
                                               </tr>
                                             ))}
@@ -613,14 +526,7 @@ export default function AdminAllOrders() {
                                       </div>
                                     )}
 
-                                    <div className="mt-4 flex justify-end">
-                                      {/* <button
-                                        onClick={() => handleMarkReady(u.user.id, idx, addrGrp.items, addrGrp.scheduleIds, addrGrp.retailOrderIds)}
-                                        className="btn-primary py-1.5 px-4 text-sm font-semibold"
-                                      >
-                                        {addrGrp.status === 'ready_for_delivery' ? 'Update Ready for Delivery' : 'Mark Ready for Delivery'}
-                                      </button> */}
-                                    </div>
+
                                   </div>
                                 ))}
                               </div>
