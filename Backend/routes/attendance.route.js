@@ -7,7 +7,7 @@ const router = express.Router();
 // Delivery boy marks attendance
 router.post("/mark", requireAuth, requireRole(["delivery"]), markAttendance);
 
-// Only admin can view all attendance logs
-router.get("/", requireAuth, requireRole(["admin"]), getAttendanceLogs);
+// View attendance logs (admin views all, delivery views own)
+router.get("/", requireAuth, requireRole(["admin", "delivery"]), getAttendanceLogs);
 
 export default router;

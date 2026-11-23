@@ -8,7 +8,11 @@ export const getAttendanceLogs = async (req, res) => {
 
         let whereClause = {};
         if (date) whereClause.date = date;
-        if (delivery_boy_id) whereClause.delivery_boy_id = delivery_boy_id;
+        if (req.user && req.user.role === 'delivery') {
+            whereClause.delivery_boy_id = req.user.id;
+        } else if (delivery_boy_id) {
+            whereClause.delivery_boy_id = delivery_boy_id;
+        }
 
         const logs = await AttendanceLog.findAll({
             where: whereClause,
