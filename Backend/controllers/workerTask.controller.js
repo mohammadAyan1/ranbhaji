@@ -553,18 +553,22 @@ export const assignNextTask = async (req, res) => {
             activePipelineTasks.length === 0;
 
         if (isBatchProcessingComplete) {
-            // Check if BUCKET_ARRANGE tasks already exist
-            const bucketArrangeTasks = tasks.filter(t => t.stage === 'BUCKET_ARRANGE');
-            if (bucketArrangeTasks.length === 0) {
+            // Find which demanded products do NOT yet have a BUCKET_ARRANGE task today
+            const existingBucketProductIds = new Set(
+                tasks.filter(t => t.stage === 'BUCKET_ARRANGE').map(t => t.product_id)
+            );
+            const missingDemandsForBucket = demands.filter(d => !existingBucketProductIds.has(d.product_id));
+
+            if (missingDemandsForBucket.length > 0) {
                 // Fetch demand map to get exact user counts (both subscription & retail)
                 const now = new Date();
                 now.setMinutes(now.getMinutes() + 330);
                 const dateStr = now.toISOString().split('T')[0];
                 const demandMap = await computeBatchDemandHelper(batchId, dateStr);
 
-                // Generate BUCKET_ARRANGE task for each demanded vegetable in bulk
+                // Generate BUCKET_ARRANGE task for each missing demanded vegetable
                 const tasksToCreate = [];
-                for (const d of demands) {
+                for (const d of missingDemandsForBucket) {
                     const prodDemand = demandMap ? demandMap[d.product_id] : null;
                     let userCount = prodDemand && prodDemand.usersMap ? Object.keys(prodDemand.usersMap).length : 0;
                     if (userCount === 0) userCount = 1; // Fallback
@@ -875,7 +879,7 @@ export const handleStageCompletion = async (task) => {
     );
 
     // Create the NEXT stage task in NOT_STARTED state
-    const stageOrder = ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING'];
+    const stageOrder = ['WEIGHING', 'SOAKING', 'CUTTING', 'DRYING', 'BUCKET_ARRANGE'];
     const currentIdx = stageOrder.indexOf(task.stage);
 
     let nextTask = null;
@@ -888,6 +892,21 @@ export const handleStageCompletion = async (task) => {
             if (nextStage === 'SOAKING') duration = calculateSoakingDuration(product);
             else if (nextStage === 'CUTTING') duration = calculateCuttingDuration(product, task.quantity_grams);
             else if (nextStage === 'DRYING') duration = calculateDryingDuration(product, task.quantity_grams);
+            else if (nextStage === 'BUCKET_ARRANGE') {
+                try {
+                    const now = new Date();
+                    now.setMinutes(now.getMinutes() + 330);
+                    const dateStr = now.toISOString().split('T')[0];
+                    const demandMap = await computeBatchDemandHelper(task.batch_id, dateStr);
+                    const prodDemand = demandMap ? demandMap[task.product_id] : null;
+                    let userCount = prodDemand && prodDemand.usersMap ? Object.keys(prodDemand.usersMap).length : 0;
+                    if (userCount === 0) userCount = 1;
+                    const baseTime = product ? (product.weighing_time_seconds || 30) : 30;
+                    duration = baseTime * userCount;
+                } catch (e) {
+                    duration = 30;
+                }
+            }
 
             if (duration === 0 && ['SOAKING', 'DRYING'].includes(nextStage)) {
                 // skip zero-duration waiting stages
