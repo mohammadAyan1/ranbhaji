@@ -1656,3 +1656,163 @@ export const getMyTaskHistory = async (req, res) => {
     }
 };
 
+/**
+ * GET /worker-tasks/tasks/live-tracker (or /live-tracker)
+ * Returns all assigned products and tasks/stages for the logged-in worker for today,
+ * eliminating the need for localStorage persistence in the frontend app.
+ */
+export const getWorkerLiveTracker = async (req, res) => {
+    try {
+        const workerId = req.user.id;
+        const { batchId } = req.query;
+
+        const startOfToday = new Date();
+        startOfToday.setMinutes(startOfToday.getMinutes() + 330); // IST Offset
+        startOfToday.setUTCHours(0, 0, 0, 0);
+        startOfToday.setMinutes(startOfToday.getMinutes() - 330);
+
+        // 1. Fetch assignments for this worker today (or where left_at is null)
+        const assignments = await TaskWorkerAssignment.findAll({
+            where: {
+                worker_id: workerId,
+                [Op.or]: [
+                    { joined_at: { [Op.gte]: startOfToday } },
+                    { left_at: null }
+                ]
+            },
+            include: [{
+                model: BatchProductTask,
+                as: 'task',
+                where: batchId ? { batch_id: batchId } : {},
+                include: [{ model: Product }]
+            }],
+            order: [['joined_at', 'ASC']]
+        });
+
+        // 2. Also fetch active tasks directly assigned to this worker
+        const activeTasks = await BatchProductTask.findAll({
+            where: {
+                status: { [Op.in]: ['RUNNING', 'PAUSED', 'ALARM'] },
+                ...(batchId ? { batch_id: batchId } : {})
+            },
+            include: [
+                { model: Product },
+                {
+                    model: TaskWorkerAssignment,
+                    as: 'worker_assignments',
+                    where: { worker_id: workerId, left_at: null },
+                    required: true
+                }
+            ]
+        });
+
+        // 3. Deduplicate unique tasks
+        const taskMap = new Map();
+        assignments.forEach(a => {
+            if (a.task) taskMap.set(a.task.id, a.task);
+        });
+        activeTasks.forEach(t => {
+            taskMap.set(t.id, t);
+        });
+
+        // Helper to normalize stage name
+        const normalizeStage = (stage) => {
+            const s = String(stage || '').toUpperCase().trim();
+            if (s.includes('SOAK')) return 'SOAKING';
+            if (s.includes('DRY')) return 'DRYING';
+            if (s.includes('WEIGH')) return 'WEIGHING';
+            if (s.includes('CUT') || s.includes('CLEAN')) return 'CUTTING';
+            if (s.includes('BASKET') || s.includes('BUCKET')) return 'basket_ARRANGE';
+            return s;
+        };
+
+        // 4. Group by product
+        const productMap = {};
+        for (const task of taskMap.values()) {
+            const prod = task.Product;
+            if (!prod) continue;
+            const pid = prod.id;
+
+            if (!productMap[pid]) {
+                const qtyVal = parseFloat(task.quantity_grams) || 0;
+                productMap[pid] = {
+                    productId: pid,
+                    productName: prod.name,
+                    productHindi: prod.hindi_name || '',
+                    quantity: `${qtyVal}g`,
+                    quantity_grams: qtyVal,
+                    image: prod.image_url || prod.image || '',
+                    batchId: task.batch_id,
+                    workerAssignedStages: [],
+                    completedStages: [],
+                    activeTasks: [],
+                    stages: []
+                };
+            }
+
+            const normStage = normalizeStage(task.stage);
+            if (normStage && !productMap[pid].workerAssignedStages.includes(normStage)) {
+                productMap[pid].workerAssignedStages.push(normStage);
+            }
+
+            const st = (task.status || '').toUpperCase();
+            if (st === 'DONE') {
+                if (normStage && !productMap[pid].completedStages.includes(normStage)) {
+                    productMap[pid].completedStages.push(normStage);
+                }
+            } else if (['RUNNING', 'PAUSED', 'ALARM'].includes(st)) {
+                if (!productMap[pid].activeTasks.some(at => at.id === task.id)) {
+                    productMap[pid].activeTasks.push({
+                        id: task.id,
+                        stage: task.stage,
+                        status: task.status,
+                        duration_seconds: task.duration_seconds,
+                        remaining_seconds: task.remaining_seconds,
+                        started_at: task.started_at,
+                        paused_at: task.paused_at,
+                        quantity_grams: task.quantity_grams
+                    });
+                }
+            }
+
+            productMap[pid].stages.push({
+                taskId: task.id,
+                stage: task.stage,
+                normStage,
+                status: st === 'DONE' ? 'COMPLETED' : st,
+                duration_seconds: task.duration_seconds,
+                remaining_seconds: task.remaining_seconds,
+                started_at: task.started_at,
+                paused_at: task.paused_at,
+                completed_at: task.completed_at
+            });
+        }
+
+        // 5. Calculate summary metrics for each product
+        const products = Object.values(productMap).map(p => {
+            const totalStages = p.workerAssignedStages.length;
+            const completedCount = p.completedStages.length;
+            const completionPercent = totalStages > 0 ? Math.round((completedCount / totalStages) * 100) : 0;
+            const hasRunning = p.activeTasks.some(t => ['RUNNING', 'ALARM'].includes((t.status || '').toUpperCase()));
+
+            return {
+                ...p,
+                totalStages,
+                completedCount,
+                completionPercent,
+                hasRunning,
+                status: hasRunning ? 'LIVE' : (completedCount === totalStages && totalStages > 0 ? 'COMPLETED' : 'PENDING')
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            products,
+            count: products.length
+        });
+    } catch (error) {
+        console.error("getWorkerLiveTracker Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+

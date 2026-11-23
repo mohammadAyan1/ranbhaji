@@ -3,7 +3,7 @@ import {
     getTodayBatches, getBatchDemand, assignNextTask, startTaskStage,
     pauseTask, resumeTask, completeTask, acknowledgeAlarm, joinTask, triggerAlarm, checkAlarms, syncTask,
     getTaskBuckets, getMyActiveTasks, getStuckTasks, forceCompleteTask, getMyTaskHistory,
-    respondTaskCompletion, getTaskCompletionStatus
+    respondTaskCompletion, getTaskCompletionStatus, getWorkerLiveTracker
 } from '../controllers/workerTask.controller.js';
 import { requireAuth, requireRole } from '../middlewares/auth.middleware.js';
 
@@ -20,6 +20,8 @@ router.get('/alarms', checkAlarms); // polling alarms safely
 router.get('/tasks/active', getMyActiveTasks); // get all active tasks for worker
 router.get('/tasks/stuck', getStuckTasks); // get stuck (PAUSED/NOT_STARTED) tasks for worker
 router.get('/tasks/history', getMyTaskHistory); // get history of worker's tasks for today
+router.get('/tasks/live-tracker', getWorkerLiveTracker); // Live process tracker for worker
+router.get('/live-tracker', getWorkerLiveTracker); // Alias
 
 // Task actions
 router.post('/tasks/:taskId/start', startTaskStage);
