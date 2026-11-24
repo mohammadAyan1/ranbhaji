@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, Clock, Users, CheckCircle, Hourglass, Calendar, Filter, RotateCcw } from 'lucide-react';
+import { Activity, Clock, Users, CheckCircle, Hourglass, Calendar, Filter, RotateCcw, Download, FileSpreadsheet } from 'lucide-react';
 import { io } from 'socket.io-client';
+import * as XLSX from 'xlsx';
 import api from "../../api/axios";
 
 const getImageUrl = (url) => {
@@ -253,6 +254,85 @@ export default function AdminProduction() {
     ? rawLogs
     : rawLogs.filter(l => l.worker_name && l.worker_name.toLowerCase() === selectedWorker.toLowerCase());
 
+  const formatDateTimeForExport = (dateStr) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    return `${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`;
+  };
+
+  const handleExportExcel = () => {
+    if (!displayedLogs || displayedLogs.length === 0) {
+      alert("No worker logs available to export.");
+      return;
+    }
+
+    const data = displayedLogs.map((log, index) => {
+      const formattedTask = (log.task || '')
+        .replace(/BUCKET_ARRANGE/gi, 'basket arrange')
+        .replace(/busket_arrange/gi, 'basket arrange')
+        .replace(/busket\s*arrange/gi, 'basket arrange');
+
+      const workDur = formatActualWorkDuration(log);
+      const assignStartDur = formatAssignToStartDuration(log);
+
+      let startedAtDisplay = '—';
+      if (log.started_at) {
+        startedAtDisplay = formatDateTimeForExport(log.started_at);
+      } else if (log.taken_over_by) {
+        const takenTime = log.taken_over_at ? formatDateTimeForExport(log.taken_over_at) : '';
+        const takenStarted = log.taken_over_started_at ? ` (Started: ${formatDateTimeForExport(log.taken_over_started_at)})` : '';
+        startedAtDisplay = `Not Started (Taken by ${log.taken_over_by}${takenTime ? ` at ${takenTime}` : ''}${takenStarted})`;
+      } else {
+        startedAtDisplay = 'Not Started';
+      }
+
+      return {
+        "S.No.": index + 1,
+        "Worker Name": log.worker_name || '—',
+        "Product Name": log.product_name || '—',
+        "Task Details": formattedTask || '—',
+        "Role": log.role || '—',
+        "Status": log.status === 'NOT_STARTED' ? 'NOT STARTED' : (log.status || '—'),
+        "Taken Over By": log.taken_over_by || '—',
+        "Assigned At": formatDateTimeForExport(log.assigned_at),
+        "Started At": startedAtDisplay,
+        "Assign → Start Duration": assignStartDur !== '-' ? assignStartDur : '—',
+        "Completed At": log.completed_at ? formatDateTimeForExport(log.completed_at) : (log.status === 'RUNNING' ? 'In Progress' : '—'),
+        "Working Time": workDur !== '-' ? workDur : '—',
+        "Est. Duration": log.duration_seconds > 0 ? `${Math.floor(log.duration_seconds / 60)}m ${log.duration_seconds % 60}s` : '—'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet["!cols"] = [
+      { wch: 8 },   // S.No.
+      { wch: 22 },  // Worker Name
+      { wch: 20 },  // Product Name
+      { wch: 26 },  // Task Details
+      { wch: 14 },  // Role
+      { wch: 16 },  // Status
+      { wch: 20 },  // Taken Over By
+      { wch: 24 },  // Assigned At
+      { wch: 32 },  // Started At
+      { wch: 24 },  // Assign → Start Duration
+      { wch: 24 },  // Completed At
+      { wch: 18 },  // Working Time
+      { wch: 16 }   // Est. Duration
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Worker Task Logs");
+
+    const datePart = fromDate && toDate
+      ? `${fromDate}_to_${toDate}`
+      : (fromDate || toDate || new Date().toISOString().split('T')[0]);
+    const workerPart = selectedWorker && selectedWorker !== 'all' ? `_${selectedWorker}` : '';
+    const fileName = `Worker_Task_Logs_${datePart}${workerPart}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
@@ -283,6 +363,15 @@ export default function AdminProduction() {
               <span className="text-xs font-semibold px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
                 {displayedLogs.length} {displayedLogs.length === 1 ? 'task' : 'tasks'}
               </span>
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold px-3 py-1.5 rounded-lg text-xs shadow-xs transition-all cursor-pointer"
+                title="Export Worker Task Logs to Excel"
+              >
+                <FileSpreadsheet size={14} />
+                <span>Export Excel</span>
+              </button>
             </div>
           </div>
 
@@ -354,6 +443,15 @@ export default function AdminProduction() {
                   title="Reset filters and show all"
                 >
                   Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  title="Export filtered logs to Excel (.xlsx)"
+                >
+                  <FileSpreadsheet size={16} />
+                  <span>Export</span>
                 </button>
               </div>
             </div>
