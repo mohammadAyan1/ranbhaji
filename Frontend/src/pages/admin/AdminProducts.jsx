@@ -14,7 +14,8 @@ const emptyForm = {
   description: "", min_retail_qty: "", water_capacity_liters: "",
   weighing_time_seconds: 0, soaking_time_seconds: 0, cutting_mode: "PER_25G",
   pieces_per_25g: "", time_per_piece_seconds: "", time_per_25g_seconds: "", drying_time_seconds: 0,
-  drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null, existing_image_url: "", is_qty_double: false, is_package_active: true, discount_percentage: ""
+  drying_time_per_piece_seconds: 0, drying_time_per_25g_seconds: 0, image: null, existing_image_url: "", is_qty_double: false, is_package_active: true, discount_percentage: "",
+  waste_percentage: "", closing_stock_usable_percentage: "100"
 };
 
 const showKgToggle = (category, unit) =>
@@ -333,6 +334,8 @@ export default function AdminProducts() {
     payload.append("discount_percentage", form.discount_percentage || 0);
     payload.append("is_qty_double", form.is_qty_double);
     payload.append("is_package_active", form.is_package_active !== false);
+    payload.append("waste_percentage", form.waste_percentage !== undefined && form.waste_percentage !== "" ? form.waste_percentage : 0);
+    payload.append("closing_stock_usable_percentage", form.closing_stock_usable_percentage !== undefined && form.closing_stock_usable_percentage !== "" ? form.closing_stock_usable_percentage : 100);
 
     if (form.image) {
       payload.append("image", form.image);
@@ -440,7 +443,9 @@ export default function AdminProducts() {
       existing_image_url: p.image_url || "",
       is_qty_double: p.is_qty_double || false,
       is_package_active: p.is_package_active !== false,
-      discount_percentage: p.discount_percentage || ""
+      discount_percentage: p.discount_percentage || "",
+      waste_percentage: p.waste_percentage !== null && p.waste_percentage !== undefined ? p.waste_percentage : "",
+      closing_stock_usable_percentage: p.closing_stock_usable_percentage !== null && p.closing_stock_usable_percentage !== undefined ? p.closing_stock_usable_percentage : "100"
     });
     topRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -653,40 +658,67 @@ export default function AdminProducts() {
     const data = itemsToExport.map((d, index) => {
       const pkgQty = d.total_package_qty || 0;
       const rtlQty = d.total_retail_qty || 0;
-      const totalQty = pkgQty + rtlQty;
+      const retQty = d.total_return_qty || 0;
+      const totalDemand = d.actual_demand !== undefined ? d.actual_demand : (pkgQty + rtlQty + retQty);
       const unitLower = (d.unit || "").toLowerCase().trim();
-
-      // Show weight products in grams (gm) as requested
-      let displayQty = totalQty;
-      let displayUnit = d.unit || "pcs";
-
-      if (unitLower === "gm" || unitLower === "g") {
-        displayQty = totalQty;
-        displayUnit = "gm";
-      } else if (unitLower === "kg") {
-        displayQty = totalQty * 1000;
-        displayUnit = "gm";
-      } else if (unitLower === "ml") {
-        displayQty = totalQty;
-        displayUnit = "ml";
-      }
-
+      const isGmOrMl = unitLower === "gm" || unitLower === "g" || unitLower === "ml";
       const matchingProduct = products.find(p => p.id === d.id);
+
+      const closingStock = d.yesterday_closing_stock || 0;
+      const usableClosing = d.usable_closing_stock !== undefined ? d.usable_closing_stock : closingStock;
+      const wastePercent = d.waste_percentage !== undefined ? d.waste_percentage : (matchingProduct?.waste_percentage || 0);
+      const usablePercent = d.closing_stock_usable_percentage !== undefined ? d.closing_stock_usable_percentage : (matchingProduct?.closing_stock_usable_percentage !== undefined ? matchingProduct.closing_stock_usable_percentage : 100);
+      const demandWaste = d.demand_waste_qty || 0;
+      const oldStockWaste = d.old_stock_waste_qty || 0;
+      const totalEstimatedWaste = d.total_estimated_waste_qty || (demandWaste + oldStockWaste);
+      const targetPurchase = d.target_purchase_qty !== undefined ? d.target_purchase_qty : Math.max(0, (totalDemand + demandWaste) - usableClosing);
+
+      const fmt = (val) => isGmOrMl ? `${(val / 1000).toFixed(2)} ${unitLower === 'ml' ? 'L' : 'kg'} (${Math.round(val)}g)` : `${val} pcs`;
+
+      const selectedDateStr = demandDate || new Date().toISOString().split('T')[0];
+      const log = purchaseLogs.find(l => l.product_id === d.id && l.purchase_date && new Date(l.purchase_date).toISOString().split('T')[0] === selectedDateStr);
+      let purchasedDisplay = "Not logged";
+      if (log) {
+        const pQty = parseFloat(log.quantity || 0);
+        purchasedDisplay = isGmOrMl ? `${(pQty / 1000).toFixed(2)} ${unitLower === 'ml' ? 'L' : 'kg'} (${Math.round(pQty)}g)` : `${pQty} pcs`;
+      }
 
       return {
         "S.No.": index + 1,
         "Product Name": d.name || "—",
         "Hindi Name": matchingProduct?.hindi_name || d.hindi_name || "—",
-        "Total Quantity": `${displayQty} ${displayUnit}`
+        "Unit": d.unit || "gm",
+        "Actual Demand": fmt(totalDemand),
+        "Yesterday Closing Stock": fmt(closingStock),
+        "Closing Usable %": `${usablePercent}%`,
+        "Usable Old Stock": fmt(usableClosing),
+        "Waste %": `${wastePercent}%`,
+        "Demand Waste": fmt(demandWaste),
+        "Old Stock Waste": fmt(oldStockWaste),
+        "Total Est. Waste": fmt(totalEstimatedWaste),
+        "Target Purchase (Procure)": fmt(targetPurchase),
+        "Purchased Qty": purchasedDisplay,
+        "Status": !log ? "Pending Weight" : (parseFloat(log.purchase_price_per_kg || 0) > 0 ? "Completed" : "Awaiting Price")
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     worksheet["!cols"] = [
       { wch: 8 },   // S.No.
-      { wch: 28 },  // Product Name
-      { wch: 24 },  // Hindi Name
-      { wch: 18 }   // Total Quantity
+      { wch: 26 },  // Product Name
+      { wch: 22 },  // Hindi Name
+      { wch: 8 },   // Unit
+      { wch: 18 },  // Actual Demand
+      { wch: 22 },  // Yesterday Closing Stock
+      { wch: 16 },  // Closing Usable %
+      { wch: 18 },  // Usable Old Stock
+      { wch: 10 },  // Waste %
+      { wch: 16 },  // Demand Waste
+      { wch: 16 },  // Old Stock Waste
+      { wch: 18 },  // Total Est. Waste
+      { wch: 24 },  // Target Purchase (Procure)
+      { wch: 18 },  // Purchased Qty
+      { wch: 16 }   // Status
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -1075,6 +1107,56 @@ export default function AdminProducts() {
                 </div>
               )}
 
+              {!isWater && (
+                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-amber-50/70 border border-amber-200/90 shadow-xs">
+                  <div>
+                    <label className="label text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <span>🗑️ Expected Waste (%)</span>
+                      <span className="text-[10px] text-amber-700 font-normal">(Demand par expected waste, e.g. 10%)</span>
+                    </label>
+                    <div className="relative mt-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        className="input bg-white pr-8"
+                        placeholder="e.g. 10"
+                        value={form.waste_percentage}
+                        onChange={e => handleFormChange("waste_percentage", e.target.value)}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-xs">%</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 mt-1">
+                      Target purchase calculate karte samay total demand me ye % judega.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="label text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <span>📦 Closing Stock Usable (%)</span>
+                      <span className="text-[10px] text-amber-700 font-normal">(Kal ke bache batch ka kitna % use hoga, e.g. 75%)</span>
+                    </label>
+                    <div className="relative mt-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        className="input bg-white pr-8"
+                        placeholder="e.g. 75 (Default 100%)"
+                        value={form.closing_stock_usable_percentage}
+                        onChange={e => handleFormChange("closing_stock_usable_percentage", e.target.value)}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-xs">%</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 mt-1">
+                      Kal ke closing stock ka sirf itna % use hoga, baki waste me count hoga.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="md:col-span-2 lg:col-span-3">
                 <label className="label">Product Description</label>
                 <textarea
@@ -1234,6 +1316,8 @@ export default function AdminProducts() {
                     <th className="text-right p-3">Avg Cost Price</th>
                     <th className="text-right p-3">Default Sell Price</th>
                     <th className="text-right p-3">Margin</th>
+                    <th className="text-center p-3">Waste %</th>
+                    <th className="text-center p-3">Closing Usable %</th>
                     {/* <th className="text-right p-3">Discount</th> */}
                     <th className="text-center p-3">Qty Double</th>
                     <th className="text-right p-3">Base Unit</th>
@@ -1303,6 +1387,24 @@ export default function AdminProducts() {
                           <p className="text-gray-500 text-[10px]">₹{p.selling_price_per_gm} / {p.unit}</p>
                         </td>
                         <td className="p-3 text-right text-fresh-600">{margin}%</td>
+                        <td className="p-3 text-center">
+                          {p.waste_percentage !== null && p.waste_percentage !== undefined && parseFloat(p.waste_percentage) > 0 ? (
+                            <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[11px] font-bold">
+                              {parseFloat(p.waste_percentage)}%
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">0%</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          {p.closing_stock_usable_percentage !== null && p.closing_stock_usable_percentage !== undefined ? (
+                            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-[11px] font-bold">
+                              {parseFloat(p.closing_stock_usable_percentage)}%
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">100%</span>
+                          )}
+                        </td>
                         {/* <td className="p-3 text-right text-orange-500">{p.discount_percentage && parseFloat(p.discount_percentage) > 0 ? `${parseFloat(p.discount_percentage)}%` : '—'}</td> */}
                         <td className="p-3 text-center">
                           {p.is_qty_double ? (
@@ -1483,7 +1585,10 @@ export default function AdminProducts() {
                     <thead>
                       <tr className="table-header">
                         <th className="text-left p-3 rounded-tl-xl">Product</th>
-                        <th className="text-right p-3">Total Demand</th>
+                        <th className="text-right p-3">Actual Demand</th>
+                        <th className="text-center p-3">Closing Stock (Usable)</th>
+                        <th className="text-center p-3">Est. Waste</th>
+                        <th className="text-center p-3 bg-emerald-50 text-emerald-800 font-bold">Target To Buy (Procure)</th>
                         <th className="text-center p-3">Purchased Qty / Weight</th>
                         <th className="text-center p-3">Status</th>
                         {isAdmin && <th className="text-right p-3">Purchase Price</th>}
@@ -1493,11 +1598,11 @@ export default function AdminProducts() {
                     <tbody>
                       {demands.length === 0 ? (
                         <tr>
-                          <td colSpan={isAdmin ? "6" : "5"} className="text-center py-6 text-gray-500">No stock demand found for {selectedDateStr}.</td>
+                          <td colSpan={isAdmin ? "9" : "8"} className="text-center py-6 text-gray-500">No stock demand found for {selectedDateStr}.</td>
                         </tr>
                       ) : filtered.length === 0 ? (
                         <tr>
-                          <td colSpan={isAdmin ? "6" : "5"} className="text-center py-6 text-gray-500">
+                          <td colSpan={isAdmin ? "9" : "8"} className="text-center py-6 text-gray-500">
                             No items found matching the selected filter.
                           </td>
                         </tr>
@@ -1511,9 +1616,28 @@ export default function AdminProducts() {
                           const isWaterOrPiece = isWater || isPiece;
                           const isGm = !isWaterOrPiece && (u === 'gm' || u === 'ml');
 
-                          const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0);
-                          const displayQty = isGm ? totalQty / 1000 : totalQty;
+                          const totalQty = (d.total_package_qty || 0) + (d.total_retail_qty || 0) + (d.total_return_qty || 0);
+                          const rawDemand = d.actual_demand !== undefined ? d.actual_demand : totalQty;
+
+                          const wastePct = d.waste_percentage !== undefined ? d.waste_percentage : (matchingProduct?.waste_percentage || 0);
+                          const usablePct = d.closing_stock_usable_percentage !== undefined ? d.closing_stock_usable_percentage : (matchingProduct?.closing_stock_usable_percentage !== undefined ? matchingProduct.closing_stock_usable_percentage : 100);
+
+                          const closingStock = d.yesterday_closing_stock || 0;
+                          const usableClosing = d.usable_closing_stock !== undefined ? d.usable_closing_stock : (closingStock * (usablePct / 100));
+                          const demandWaste = d.demand_waste_qty !== undefined ? d.demand_waste_qty : (rawDemand * (wastePct / 100));
+                          const oldStockWaste = d.old_stock_waste_qty !== undefined ? d.old_stock_waste_qty : Math.max(0, closingStock - usableClosing);
+                          const totalEstimatedWaste = d.total_estimated_waste_qty !== undefined ? d.total_estimated_waste_qty : (demandWaste + oldStockWaste);
+                          const targetPurchase = d.target_purchase_qty !== undefined ? d.target_purchase_qty : Math.max(0, (rawDemand + demandWaste) - usableClosing);
+
                           const displayUnit = isGm ? (u === 'gm' ? 'kg' : 'L') : 'pcs';
+
+                          const formatQtyDisplay = (valInBase) => {
+                            if (isGm) {
+                              const inKg = (valInBase / 1000).toFixed(2);
+                              return `${inKg} ${displayUnit}`;
+                            }
+                            return `${valInBase} pcs`;
+                          };
 
                           const log = getProductLog(d.id);
                           const status = getLogStatus(log);
@@ -1521,18 +1645,65 @@ export default function AdminProducts() {
                           let purchasedWeightDisplay = "-";
                           if (log) {
                             const pQty = parseFloat(log.quantity || 0);
-                            purchasedWeightDisplay = isGm ? `${pQty / 1000} ${u === 'gm' ? 'kg' : 'L'}` : `${pQty} pcs`;
+                            purchasedWeightDisplay = isGm ? `${(pQty / 1000).toFixed(2)} ${displayUnit}` : `${pQty} pcs`;
                           }
 
                           return (
                             <tr key={d.id} className="table-row">
-                              <td className="p-3 text-gray-900 font-medium">{d.name}</td>
+                              <td className="p-3 text-gray-900 font-medium">
+                                <div>
+                                  <span className="font-semibold text-gray-900">{d.name}</span>
+                                  {(d.hindi_name || matchingProduct?.hindi_name) && (
+                                    <span className="text-gray-500 text-xs ml-1">({d.hindi_name || matchingProduct?.hindi_name})</span>
+                                  )}
+                                </div>
+                              </td>
                               <td
-                                className="p-3 text-right font-bold text-blue-500 cursor-pointer hover:underline"
-                                title="Click to view demand breakdown"
+                                className="p-3 text-right font-bold text-blue-600 cursor-pointer hover:underline"
+                                title="Click to view customer demand breakdown"
                                 onClick={() => setSelectedDemand(d)}
                               >
-                                {displayQty} {displayUnit}
+                                <div>{formatQtyDisplay(rawDemand)}</div>
+                                {isGm && <span className="text-[10px] text-gray-400 block font-normal">({Math.round(rawDemand)}g)</span>}
+                              </td>
+                              <td className="p-3 text-center">
+                                {closingStock > 0 ? (
+                                  <div className="text-xs">
+                                    <span className="font-semibold text-gray-800">{formatQtyDisplay(closingStock)}</span>
+                                    <div className="text-[10px] text-indigo-700 font-medium">
+                                      Usable: {formatQtyDisplay(usableClosing)} ({usablePct}%)
+                                    </div>
+                                    {oldStockWaste > 0 && (
+                                      <div className="text-[10px] text-rose-500">
+                                        Old waste: {formatQtyDisplay(oldStockWaste)}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">0 (Nil)</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center">
+                                {totalEstimatedWaste > 0 ? (
+                                  <div className="text-xs">
+                                    <span className="font-semibold text-amber-700">{formatQtyDisplay(totalEstimatedWaste)}</span>
+                                    <div className="text-[10px] text-gray-500">
+                                      +{formatQtyDisplay(demandWaste)} ({wastePct}% dem)
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">0%</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center bg-emerald-50/70 border-x border-emerald-100">
+                                <div className="inline-block px-2.5 py-1 bg-emerald-100/90 text-emerald-900 border border-emerald-300 rounded-lg shadow-2xs font-extrabold text-sm">
+                                  {formatQtyDisplay(targetPurchase)}
+                                </div>
+                                {isGm && (
+                                  <span className="text-[10px] text-emerald-700 block font-medium mt-0.5">
+                                    ({Math.round(targetPurchase)}g)
+                                  </span>
+                                )}
                               </td>
                               <td className="p-3 text-center">
                                 {log ? (
@@ -1580,7 +1751,7 @@ export default function AdminProducts() {
                                     onClick={() => {
                                       setPurchaseForm({
                                         product_id: d.id,
-                                        quantity: isGm ? totalQty : displayQty,
+                                        quantity: isGm ? Math.round(targetPurchase) : targetPurchase,
                                         total_price: ""
                                       });
                                     }}
@@ -1656,6 +1827,39 @@ export default function AdminProducts() {
             const isCurWaterOrPiece = isCurWater || isCurPiece;
             const isCurGm = !isCurWaterOrPiece && (curUnit === 'gm' || curUnit === 'ml');
 
+            const currentDemandRaw = currentDemand?.actual_demand !== undefined 
+              ? currentDemand.actual_demand 
+              : ((currentDemand?.total_package_qty || 0) + (currentDemand?.total_retail_qty || 0) + (currentDemand?.total_return_qty || 0));
+            
+            const currentWastePct = currentDemand?.waste_percentage !== undefined 
+              ? currentDemand.waste_percentage 
+              : (currentProduct?.waste_percentage || 0);
+
+            const currentUsablePct = currentDemand?.closing_stock_usable_percentage !== undefined 
+              ? currentDemand.closing_stock_usable_percentage 
+              : (currentProduct?.closing_stock_usable_percentage !== undefined ? currentProduct.closing_stock_usable_percentage : 100);
+
+            const currentClosingBase = currentDemand?.yesterday_closing_stock || 0;
+            const currentUsableBase = currentDemand?.usable_closing_stock !== undefined 
+              ? currentDemand.usable_closing_stock 
+              : (currentClosingBase * (currentUsablePct / 100));
+
+            const currentDemandWaste = currentDemand?.demand_waste_qty !== undefined 
+              ? currentDemand.demand_waste_qty 
+              : (currentDemandRaw * (currentWastePct / 100));
+
+            const currentOldWaste = currentDemand?.old_stock_waste_qty !== undefined 
+              ? currentDemand.old_stock_waste_qty 
+              : Math.max(0, currentClosingBase - currentUsableBase);
+
+            const currentTotalWaste = currentDemand?.total_estimated_waste_qty !== undefined 
+              ? currentDemand.total_estimated_waste_qty 
+              : (currentDemandWaste + currentOldWaste);
+
+            const targetPurchaseBase = currentDemand?.target_purchase_qty !== undefined 
+              ? currentDemand.target_purchase_qty 
+              : Math.max(0, (currentDemandRaw + currentDemandWaste) - currentUsableBase);
+
             return (
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up border border-gray-200 flex flex-col max-h-[90vh]">
@@ -1672,6 +1876,46 @@ export default function AdminProducts() {
                   </div>
                   <div className="p-6 overflow-y-auto">
                     <form onSubmit={handlePurchaseSubmit} className="space-y-4">
+                      {/* Calculation Breakdown Card */}
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-2 text-xs">
+                        <div className="flex justify-between items-center border-b border-emerald-200/80 pb-2">
+                          <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+                            <span>📊 Procurement Target Calculation</span>
+                          </span>
+                          <span className="font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded text-xs">
+                            Target: {isCurGm ? `${(targetPurchaseBase / 1000).toFixed(2)} ${curUnit === 'ml' ? 'L' : 'kg'} (${Math.round(targetPurchaseBase)}g)` : `${targetPurchaseBase} pcs`}
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-gray-700">
+                          <div className="flex justify-between">
+                            <span>1. Raw Customer Demand:</span>
+                            <span className="font-semibold text-gray-900">{isCurGm ? `${(currentDemandRaw / 1000).toFixed(2)} kg (${Math.round(currentDemandRaw)}g)` : `${currentDemandRaw} pcs`}</span>
+                          </div>
+                          <div className="flex justify-between text-amber-900">
+                            <span>2. Expected Waste ({currentWastePct}%):</span>
+                            <span className="font-semibold">+{isCurGm ? `${(currentDemandWaste / 1000).toFixed(2)} kg (${Math.round(currentDemandWaste)}g)` : `${currentDemandWaste} pcs`}</span>
+                          </div>
+                          <div className="flex justify-between text-indigo-900">
+                            <span>3. Yesterday Closing Stock:</span>
+                            <span className="font-semibold">{isCurGm ? `${(currentClosingBase / 1000).toFixed(2)} kg (${Math.round(currentClosingBase)}g)` : `${currentClosingBase} pcs`}</span>
+                          </div>
+                          <div className="flex justify-between text-indigo-800 bg-white/70 px-2 py-1 rounded border border-indigo-100 font-medium">
+                            <span>↳ Usable from Old Stock ({currentUsablePct}%):</span>
+                            <span className="font-bold text-indigo-900">-{isCurGm ? `${(currentUsableBase / 1000).toFixed(2)} kg (${Math.round(currentUsableBase)}g)` : `${currentUsableBase} pcs`}</span>
+                          </div>
+                          {currentOldWaste > 0 && (
+                            <div className="flex justify-between text-rose-700 text-[11px] px-2">
+                              <span>↳ Old Discarded Waste:</span>
+                              <span>+{isCurGm ? `${(currentOldWaste / 1000).toFixed(2)} kg (${Math.round(currentOldWaste)}g)` : `${currentOldWaste} pcs`}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-gray-800 font-medium pt-1 border-t border-emerald-200/60">
+                            <span>Total Estimated Waste:</span>
+                            <span className="font-bold text-amber-700">{isCurGm ? `${(currentTotalWaste / 1000).toFixed(2)} kg (${Math.round(currentTotalWaste)}g)` : `${currentTotalWaste} pcs`}</span>
+                          </div>
+                        </div>
+                      </div>
+
                       {!isAdmin && (
                         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
                           ⚖️ <b>Worker Note:</b> {isCurWaterOrPiece ? "Market se jitne pcs/bottles liye hain sirf wahi quantity enter karein." : "Market se jitna saman/wajan liya hai sirf wahi enter karein."} Total price enter karne ki zaroorat nahi hai.
@@ -1692,12 +1936,9 @@ export default function AdminProducts() {
                           required
                           autoFocus
                         />
-                        <p className="text-[11px] text-gray-500 mt-1">
-                          Total Demand: {(() => {
-                            if (!currentDemand) return "-";
-                            const total = (currentDemand.total_package_qty || 0) + (currentDemand.total_retail_qty || 0);
-                            return isCurGm ? `${total / 1000} ${currentDemand.unit === 'gm' ? 'kg' : 'L'}` : `${total} pcs`;
-                          })()}
+                        <p className="text-[11px] text-gray-500 mt-1 flex justify-between items-center">
+                          <span>Target Purchase: <b>{isCurGm ? `${(targetPurchaseBase / 1000).toFixed(2)} ${curUnit === 'ml' ? 'L' : 'kg'} (${Math.round(targetPurchaseBase)}g)` : `${targetPurchaseBase} pcs`}</b></span>
+                          <span className="text-gray-400">Demand: {isCurGm ? `${(currentDemandRaw / 1000).toFixed(2)} ${curUnit === 'ml' ? 'L' : 'kg'}` : `${currentDemandRaw} pcs`}</span>
                         </p>
                       </div>
 
@@ -2213,6 +2454,56 @@ export default function AdminProducts() {
             </div>
 
             <div className="p-5 max-h-[60vh] overflow-y-auto space-y-6">
+              {/* Target & Waste Calculation Summary Card */}
+              {(() => {
+                const isGm = selectedDemand.unit === 'gm' || selectedDemand.unit === 'ml';
+                const rawDemand = selectedDemand.actual_demand !== undefined 
+                  ? selectedDemand.actual_demand 
+                  : ((selectedDemand.total_package_qty || 0) + (selectedDemand.total_retail_qty || 0) + (selectedDemand.total_return_qty || 0));
+                const wastePct = selectedDemand.waste_percentage || 0;
+                const usablePct = selectedDemand.closing_stock_usable_percentage !== undefined ? selectedDemand.closing_stock_usable_percentage : 100;
+                const closingBase = selectedDemand.yesterday_closing_stock || 0;
+                const usableBase = selectedDemand.usable_closing_stock !== undefined ? selectedDemand.usable_closing_stock : (closingBase * (usablePct / 100));
+                const demandWaste = selectedDemand.demand_waste_qty !== undefined ? selectedDemand.demand_waste_qty : (rawDemand * (wastePct / 100));
+                const oldWaste = selectedDemand.old_stock_waste_qty !== undefined ? selectedDemand.old_stock_waste_qty : Math.max(0, closingBase - usableBase);
+                const targetPurchase = selectedDemand.target_purchase_qty !== undefined ? selectedDemand.target_purchase_qty : Math.max(0, (rawDemand + demandWaste) - usableBase);
+
+                return (
+                  <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-2 text-xs">
+                    <div className="flex justify-between items-center border-b border-emerald-200/80 pb-2">
+                      <span className="font-bold text-emerald-950">📊 Target Purchase Breakdown</span>
+                      <span className="font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded text-xs">
+                        Target: {isGm ? `${(targetPurchase / 1000).toFixed(2)} ${selectedDemand.unit === 'ml' ? 'L' : 'kg'} (${Math.round(targetPurchase)}g)` : `${targetPurchase} pcs`}
+                      </span>
+                    </div>
+                    <div className="space-y-1 text-gray-700">
+                      <div className="flex justify-between">
+                        <span>1. Actual Customer Orders:</span>
+                        <span className="font-semibold text-gray-900">{isGm ? `${(rawDemand / 1000).toFixed(2)} kg (${Math.round(rawDemand)}g)` : `${rawDemand} pcs`}</span>
+                      </div>
+                      <div className="flex justify-between text-amber-900">
+                        <span>2. Expected Waste ({wastePct}%):</span>
+                        <span className="font-semibold">+{isGm ? `${(demandWaste / 1000).toFixed(2)} kg (${Math.round(demandWaste)}g)` : `${demandWaste} pcs`}</span>
+                      </div>
+                      <div className="flex justify-between text-indigo-900">
+                        <span>3. Yesterday Closing Stock:</span>
+                        <span className="font-semibold">{isGm ? `${(closingBase / 1000).toFixed(2)} kg (${Math.round(closingBase)}g)` : `${closingBase} pcs`}</span>
+                      </div>
+                      <div className="flex justify-between text-indigo-800 bg-white/70 px-2 py-1 rounded border border-indigo-100 font-medium">
+                        <span>↳ Usable from Old Stock ({usablePct}%):</span>
+                        <span className="font-bold text-indigo-900">-{isGm ? `${(usableBase / 1000).toFixed(2)} kg (${Math.round(usableBase)}g)` : `${usableBase} pcs`}</span>
+                      </div>
+                      {oldWaste > 0 && (
+                        <div className="flex justify-between text-rose-700 text-[11px] px-2">
+                          <span>↳ Old Stock Discarded Waste:</span>
+                          <span>+{isGm ? `${(oldWaste / 1000).toFixed(2)} kg (${Math.round(oldWaste)}g)` : `${oldWaste} pcs`}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Package Demands */}
               {selectedDemand.package_details && selectedDemand.package_details.length > 0 && (
                 <div>

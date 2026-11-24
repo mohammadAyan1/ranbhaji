@@ -5,7 +5,7 @@ import {
     WalletTransaction, Notification, WaterSubscription, Package, Address,
     ScheduleSeasonalSelection, PackageSeasonalConfig, PackageFixedItem, PackageSeasonalPool,
     RetailOrder, RetailOrderItem, Batch, MissedProductLog, ReturnedProductLog,
-    LossLog, PurchaseLog, BatchProductTask, AttendanceLog
+    LossLog, PurchaseLog, BatchProductTask, AttendanceLog, DailyStockLog
 } from "../models/index.js";
 import path from "path";
 import { generateDeliveryDates, generateWaterDeliveryDates } from "../utils/scheduleEngine.js";
@@ -1228,8 +1228,11 @@ export const getProductDemands = async (req, res) => {
                 demandMap[p.id] = {
                     id: p.id,
                     name: p.name,
+                    hindi_name: p.hindi_name || null,
                     category: p.category,
                     unit: p.unit,
+                    waste_percentage: parseFloat(p.waste_percentage || 0),
+                    closing_stock_usable_percentage: parseFloat(p.closing_stock_usable_percentage !== null && p.closing_stock_usable_percentage !== undefined ? p.closing_stock_usable_percentage : 100),
                     total_package_qty: 0,
                     total_retail_qty: 0,
                     total_return_qty: 0,
@@ -1363,11 +1366,58 @@ export const getProductDemands = async (req, res) => {
             }
         }
 
-        const demandsList = Object.values(demandMap).map(d => ({
-            ...d,
-            package_details: Object.values(d.package_details),
-            retail_details: Object.values(d.retail_details)
-        }));
+        // Fetch yesterday's closing stock for each product to calculate net purchase & waste
+        const prevDateObj = new Date(dateStr);
+        prevDateObj.setDate(prevDateObj.getDate() - 1);
+        const prevDateStr = prevDateObj.toISOString().split('T')[0];
+
+        // Fetch latest DailyStockLog on or before yesterday
+        const stockLogs = await DailyStockLog.findAll({
+            where: { date: { [Op.lte]: prevDateStr } },
+            order: [['date', 'DESC']]
+        });
+        const closingStockMap = {};
+        for (const log of stockLogs) {
+            if (closingStockMap[log.product_id] === undefined) {
+                closingStockMap[log.product_id] = parseFloat(log.closing_stock || 0);
+            }
+        }
+
+        const demandsList = Object.values(demandMap).map(d => {
+            const rawDemand = d.total_package_qty + d.total_retail_qty + (d.total_return_qty || 0);
+            const isGmOrMl = (d.unit || '').toLowerCase().trim() === 'gm' || (d.unit || '').toLowerCase().trim() === 'ml';
+
+            // DailyStockLog closing_stock is stored in kg if gm/ml, or pcs
+            const closingStockKg = closingStockMap[d.id] !== undefined ? closingStockMap[d.id] : 0;
+            const closingStockBase = isGmOrMl ? closingStockKg * 1000 : closingStockKg;
+
+            const usablePercent = d.closing_stock_usable_percentage !== undefined ? d.closing_stock_usable_percentage : 100;
+            const wastePercent = d.waste_percentage || 0;
+
+            const usableClosingStockBase = closingStockBase * (usablePercent / 100);
+            const oldStockWasteBase = Math.max(0, closingStockBase - usableClosingStockBase);
+
+            const demandWasteBase = rawDemand * (wastePercent / 100);
+            const demandWithWasteBase = rawDemand + demandWasteBase;
+
+            // Target purchase needed: (Demand + Waste) - Usable Closing Stock
+            const targetPurchaseBase = Math.max(0, demandWithWasteBase - usableClosingStockBase);
+            const totalEstimatedWasteBase = oldStockWasteBase + demandWasteBase;
+
+            return {
+                ...d,
+                package_details: Object.values(d.package_details),
+                retail_details: Object.values(d.retail_details),
+                actual_demand: rawDemand,
+                yesterday_closing_stock: closingStockBase,
+                closing_stock_kg: closingStockKg,
+                usable_closing_stock: usableClosingStockBase,
+                demand_waste_qty: demandWasteBase,
+                old_stock_waste_qty: oldStockWasteBase,
+                total_estimated_waste_qty: totalEstimatedWasteBase,
+                target_purchase_qty: targetPurchaseBase
+            };
+        });
 
         res.status(200).json({
             success: true,

@@ -8,7 +8,7 @@ import { syncBatchDemand, invalidateBatchDemandSync } from './workerTask.control
 // POST /api/products  (admin)
 export const createProduct = async (req, res) => {
     try {
-        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, drying_time_per_piece_seconds, drying_time_per_25g_seconds, margin_percentage, water_capacity_liters, is_qty_double, discount_percentage, is_package_active } = req.body;
+        const { name, hindi_name, category, sub_category, purchase_price_per_gm, selling_price_per_gm, unit, unit_id, description, min_retail_qty, weighing_time_seconds, soaking_time_seconds, cutting_mode, pieces_per_25g, time_per_piece_seconds, time_per_25g_seconds, drying_time_seconds, drying_time_per_piece_seconds, drying_time_per_25g_seconds, margin_percentage, water_capacity_liters, is_qty_double, discount_percentage, is_package_active, waste_percentage, closing_stock_usable_percentage } = req.body;
         if (!name || !category || (!unit && !unit_id)) {
             return res.status(400).json({ success: false, message: "name, category and unit/unit_id are required" });
         }
@@ -37,6 +37,8 @@ export const createProduct = async (req, res) => {
             drying_time_per_25g_seconds: drying_time_per_25g_seconds || 0,
             is_qty_double: is_qty_double === 'true' || is_qty_double === true,
             discount_percentage: discount_percentage || 0,
+            waste_percentage: parseFloat(waste_percentage) || 0,
+            closing_stock_usable_percentage: closing_stock_usable_percentage !== undefined && closing_stock_usable_percentage !== '' ? parseFloat(closing_stock_usable_percentage) : 100,
             is_package_active: is_package_active !== undefined ? (is_package_active === 'true' || is_package_active === true || is_package_active === 1 || is_package_active === '1') : true
         });
 
@@ -135,6 +137,14 @@ export const updateProduct = async (req, res) => {
 
         if (updateData.discount_percentage !== undefined) {
             updateData.discount_percentage = parseFloat(updateData.discount_percentage) || 0;
+        }
+
+        if (updateData.waste_percentage !== undefined) {
+            updateData.waste_percentage = parseFloat(updateData.waste_percentage) || 0;
+        }
+
+        if (updateData.closing_stock_usable_percentage !== undefined) {
+            updateData.closing_stock_usable_percentage = updateData.closing_stock_usable_percentage !== '' ? parseFloat(updateData.closing_stock_usable_percentage) : 100;
         }
 
         if (updateData.is_package_active !== undefined) {
