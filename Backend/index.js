@@ -61,9 +61,8 @@ const httpServer = http.createServer(app);
 
 export const io = new Server(httpServer, {
     cors: {
-        origin: process.env.NODE_ENV === "production"
-            ? [process.env.FRONTEND_URL, "http://localhost:8081", "http://localhost:5173", "http://localhost:3000", "https://ram-bhaji.vercel.app", "https://nextjs.driveranger.com", "https://vegalert-production-monitor.onrender.com", "https://nextjs.driveranger.com", "http://localhost:8081"]
-            : ["http://localhost:5173", "http://localhost:3000", "http://localhost:8081"],
+        origin: true,
+        credentials: true,
         methods: ["GET", "POST", "PATCH", "PUT", "DELETE"]
     }
 });
@@ -85,32 +84,12 @@ app.use((req, res, next) => {
     next();
 });
 
-// Robust CORS supporting all domains, preflight OPTIONS, and all REST methods (GET, POST, PUT, PATCH, DELETE)
+// Universal CORS supporting all mobile apps, Expo (localhost, 127.0.0.1, LAN IPs), web apps & preflight OPTIONS
 app.use(cors({
-    origin: (origin, callback) => {
-        // Allow mobile apps, Postman, curl, server-to-server (no origin)
-        if (!origin) return callback(null, true);
-
-        // Allow any rambhaji, shreenari, vercel, render, driveranger, and localhost
-        const allowedPatterns = [
-            /rambhaji\.com$/,
-            /shreenari\.com$/,
-            /vercel\.app$/,
-            /onrender\.com$/,
-            /driveranger\.com$/,
-            /localhost/
-        ];
-
-        const isAllowed = allowedPatterns.some(pattern => pattern.test(origin));
-        if (isAllowed || process.env.NODE_ENV !== "production") {
-            callback(null, true);
-        } else {
-            callback(null, true); // Fallback: allow to ensure API does not block legitimate clients
-        }
-    },
+    origin: true, // Dynamically mirrors incoming Origin so localhost:8081, LAN IPs, and web domains all work cleanly
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-HTTP-Method-Override"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-HTTP-Method-Override", "access-control-allow-origin"]
 }));
 
 // Static uploads
