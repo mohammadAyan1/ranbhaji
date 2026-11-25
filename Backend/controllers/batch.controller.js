@@ -385,12 +385,20 @@ export const getBatchDemands = async (req, res) => {
 
                 const total_time_minutes = soakingTime + cleaningTime + cuttingTime + dryingTime + weightingTime;
 
+                const wastePercent = parseFloat(pData.product?.waste_percentage || 0);
+                const isWater = (pData.product?.category || '').toLowerCase() === 'water';
+                const demandWaste = (!isWater && wastePercent > 0) ? (pData.total_quantity * wastePercent / 100) : 0;
+                const processingQuantity = (!isWater && wastePercent > 0) ? Math.round(pData.total_quantity + demandWaste) : pData.total_quantity;
+
                 demandsArray.push({
                     product_id: parseInt(productId),
                     product_name: pData.product_name,
                     product_image: pData.product.image_url,
                     hindi_name: pData.product.hindi_name,
                     total_demand: pData.total_quantity,
+                    waste_percentage: wastePercent,
+                    waste_quantity: demandWaste,
+                    processing_quantity: processingQuantity,
                     processed_qty: processed,
                     remaining_quantity: remaining_quantity,
                     unit: pData.unit,

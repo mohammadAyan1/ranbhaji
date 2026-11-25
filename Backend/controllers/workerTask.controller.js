@@ -177,25 +177,35 @@ export const syncBatchDemand = async (batchId, options = {}) => {
         });
         const purchasedProductIds = new Set(purchases.map(p => parseInt(p.product_id)));
 
-        // Fetch product categories to always allow water
+        // Fetch product categories & waste percentage
         const productIds = Object.keys(demandMap);
         const products = productIds.length > 0 ? await Product.findAll({
             where: { id: productIds },
-            attributes: ['id', 'category', 'weighing_time_seconds']
+            attributes: ['id', 'category', 'weighing_time_seconds', 'waste_percentage']
         }) : [];
-        const productCategories = {};
-        products.forEach(p => productCategories[p.id] = p.category);
+        const productMap = {};
+        products.forEach(p => productMap[p.id] = p);
 
         const demandsToCreate = [];
         for (const [productId, qty] of Object.entries(demandMap)) {
             const pId = parseInt(productId);
-            const isWater = productCategories[pId] === 'water';
+            const prod = productMap[pId];
+            const isWater = (prod?.category || '').toLowerCase() === 'water';
+            const wastePercent = parseFloat(prod?.waste_percentage || 0);
 
-            if (qty > 0 && (isWater || purchasedProductIds.has(pId))) {
+            // Raw customer demand
+            const rawGrams = parseFloat(qty) || 0;
+            // Worker Processing Weight: Worker must process raw demand + expected waste (e.g. 4000g + 10% = 4400g).
+            // Old stock in shop is NOT deducted from worker tasks because worker processes both old stock and new mandi stock!
+            const processingGrams = (!isWater && wastePercent > 0)
+                ? Math.round(rawGrams * (1 + wastePercent / 100))
+                : rawGrams;
+
+            if (rawGrams > 0 && (isWater || purchasedProductIds.has(pId))) {
                 demandsToCreate.push({
                     batch_id: batchId,
                     product_id: pId,
-                    quantity_grams: qty
+                    quantity_grams: processingGrams
                 });
             }
         }
@@ -220,9 +230,9 @@ export const syncBatchDemand = async (batchId, options = {}) => {
 
                 const weighingTasksToCreate = [];
                 for (const d of demandsToCreate) {
-                    if (productCategories[d.product_id] === 'water') continue;
+                    const prodObj = productMap[d.product_id];
+                    if ((prodObj?.category || '').toLowerCase() === 'water') continue;
                     if (!existingTaskProductIds.has(d.product_id)) {
-                        const prodObj = products.find(p => p.id === d.product_id);
                         const duration = calculateWeighingDuration(prodObj);
                         weighingTasksToCreate.push({
                             batch_id: batchId,
@@ -591,11 +601,14 @@ export const assignNextTask = async (req, res) => {
                     const baseTime = d.Product ? (d.Product.weighing_time_seconds || 30) : 30;
                     const totalDuration = baseTime * userCount;
 
+                    // For BUCKET_ARRANGE, packable quantity is the net customer demand (peeling waste was discarded in earlier stages)
+                    const packableQty = prodDemand ? parseFloat(prodDemand.total_quantity || d.quantity_grams) : parseFloat(d.quantity_grams);
+
                     tasksToCreate.push({
                         batch_id: batchId,
                         product_id: d.product_id,
                         stage: 'BUCKET_ARRANGE',
-                        quantity_grams: d.quantity_grams,
+                        quantity_grams: packableQty,
                         status: 'NOT_STARTED',
                         duration_seconds: totalDuration,
                         remaining_seconds: totalDuration

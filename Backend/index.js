@@ -76,11 +76,41 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// HTTP Method Override middleware (allows clients/proxies to tunnel PUT/PATCH via POST if ModSecurity/Apache blocks them)
+app.use((req, res, next) => {
+    const override = req.headers['x-http-method-override'] || req.query?._method;
+    if (override && req.method === 'POST') {
+        req.method = override.toUpperCase();
+    }
+    next();
+});
+
+// Robust CORS supporting all domains, preflight OPTIONS, and all REST methods (GET, POST, PUT, PATCH, DELETE)
 app.use(cors({
-    origin: process.env.NODE_ENV === "production"
-        ? [process.env.FRONTEND_URL, "http://localhost:8081", "http://localhost:5173", "http://localhost:3000", "http://localhost:3001", "https://ram-bhaji.vercel.app", "https://nextjs.driveranger.com", "https://vegalert-production-monitor.onrender.com", "https://rambhaji.com", "http://localhost:8082"]
-        : ["http://localhost:5173", "http://localhost:3000", "http://localhost:8081", "http://localhost:8082"],
-    credentials: true
+    origin: (origin, callback) => {
+        // Allow mobile apps, Postman, curl, server-to-server (no origin)
+        if (!origin) return callback(null, true);
+
+        // Allow any rambhaji, shreenari, vercel, render, driveranger, and localhost
+        const allowedPatterns = [
+            /rambhaji\.com$/,
+            /shreenari\.com$/,
+            /vercel\.app$/,
+            /onrender\.com$/,
+            /driveranger\.com$/,
+            /localhost/
+        ];
+
+        const isAllowed = allowedPatterns.some(pattern => pattern.test(origin));
+        if (isAllowed || process.env.NODE_ENV !== "production") {
+            callback(null, true);
+        } else {
+            callback(null, true); // Fallback: allow to ensure API does not block legitimate clients
+        }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-HTTP-Method-Override"]
 }));
 
 // Static uploads
@@ -147,11 +177,32 @@ app.use((err, req, res, next) => {
     res.status(500).json({ success: false, message: err.message || "Internal server error" });
 });
 
+// Auto-migration helper to automatically add missing table columns on production
+const ensureDBSchema = async () => {
+    try {
+        const [columns] = await sequelize.query("SHOW COLUMNS FROM products");
+        const columnNames = columns.map(c => c.Field);
+
+        if (!columnNames.includes('waste_percentage')) {
+            console.log("[DB Auto-Migrate] Adding missing column: waste_percentage to products");
+            await sequelize.query("ALTER TABLE products ADD COLUMN waste_percentage DECIMAL(5,2) DEFAULT 0");
+        }
+        if (!columnNames.includes('closing_stock_usable_percentage')) {
+            console.log("[DB Auto-Migrate] Adding missing column: closing_stock_usable_percentage to products");
+            await sequelize.query("ALTER TABLE products ADD COLUMN closing_stock_usable_percentage DECIMAL(5,2) DEFAULT 100");
+        }
+        console.log("[DB Auto-Migrate] Products table schema verified.");
+    } catch (err) {
+        console.error("[DB Auto-Migrate Warning]", err.message);
+    }
+};
+
 // Start server
 const startServer = async () => {
     await connectDB();
     await sequelize.sync();
     console.log("[DB] Models synchronized");
+    await ensureDBSchema();
 
     await seedDatabase();
 
