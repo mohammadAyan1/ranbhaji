@@ -84,12 +84,12 @@ app.use((req, res, next) => {
     next();
 });
 
-// Universal CORS supporting all mobile apps, Expo (localhost, 127.0.0.1, LAN IPs), web apps & preflight OPTIONS
+// Universal CORS supporting all mobile apps, Expo tunnels (*.exp.direct, localhost, LAN IPs), web apps & preflight OPTIONS
 app.use(cors({
-    origin: true, // Dynamically mirrors incoming Origin so localhost:8081, LAN IPs, and web domains all work cleanly
+    origin: true, // Dynamically mirrors incoming Origin (expo tunnels, localhost, LAN IPs, and web domains)
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-HTTP-Method-Override", "access-control-allow-origin"]
+    optionsSuccessStatus: 200 // Legacy browsers and tunnel proxies (Localtunnel/ngrok/Expo) work best with 200 OK
 }));
 
 // Static uploads
