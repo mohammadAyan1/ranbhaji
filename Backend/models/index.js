@@ -481,6 +481,7 @@ const CalculatorDraftItem = sequelize.define('CalculatorDraftItem', {
 CalculatorDraftItem.belongsTo(CalculatorDraft, { foreignKey: 'draft_id', onDelete: 'CASCADE' });
 CalculatorDraftItem.belongsTo(Product, { foreignKey: 'product_id' });
 CalculatorDraft.hasMany(CalculatorDraftItem, { foreignKey: 'draft_id', as: 'Items', onDelete: 'CASCADE' });
+CalculatorDraft.belongsTo(User, { as: 'TargetUser', foreignKey: 'target_user_id' });
 
 // 20. PURCHASE_LOGS
 const PurchaseLog = sequelize.define('PurchaseLog', {

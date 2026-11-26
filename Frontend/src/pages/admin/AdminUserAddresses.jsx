@@ -23,6 +23,49 @@ export default function AdminUserAddresses() {
   const [editZoneId, setEditZoneId] = useState(null);
   const [editZoneValue, setEditZoneValue] = useState("");
 
+  // Edit Address states
+  const [isEditAddressModalOpen, setIsEditAddressModalOpen] = useState(false);
+  const [editAddressData, setEditAddressData] = useState({
+    id: null,
+    address_line: "",
+    city: "Bhopal",
+    pincode: "",
+    landmark: "",
+    zone: "",
+    is_default: false
+  });
+  const [savingEditAddress, setSavingEditAddress] = useState(false);
+
+  const handleOpenEditAddress = (addr) => {
+    setEditAddressData({
+      id: addr.id,
+      address_line: addr.address_line || "",
+      city: addr.city || "Bhopal",
+      pincode: addr.pincode || "",
+      landmark: addr.landmark || "",
+      zone: addr.zone || "",
+      is_default: !!addr.is_default
+    });
+    setIsEditAddressModalOpen(true);
+  };
+
+  const handleSaveEditAddress = async (e) => {
+    e.preventDefault();
+    if (!editAddressData.id) return;
+    setSavingEditAddress(true);
+    setMsg("");
+    try {
+      await api.put(`/addresses/admin/${editAddressData.id}`, editAddressData);
+      setMsg("✅ Address updated successfully!");
+      setIsEditAddressModalOpen(false);
+      fetchUsers();
+    } catch (err) {
+      setMsg(`❌ Failed to update address: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingEditAddress(false);
+    }
+  };
+
   const handleUpdateZone = async (addrId) => {
     try {
         await api.patch(`/addresses/admin/${addrId}/zone`, { zone: editZoneValue });
@@ -270,6 +313,9 @@ export default function AdminUserAddresses() {
                                             <button onClick={() => { setEditZoneId(addr.id); setEditZoneValue(addr.zone || ""); }} className="text-xs text-blue-600 hover:underline">
                                                 Edit Zone
                                             </button>
+                                            <button onClick={() => handleOpenEditAddress(addr)} className="text-xs text-amber-700 hover:underline font-semibold ml-2">
+                                                ✏️ Edit Address
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -314,6 +360,95 @@ export default function AdminUserAddresses() {
           </table>
         </div>
       </div>
+
+      {/* Edit Address Modal */}
+      {isEditAddressModalOpen && editAddressData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-teal-50">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span>📍</span> Edit Delivery Address
+              </h2>
+              <button onClick={() => setIsEditAddressModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg">✖</button>
+            </div>
+            <form onSubmit={handleSaveEditAddress} className="p-6 space-y-4">
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Address Line</label>
+                <textarea
+                  className="input w-full text-sm"
+                  rows="2"
+                  value={editAddressData.address_line}
+                  onChange={e => setEditAddressData({ ...editAddressData, address_line: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">City</label>
+                  <input
+                    type="text"
+                    className="input w-full text-sm"
+                    value={editAddressData.city}
+                    onChange={e => setEditAddressData({ ...editAddressData, city: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Pincode</label>
+                  <input
+                    type="text"
+                    className="input w-full text-sm"
+                    value={editAddressData.pincode}
+                    onChange={e => setEditAddressData({ ...editAddressData, pincode: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Landmark (Optional)</label>
+                  <input
+                    type="text"
+                    className="input w-full text-sm"
+                    value={editAddressData.landmark}
+                    onChange={e => setEditAddressData({ ...editAddressData, landmark: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Zone (Optional)</label>
+                  <select
+                    className="input w-full text-sm"
+                    value={editAddressData.zone || ""}
+                    onChange={e => setEditAddressData({ ...editAddressData, zone: e.target.value })}
+                  >
+                    <option value="">-- Select Zone --</option>
+                    {allZones.map(z => (
+                      <option key={z.id} value={z.name}>{z.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditAddressModalOpen(false)}
+                  className="btn-secondary text-sm px-5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEditAddress}
+                  className="btn-primary text-sm px-6"
+                >
+                  {savingEditAddress ? "Saving..." : "Update Address"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

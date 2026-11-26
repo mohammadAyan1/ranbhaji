@@ -218,3 +218,67 @@ export const createAddressForUser = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// PUT /api/addresses/admin/:id
+export const updateAddressByAdmin = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { address_line, city, pincode, landmark, zone, is_default, latitude, longitude } = req.body;
+        const address = await Address.findByPk(req.params.id);
+        if (!address) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Address not found" });
+        }
+
+        const shouldBeDefault = is_default === true || is_default === 'true';
+        if (shouldBeDefault && !address.is_default) {
+            await Address.update({ is_default: false }, { where: { user_id: address.user_id }, transaction: t });
+        }
+
+        await address.update({
+            address_line: address_line !== undefined ? address_line : address.address_line,
+            city: city !== undefined ? city : address.city,
+            pincode: pincode !== undefined ? pincode : address.pincode,
+            landmark: landmark !== undefined ? landmark : address.landmark,
+            zone: zone !== undefined ? zone : address.zone,
+            latitude: latitude !== undefined ? latitude : address.latitude,
+            longitude: longitude !== undefined ? longitude : address.longitude,
+            is_default: is_default !== undefined ? shouldBeDefault : address.is_default
+        }, { transaction: t });
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Address updated successfully", address });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// DELETE /api/addresses/admin/:id
+export const deleteAddressByAdmin = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const address = await Address.findByPk(req.params.id);
+        if (!address) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Address not found" });
+        }
+
+        const user_id = address.user_id;
+        const wasDefault = address.is_default;
+        await address.destroy({ transaction: t });
+
+        if (wasDefault) {
+            const nextAddress = await Address.findOne({ where: { user_id }, order: [['id', 'ASC']], transaction: t });
+            if (nextAddress) {
+                await nextAddress.update({ is_default: true }, { transaction: t });
+            }
+        }
+
+        await t.commit();
+        res.status(200).json({ success: true, message: "Address deleted successfully" });
+    } catch (error) {
+        await t.rollback();
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

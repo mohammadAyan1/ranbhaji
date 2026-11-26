@@ -36,6 +36,7 @@ export default function AdminUserHistory() {
   const [showPassword, setShowPassword] = useState(false);
   const [showRetailDiscount, setShowRetailDiscount] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
+  const [allZones, setAllZones] = useState([]);
   const [addressForm, setAddressForm] = useState({
     address_line: "",
     city: "Bhopal",
@@ -46,6 +47,24 @@ export default function AdminUserHistory() {
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
   const [batches, setBatches] = useState([]);
+
+  // Edit User Details states
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editUserForm, setEditUserForm] = useState({ name: "", phone: "", email: "", password: "" });
+  const [savingUser, setSavingUser] = useState(false);
+
+  // Edit Address states
+  const [showEditAddressModal, setShowEditAddressModal] = useState(false);
+  const [editingAddress, setEditingAddress] = useState({
+    id: null,
+    address_line: "",
+    city: "Bhopal",
+    pincode: "",
+    landmark: "",
+    zone: "",
+    is_default: false
+  });
+  const [savingAddress, setSavingAddress] = useState(false);
 
   const [batchFormData, setBatchFormData] = useState({
     sub_id: "",
@@ -85,16 +104,18 @@ export default function AdminUserHistory() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, pkgRes, batchesRes, waterProdRes] = await Promise.all([
+        const [usersRes, pkgRes, batchesRes, waterProdRes, zonesRes] = await Promise.all([
           api.get("/admin/users"),
           api.get("/packages"),
           api.get("/user/batches"),
-          api.get("/products?category=water&status=active")
+          api.get("/products?category=water&status=active"),
+          api.get("/zones").catch(() => ({ data: [] }))
         ]);
         setUsers(usersRes.data.users || []);
         setPackages(pkgRes.data.packages || []);
         setBatches(batchesRes.data.batches || []);
         setWaterProducts(waterProdRes.data.products || []);
+        setAllZones(zonesRes.data || []);
       } catch (err) {
         setMsg(`❌ Failed to load data: ${err.response?.data?.message || err.message}`);
       }
@@ -395,7 +416,7 @@ export default function AdminUserHistory() {
     const pkgFixed = pkg.seasonal_config?.fixed_items || [];
     pkgFixed.forEach(fi => {
       const found = (serving.fixed_items || []).find(i => i.product_id === fi.product_id);
-      fixedMap[fi.product_id] = found ? parseFloat(found.qty_gm || 0) : parseFloat(fi.qty_gm || 0);
+      fixedMap[fi.product_id] = (found && found.qty_gm !== undefined) ? parseFloat(found.qty_gm) : parseFloat(fi.qty_gm || 0);
     });
     setServingFixedItems(fixedMap);
 
@@ -522,6 +543,96 @@ export default function AdminUserHistory() {
     }
   };
 
+  const handleOpenEditUserModal = () => {
+    if (!currentUserInfo) return;
+    setEditUserForm({
+      name: currentUserInfo.name || "",
+      phone: currentUserInfo.phone || "",
+      email: currentUserInfo.email || "",
+      password: ""
+    });
+    setShowEditUserModal(true);
+  };
+
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    if (!selectedUserId) return;
+    setSavingUser(true);
+    setActionMsg("");
+    try {
+      const payload = {
+        name: editUserForm.name,
+        phone: editUserForm.phone,
+        email: editUserForm.email
+      };
+      if (editUserForm.password && editUserForm.password.trim() !== "") {
+        payload.password = editUserForm.password.trim();
+      }
+
+      const res = await api.put(`/admin/user-analytics/users/${selectedUserId}`, payload);
+      setActionMsg("✅ User details updated successfully!");
+
+      if (res.data.user) {
+        setCurrentUserInfo(prev => ({ ...prev, ...res.data.user }));
+        setUsers(prev => prev.map(u => u.id === parseInt(selectedUserId) ? { ...u, ...res.data.user } : u));
+      }
+      setShowEditUserModal(false);
+    } catch (err) {
+      setActionMsg(`❌ Failed to update user: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleOpenEditAddressModal = (addr) => {
+    if (!addr) return;
+    setEditingAddress({
+      id: addr.id,
+      address_line: addr.address_line || "",
+      city: addr.city || "Bhopal",
+      pincode: addr.pincode || "",
+      landmark: addr.landmark || "",
+      zone: addr.zone || "",
+      is_default: !!addr.is_default
+    });
+    setShowEditAddressModal(true);
+  };
+
+  const handleSaveEditAddress = async (e) => {
+    e.preventDefault();
+    if (!editingAddress.id) return;
+    setSavingAddress(true);
+    setActionMsg("");
+    try {
+      await api.put(`/addresses/admin/${editingAddress.id}`, editingAddress);
+      setActionMsg("✅ Address updated successfully!");
+
+      const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      if (res.data.user) setCurrentUserInfo(res.data.user);
+      if (res.data.addresses) setUserAddresses(res.data.addresses);
+      if (res.data.analytics) setAnalytics(res.data.analytics);
+
+      setShowEditAddressModal(false);
+    } catch (err) {
+      setActionMsg(`❌ Failed to update address: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const handleDeleteAddress = async (addrId) => {
+    if (!window.confirm("Are you sure you want to delete this address?")) return;
+    try {
+      await api.delete(`/addresses/admin/${addrId}`);
+      setActionMsg("✅ Address deleted successfully!");
+      const res = await api.get(`/admin/user-analytics/${selectedUserId}`);
+      if (res.data.user) setCurrentUserInfo(res.data.user);
+      if (res.data.addresses) setUserAddresses(res.data.addresses);
+    } catch (err) {
+      setActionMsg(`❌ Failed to delete address: ${err.response?.data?.message || err.message}`);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -560,6 +671,12 @@ export default function AdminUserHistory() {
             <span>📍</span> Add Address
           </button>
           <button
+            onClick={handleOpenEditUserModal}
+            className="btn-secondary text-sm px-4 py-2 flex items-center gap-2 border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-2xs font-semibold"
+          >
+            <span>✏️</span> Edit User Details
+          </button>
+          <button
             onClick={() => {
               setDiscountPercent(currentUserInfo?.discount_percentage ?? "0");
               setShowDiscountModal(true);
@@ -590,6 +707,13 @@ export default function AdminUserHistory() {
               <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
                 {currentUserInfo.name}
                 <span className="text-xs font-normal text-gray-500">#{currentUserInfo.id}</span>
+                <button
+                  onClick={handleOpenEditUserModal}
+                  className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 cursor-pointer"
+                  title="Edit user name, phone & email"
+                >
+                  ✏️ Edit
+                </button>
               </h3>
               <p className="text-sm text-gray-600 mt-0.5">
                 📞 {currentUserInfo.phone} {currentUserInfo.email && `| ✉️ ${currentUserInfo.email}`}
@@ -600,7 +724,18 @@ export default function AdminUserHistory() {
             <div className="flex items-start gap-2 bg-white/90 border border-gray-200 px-3 py-2 rounded-xl text-xs text-gray-700 max-w-xl shadow-2xs">
               <span className="text-base shrink-0 mt-0.5">📍</span>
               <div className="min-w-0 flex-1">
-                <p className="font-bold text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Delivery Address</p>
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="font-bold text-[10px] text-gray-500 uppercase tracking-wider">Delivery Address</p>
+                  {userAddresses && userAddresses.length > 0 && (
+                    <button
+                      onClick={() => handleOpenEditAddressModal(userAddresses[0])}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      title="Edit this address"
+                    >
+                      ✏️ Edit Address
+                    </button>
+                  )}
+                </div>
                 {userAddresses && userAddresses.length > 0 ? (
                   <div>
                     <span className="font-semibold text-gray-900">
@@ -1348,6 +1483,11 @@ export default function AdminUserHistory() {
                     const currentQty = servingFixedItems[fi.product_id] ?? fi.qty_gm;
                     const pricePerKg = fi.purchase_price_per_gm * 1000;
                     const itemCost = (currentQty || 0) * fi.purchase_price_per_gm;
+                    const budget = editingPackage.seasonal_config?.per_service_budget || 0;
+                    const currentTotalCost = calcTotalServingCost();
+                    const remainingBudget = budget - currentTotalCost;
+                    const pricePerGm = parseFloat(fi.purchase_price_per_gm || 0);
+                    const maxAddable = remainingBudget > 0 && pricePerGm > 0 ? Math.floor(remainingBudget / pricePerGm) : 0;
 
                     return (
                       <div
@@ -1361,6 +1501,19 @@ export default function AdminUserHistory() {
                           <p className="text-[10px] text-gray-400">
                             Rate: ₹{pricePerKg.toFixed(2)}/kg &bull; Cost: <strong>₹{itemCost.toFixed(2)}</strong>
                           </p>
+                          {maxAddable >= 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setServingFixedItems(prev => ({
+                                ...prev,
+                                [fi.product_id]: (parseFloat(prev[fi.product_id] ?? fi.qty_gm) || 0) + maxAddable
+                              }))}
+                              className="mt-1 text-[10px] text-fresh-700 bg-fresh-50 hover:bg-fresh-100 border border-fresh-200 px-2 py-0.5 rounded cursor-pointer transition-colors inline-flex items-center gap-1 font-semibold"
+                              title="Click to add max possible quantity within budget"
+                            >
+                              💡 +{maxAddable}g add kar sakte hain
+                            </button>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -1420,6 +1573,11 @@ export default function AdminUserHistory() {
                     const pricePerKg = sp.purchase_price_per_gm * 1000;
                     const itemCost = currentQty * sp.purchase_price_per_gm;
                     const isSelected = currentQty > 0;
+                    const budget = editingPackage.seasonal_config?.per_service_budget || 0;
+                    const currentTotalCost = calcTotalServingCost();
+                    const remainingBudget = budget - currentTotalCost;
+                    const pricePerGm = parseFloat(sp.purchase_price_per_gm || 0);
+                    const maxAddable = remainingBudget > 0 && pricePerGm > 0 ? Math.floor(remainingBudget / pricePerGm) : 0;
 
                     return (
                       <div
@@ -1434,6 +1592,19 @@ export default function AdminUserHistory() {
                           <p className="text-[10px] text-gray-400">
                             Rate: ₹{pricePerKg.toFixed(2)}/kg &bull; Cost: <strong>₹{itemCost.toFixed(2)}</strong>
                           </p>
+                          {maxAddable >= 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setServingSeasonalItems(prev => ({
+                                ...prev,
+                                [sp.product_id]: (parseFloat(prev[sp.product_id] || 0)) + maxAddable
+                              }))}
+                              className="mt-1 text-[10px] text-fresh-700 bg-fresh-50 hover:bg-fresh-100 border border-fresh-200 px-2 py-0.5 rounded cursor-pointer transition-colors inline-flex items-center gap-1 font-semibold"
+                              title="Click to add max possible quantity within budget"
+                            >
+                              💡 +{maxAddable}g add kar sakte hain
+                            </button>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -1906,14 +2077,18 @@ export default function AdminUserHistory() {
                                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Products:</span>
                                         {/* Fixed items */}
                                         {serving.fixed_items && serving.fixed_items.length > 0 ? (
-                                          serving.fixed_items.map((fi, fIdx) => (
-                                            <span
-                                              key={`fi_${fIdx}`}
-                                              className="bg-white border border-gray-200 text-gray-700 text-[10px] px-2 py-0.5 rounded-md font-medium"
-                                            >
-                                              {fi.name} <strong className="text-gray-900">{fi.qty_gm >= 1000 ? `${(fi.qty_gm / 1000).toFixed(2)}kg` : `${fi.qty_gm}${fi.unit || 'g'}`}</strong>
-                                            </span>
-                                          ))
+                                          serving.fixed_items.map((fi, fIdx) => {
+                                            const isZero = parseFloat(fi.qty_gm || 0) === 0;
+                                            return (
+                                              <span
+                                                key={`fi_${fIdx}`}
+                                                className={`border text-[10px] px-2 py-0.5 rounded-md font-medium ${isZero ? 'bg-gray-100 border-gray-200 text-gray-400 line-through' : 'bg-white border-gray-200 text-gray-700'}`}
+                                                title={isZero ? 'Quantity set to 0g by user/admin' : ''}
+                                              >
+                                                {fi.name} <strong className={isZero ? 'text-gray-400' : 'text-gray-900'}>{isZero ? '0g' : (fi.qty_gm >= 1000 ? `${(fi.qty_gm / 1000).toFixed(2)}kg` : `${fi.qty_gm}${fi.unit || 'g'}`)}</strong>
+                                              </span>
+                                            );
+                                          })
                                         ) : null}
 
                                         {/* Seasonal items */}
@@ -2195,9 +2370,24 @@ export default function AdminUserHistory() {
                   <input type="text" className="input w-full text-sm" value={addressForm.pincode} onChange={e => setAddressForm({ ...addressForm, pincode: e.target.value })} required />
                 </div>
               </div>
-              <div>
-                <label className="label text-xs uppercase tracking-wider mb-1 block">Landmark (Optional)</label>
-                <input type="text" className="input w-full text-sm" value={addressForm.landmark} onChange={e => setAddressForm({ ...addressForm, landmark: e.target.value })} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Landmark (Optional)</label>
+                  <input type="text" className="input w-full text-sm" value={addressForm.landmark} onChange={e => setAddressForm({ ...addressForm, landmark: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Zone (Optional)</label>
+                  <select
+                    className="input w-full text-sm"
+                    value={addressForm.zone || ""}
+                    onChange={e => setAddressForm({ ...addressForm, zone: e.target.value })}
+                  >
+                    <option value="">-- Select Zone --</option>
+                    {allZones.map(z => (
+                      <option key={z.id} value={z.name}>{z.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <button type="submit" disabled={saving} className="btn-primary w-full py-3">
                 {saving ? "Saving..." : "Add Address"}
@@ -2239,6 +2429,23 @@ export default function AdminUserHistory() {
                           Zone: {addr.zone}
                         </span>
                       )}
+                      <button
+                        onClick={() => {
+                          setShowAllAddressesModal(false);
+                          handleOpenEditAddressModal(addr);
+                        }}
+                        className="px-2 py-0.5 rounded text-xs font-semibold bg-white border border-gray-300 text-blue-600 hover:bg-blue-50 cursor-pointer"
+                        title="Edit address"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAddress(addr.id)}
+                        className="px-2 py-0.5 rounded text-xs font-semibold bg-white border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                        title="Delete address"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   </div>
                   <p className="text-gray-800 font-medium">{addr.address_line}</p>
@@ -2265,6 +2472,181 @@ export default function AdminUserHistory() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT USER DETAILS MODAL */}
+      {showEditUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-blue-50">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span>✏️</span> Edit User Details
+              </h2>
+              <button onClick={() => setShowEditUserModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg">✖</button>
+            </div>
+            <form onSubmit={handleSaveUser} className="p-6 space-y-4">
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Full Name</label>
+                <input
+                  type="text"
+                  className="input w-full text-sm"
+                  value={editUserForm.name}
+                  onChange={e => setEditUserForm({ ...editUserForm, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Phone Number</label>
+                <input
+                  type="text"
+                  className="input w-full text-sm"
+                  value={editUserForm.phone}
+                  onChange={e => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Email (Optional)</label>
+                <input
+                  type="email"
+                  className="input w-full text-sm"
+                  value={editUserForm.email}
+                  onChange={e => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Change Password (Optional)</label>
+                <input
+                  type="text"
+                  className="input w-full text-sm"
+                  value={editUserForm.password}
+                  onChange={e => setEditUserForm({ ...editUserForm, password: e.target.value })}
+                  placeholder="Leave blank to keep unchanged"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">Current visible password: {currentUserInfo?.actual_password || "N/A"}</p>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditUserModal(false)}
+                  className="btn-secondary text-sm px-5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingUser}
+                  className="btn-primary text-sm px-6 bg-indigo-600 hover:bg-indigo-700"
+                >
+                  {savingUser ? "Saving..." : "Update Details"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT ADDRESS MODAL */}
+      {showEditAddressModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-slide-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-teal-50">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span>📍</span> Edit Delivery Address
+              </h2>
+              <button onClick={() => setShowEditAddressModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg">✖</button>
+            </div>
+            <form onSubmit={handleSaveEditAddress} className="p-6 space-y-4">
+              <div>
+                <label className="label text-xs uppercase tracking-wider mb-1 block">Address Line</label>
+                <textarea
+                  className="input w-full text-sm"
+                  rows="2"
+                  value={editingAddress.address_line}
+                  onChange={e => setEditingAddress({ ...editingAddress, address_line: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">City</label>
+                  <input
+                    type="text"
+                    className="input w-full text-sm"
+                    value={editingAddress.city}
+                    onChange={e => setEditingAddress({ ...editingAddress, city: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Pincode</label>
+                  <input
+                    type="text"
+                    className="input w-full text-sm"
+                    value={editingAddress.pincode}
+                    onChange={e => setEditingAddress({ ...editingAddress, pincode: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Landmark (Optional)</label>
+                  <input
+                    type="text"
+                    className="input w-full text-sm"
+                    value={editingAddress.landmark}
+                    onChange={e => setEditingAddress({ ...editingAddress, landmark: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs uppercase tracking-wider mb-1 block">Zone (Optional)</label>
+                  <select
+                    className="input w-full text-sm"
+                    value={editingAddress.zone || ""}
+                    onChange={e => setEditingAddress({ ...editingAddress, zone: e.target.value })}
+                  >
+                    <option value="">-- Select Zone --</option>
+                    {allZones.map(z => (
+                      <option key={z.id} value={z.name}>{z.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit_is_default"
+                  checked={editingAddress.is_default}
+                  onChange={e => setEditingAddress({ ...editingAddress, is_default: e.target.checked })}
+                  className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                />
+                <label htmlFor="edit_is_default" className="text-xs font-semibold text-gray-700 cursor-pointer">
+                  Set as Primary / Default Address
+                </label>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditAddressModal(false)}
+                  className="btn-secondary text-sm px-5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAddress}
+                  className="btn-primary text-sm px-6"
+                >
+                  {savingAddress ? "Saving..." : "Update Address"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

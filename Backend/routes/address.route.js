@@ -1,7 +1,7 @@
 import express from "express";
 import {
     createAddress, getAddresses, updateAddress, deleteAddress, setDefaultAddress, updateLocation,
-    getUnassignedAddresses, assignZone, createAddressForUser
+    getUnassignedAddresses, assignZone, createAddressForUser, updateAddressByAdmin, deleteAddressByAdmin
 } from "../controllers/address.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 
@@ -14,6 +14,8 @@ router.patch("/:id/location", requireAuth, requireRole(["delivery", "admin"]), u
 router.post("/admin/create", requireAuth, requireRole(["admin"]), createAddressForUser);
 router.get("/admin/unassigned", requireAuth, requireRole(["admin"]), getUnassignedAddresses);
 router.patch("/admin/:id/zone", requireAuth, requireRole(["admin"]), assignZone);
+router.put("/admin/:id", requireAuth, requireRole(["admin"]), updateAddressByAdmin);
+router.delete("/admin/:id", requireAuth, requireRole(["admin"]), deleteAddressByAdmin);
 
 // User only routes
 router.use(requireAuth, requireRole(["user"]));

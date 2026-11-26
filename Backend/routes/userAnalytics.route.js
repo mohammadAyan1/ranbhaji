@@ -1,7 +1,7 @@
 import express from "express";
 import {
     getAllUsers, getUserAnalytics, getFilteredCustomers, getCustomerProfile,
-    createUser, updateUserStatus, updateUserRole, updateUserDiscount,
+    createUser, updateUser, updateUserStatus, updateUserRole, updateUserDiscount,
     getUserWaterDiscounts, createUserWaterDiscount, deleteUserWaterDiscount
 } from "../controllers/userAnalytics.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
@@ -10,6 +10,7 @@ const router = express.Router();
 
 router.get("/users", requireAuth, requireRole(["admin"]), getAllUsers);
 router.post("/users", requireAuth, requireRole(["admin"]), createUser);
+router.put("/users/:id", requireAuth, requireRole(["admin"]), updateUser);
 router.patch("/users/:id/status", requireAuth, requireRole(["admin"]), updateUserStatus);
 router.patch("/users/:id/role", requireAuth, requireRole(["admin"]), updateUserRole);
 router.patch("/users/:id/discount", requireAuth, requireRole(["admin"]), updateUserDiscount);

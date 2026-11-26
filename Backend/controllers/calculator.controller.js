@@ -1,4 +1,4 @@
-import { CalculatorDraft, CalculatorDraftItem, Product } from "../models/index.js";
+import { CalculatorDraft, CalculatorDraftItem, Product, User } from "../models/index.js";
 import { sequelize } from "../confiq/db.js";
 
 // POST /api/calculator/drafts (admin)
@@ -12,6 +12,17 @@ export const createDraft = async (req, res) => {
             return res.status(400).json({ success: false, message: "Draft name is required" });
         }
 
+        let final_target_user_id = target_user_id ? parseInt(target_user_id) : null;
+        let final_target_mobile = target_mobile_number ? String(target_mobile_number).trim() : null;
+
+        if (final_target_user_id && !final_target_mobile) {
+            const u = await User.findByPk(final_target_user_id, { transaction: t });
+            if (u?.phone) final_target_mobile = u.phone;
+        } else if (final_target_mobile && !final_target_user_id) {
+            const u = await User.findOne({ where: { phone: final_target_mobile }, transaction: t });
+            if (u) final_target_user_id = u.id;
+        }
+
         const draft = await CalculatorDraft.create({
             name,
             margin_percent: parseFloat(margin_percent || 0),
@@ -22,8 +33,8 @@ export const createDraft = async (req, res) => {
             max_seasonal_count: parseInt(max_seasonal_count || 0),
             seasonal_quantities: seasonal_quantities ? JSON.parse(JSON.stringify(seasonal_quantities)) : null,
             draft_type: draft_type || 'price_calculator',
-            target_user_id: target_user_id || null,
-            target_mobile_number: target_mobile_number || null,
+            target_user_id: final_target_user_id,
+            target_mobile_number: final_target_mobile,
             calculation_mode: calculation_mode || 'highest',
             custom_price: custom_price ? parseFloat(custom_price) : null
         }, { transaction: t });
@@ -77,6 +88,17 @@ export const updateDraft = async (req, res) => {
             return res.status(400).json({ success: false, message: "Draft name is required" });
         }
 
+        let final_target_user_id = target_user_id !== undefined ? (target_user_id ? parseInt(target_user_id) : null) : draft.target_user_id;
+        let final_target_mobile = target_mobile_number !== undefined ? (target_mobile_number ? String(target_mobile_number).trim() : null) : draft.target_mobile_number;
+
+        if (final_target_user_id && !final_target_mobile) {
+            const u = await User.findByPk(final_target_user_id, { transaction: t });
+            if (u?.phone) final_target_mobile = u.phone;
+        } else if (final_target_mobile && !final_target_user_id) {
+            const u = await User.findOne({ where: { phone: final_target_mobile }, transaction: t });
+            if (u) final_target_user_id = u.id;
+        }
+
         await draft.update({
             name,
             margin_percent: parseFloat(margin_percent || 0),
@@ -87,8 +109,8 @@ export const updateDraft = async (req, res) => {
             max_seasonal_count: parseInt(max_seasonal_count || 0),
             seasonal_quantities: seasonal_quantities ? JSON.parse(JSON.stringify(seasonal_quantities)) : null,
             draft_type: draft_type || 'price_calculator',
-            target_user_id: target_user_id || null,
-            target_mobile_number: target_mobile_number || null,
+            target_user_id: final_target_user_id,
+            target_mobile_number: final_target_mobile,
             calculation_mode: calculation_mode || 'highest',
             custom_price: custom_price ? parseFloat(custom_price) : null
         }, { transaction: t });
@@ -137,6 +159,11 @@ export const getDrafts = async (req, res) => {
                     model: CalculatorDraftItem,
                     as: 'Items',
                     include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'purchase_price_per_gm', 'selling_price_per_gm'] }]
+                },
+                {
+                    model: User,
+                    as: 'TargetUser',
+                    attributes: ['id', 'name', 'phone', 'email']
                 }
             ],
             order: [['created_at', 'DESC']]

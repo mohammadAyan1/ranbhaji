@@ -113,6 +113,27 @@ export default function PackageCalculator() {
     setEditingDraftId(null);
   };
 
+  const handleOpenShareModal = (draft) => {
+    setShareDraft(draft);
+    let phone = "";
+    if (draft.target_mobile_number) {
+      phone = String(draft.target_mobile_number).replace(/\D/g, '');
+    } else if (draft.TargetUser?.phone) {
+      phone = String(draft.TargetUser.phone).replace(/\D/g, '');
+    } else if (draft.target_user_id) {
+      const u = users.find(user => user.id === draft.target_user_id);
+      if (u?.phone) phone = String(u.phone).replace(/\D/g, '');
+    } else if (draft.name) {
+      const lowerName = draft.name.toLowerCase();
+      const matched = users.find(u => u.name && lowerName.includes(u.name.toLowerCase().trim()));
+      if (matched?.phone) phone = String(matched.phone).replace(/\D/g, '');
+    }
+    if (phone.length === 12 && phone.startsWith("91")) {
+      phone = phone.slice(2);
+    }
+    setSharePhone(phone);
+  };
+
   const handleWhatsAppShare = () => {
     if (!sharePhone || sharePhone.length < 10) {
       alert("Please enter a valid 10-digit phone number.");
@@ -276,7 +297,12 @@ export default function PackageCalculator() {
     setSeasonalCount(draft.max_seasonal_count || 0);
     setPackageType(draft.draft_type || "standard");
     setTargetUserId(draft.target_user_id || "");
-    setTargetMobileNumber(draft.target_mobile_number || "");
+    let draftMobile = draft.target_mobile_number || "";
+    if (!draftMobile && draft.target_user_id) {
+      const u = users.find(user => user.id === draft.target_user_id);
+      if (u?.phone) draftMobile = u.phone;
+    }
+    setTargetMobileNumber(draftMobile);
     setCalculationMode(draft.calculation_mode || "highest");
     if (draft.custom_price !== null && draft.custom_price !== undefined) {
       setCustomPrice(draft.custom_price);
@@ -612,14 +638,47 @@ export default function PackageCalculator() {
           <>
             <div>
               <label className="label text-xs uppercase tracking-wider">Target Customer</label>
-              <select className="input text-sm" value={targetUserId} onChange={e => setTargetUserId(e.target.value)}>
+              <select 
+                className="input text-sm" 
+                value={targetUserId} 
+                onChange={e => {
+                  const val = e.target.value;
+                  setTargetUserId(val);
+                  if (val) {
+                    const u = users.find(user => user.id === parseInt(val));
+                    if (u?.phone) {
+                      setTargetMobileNumber(u.phone);
+                    }
+                  }
+                }}
+              >
                 <option value="">Select (optional)</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} {u.phone ? `(${u.phone})` : ''}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className="label text-xs uppercase tracking-wider">Target Mobile</label>
-              <input type="text" className="input text-sm" placeholder="e.g. 9876543210" value={targetMobileNumber} onChange={e => setTargetMobileNumber(e.target.value)} />
+              <input 
+                type="text" 
+                className="input text-sm" 
+                placeholder="e.g. 9876543210" 
+                value={targetMobileNumber} 
+                onChange={e => {
+                  const val = e.target.value;
+                  setTargetMobileNumber(val);
+                  const clean = val.replace(/\D/g, '');
+                  if (clean.length === 10) {
+                    const matched = users.find(u => u.phone && u.phone.includes(clean));
+                    if (matched) {
+                      setTargetUserId(matched.id);
+                    }
+                  }
+                }} 
+              />
             </div>
           </>
         )}
@@ -1062,7 +1121,10 @@ export default function PackageCalculator() {
                     ✏️ Edit
                   </button>
                   {draft.draft_type === "custom" && (
-                    <button onClick={() => setShareDraft(draft)} className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-200 transition-colors flex items-center gap-1">
+                    <button 
+                      onClick={() => handleOpenShareModal(draft)} 
+                      className="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-medium border border-green-200 transition-colors flex items-center gap-1"
+                    >
                       💬 Share
                     </button>
                   )}
@@ -1087,12 +1149,33 @@ export default function PackageCalculator() {
       {shareDraft && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-xl">
-            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
               <span className="text-green-500">💬</span> Share Draft Package
             </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Enter customer's 10-digit WhatsApp number to share <b>{shareDraft.name}</b>
+            <p className="text-sm text-gray-600 mb-3">
+              Share <b>{shareDraft.name}</b> directly on customer's WhatsApp
             </p>
+
+            {(() => {
+              const targetCustomer = shareDraft.TargetUser || users.find(u => u.id === shareDraft.target_user_id) || (shareDraft.name ? users.find(u => u.name && shareDraft.name.toLowerCase().includes(u.name.toLowerCase().trim())) : null);
+              return targetCustomer ? (
+                <div className="mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-xs text-green-900 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-green-950 flex items-center gap-1">👤 {targetCustomer.name}</p>
+                    <p className="text-gray-500 text-[11px]">{targetCustomer.email || 'Customer'}</p>
+                  </div>
+                  {targetCustomer.phone && (
+                    <span className="font-mono text-xs bg-white border border-green-200 text-green-700 px-2 py-0.5 rounded-md font-semibold">
+                      {targetCustomer.phone}
+                    </span>
+                  )}
+                </div>
+              ) : null;
+            })()}
+
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+              WhatsApp Number
+            </label>
             <div className="flex items-center gap-2 mb-6">
               <span className="text-gray-500 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200 font-medium">+91</span>
               <input
@@ -1100,7 +1183,7 @@ export default function PackageCalculator() {
                 placeholder="9876543210"
                 value={sharePhone}
                 onChange={(e) => setSharePhone(e.target.value.replace(/\D/g, ''))}
-                className="input w-full"
+                className="input w-full font-mono text-sm"
                 maxLength={10}
                 autoFocus
               />

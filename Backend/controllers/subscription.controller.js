@@ -1394,7 +1394,7 @@ export const saveScheduleSeasonal = async (req, res) => {
 
         // Add custom fixed selections
         rows.push(...inputFixedItems
-            .filter(i => parseFloat(i.qty_gm) > 0)
+            .filter(i => parseFloat(i.qty_gm) >= 0)
             .map(i => ({
                 schedule_id,
                 product_id: i.product_id,

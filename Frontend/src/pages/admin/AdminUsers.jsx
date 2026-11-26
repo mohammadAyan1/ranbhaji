@@ -23,6 +23,11 @@ export default function AdminUsers() {
   const [formData, setFormData] = useState({ name: "", phone: "", email: "", password: "", role: "user", delivery_zones: [] });
   const [creating, setCreating] = useState(false);
 
+  // Edit User states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editUserData, setEditUserData] = useState({ id: null, name: "", phone: "", email: "", password: "", role: "user" });
+  const [savingEditUser, setSavingEditUser] = useState(false);
+
   const fetchUsers = () => {
     api.get("/admin/user-analytics/users").then(r => setUsers(r.data.users || [])).finally(() => setLoading(false));
   };
@@ -89,6 +94,44 @@ export default function AdminUsers() {
       setMsg(`❌ Failed to create user: ${err.response?.data?.message || err.message}`);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleOpenEditUser = (user) => {
+    setEditUserData({
+      id: user.id,
+      name: user.name || "",
+      phone: user.phone || "",
+      email: user.email || "",
+      password: "",
+      role: user.role || "user"
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    if (!editUserData.id) return;
+    setSavingEditUser(true);
+    setMsg("");
+    try {
+      const payload = {
+        name: editUserData.name,
+        phone: editUserData.phone,
+        email: editUserData.email,
+        role: editUserData.role
+      };
+      if (editUserData.password && editUserData.password.trim() !== "") {
+        payload.password = editUserData.password.trim();
+      }
+      await api.put(`/admin/user-analytics/users/${editUserData.id}`, payload);
+      setMsg(`✅ User ${editUserData.name} updated successfully.`);
+      setIsEditModalOpen(false);
+      fetchUsers();
+    } catch (err) {
+      setMsg(`❌ Failed to update user: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSavingEditUser(false);
     }
   };
 
@@ -258,6 +301,12 @@ export default function AdminUsers() {
                         className="text-xs font-medium px-3 py-1 rounded-full border border-gray-200 text-gray-700 hover:bg-gray-50"
                       >
                         View
+                      </button>
+                      <button 
+                        onClick={() => handleOpenEditUser(u)}
+                        className="text-xs font-medium px-3 py-1 rounded-full border border-amber-200 text-amber-700 hover:bg-amber-50"
+                      >
+                        Edit
                       </button>
                       <button onClick={() => toggleStatus(u)}
                         className={`text-xs font-medium px-3 py-1 rounded-full border ${u.status === "active" ? "text-red-600 hover:bg-red-50 border-red-200" : "text-fresh-600 hover:bg-fresh-50 border-fresh-200"}`}>
@@ -442,6 +491,54 @@ export default function AdminUsers() {
               <button type="submit" disabled={savingZones} className="btn-primary w-full mt-2">
                 {savingZones ? "Saving..." : "Save Zones"}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {isEditModalOpen && editUserData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto animate-slide-up">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Edit User #{editUserData.id}</h2>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateUser} className="space-y-4">
+              <div>
+                <label className="label">Name</label>
+                <input type="text" className="input" required value={editUserData.name} onChange={e => setEditUserData({...editUserData, name: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Phone</label>
+                <input type="text" className="input" required value={editUserData.phone} onChange={e => setEditUserData({...editUserData, phone: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Email (Optional)</label>
+                <input type="email" className="input" value={editUserData.email} onChange={e => setEditUserData({...editUserData, email: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Change Password (Optional)</label>
+                <input type="text" className="input" placeholder="Leave blank to keep unchanged" value={editUserData.password} onChange={e => setEditUserData({...editUserData, password: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">Role</label>
+                <select className="input" value={editUserData.role} onChange={e => setEditUserData({...editUserData, role: e.target.value})}>
+                  <option value="user">User</option>
+                  <option value="delivery">Delivery</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              
+              <div className="pt-2 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="btn-secondary text-sm px-5">Cancel</button>
+                <button type="submit" disabled={savingEditUser} className="btn-primary text-sm px-6">
+                  {savingEditUser ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
             </form>
           </div>
         </div>

@@ -103,6 +103,57 @@ export const updateUserRole = async (req, res) => {
     }
 };
 
+// PUT /api/admin/user-analytics/users/:id OR /api/admin/users/:id
+export const updateUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, phone, email, password, role, delivery_zones } = req.body;
+
+        const user = await User.findByPk(id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        // If phone changed, check uniqueness
+        if (phone && phone !== user.phone) {
+            const existing = await User.findOne({ where: { phone, id: { [Op.ne]: id } } });
+            if (existing) {
+                return res.status(400).json({ success: false, message: "Phone number is already registered with another user." });
+            }
+            user.phone = phone;
+        }
+
+        if (name !== undefined) user.name = name;
+        if (email !== undefined) user.email = email || null;
+        if (role !== undefined) user.role = role;
+        if (delivery_zones !== undefined) user.delivery_zones = delivery_zones;
+
+        if (password && password.trim() !== "") {
+            user.actual_password = password.trim();
+            user.password_hash = await bcrypt.hash(password.trim(), 10);
+        }
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "User details updated successfully",
+            user: {
+                id: user.id,
+                name: user.name,
+                phone: user.phone,
+                email: user.email,
+                role: user.role,
+                status: user.status,
+                actual_password: user.actual_password,
+                wallet_balance: user.wallet_balance,
+                discount_percentage: user.discount_percentage,
+                delivery_zones: user.delivery_zones
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // PATCH /api/admin/user-analytics/users/:id/discount
 export const updateUserDiscount = async (req, res) => {
     try {
@@ -316,6 +367,7 @@ export const getUserAnalytics = async (req, res) => {
         // Aggregation Maps
         const packageStats = {}; // To group by package id and count renewals
         const productTotalStats = {}; // To aggregate total product quantities
+        const subFixedMap = {}; // To track subscription customized fixed items
 
         const addProductStat = (product, qty, type) => {
             if (!product) return;
@@ -343,6 +395,14 @@ export const getUserAnalytics = async (req, res) => {
         subscriptions.forEach(sub => {
             const pkg = sub.Package;
             if (pkg) {
+                if (!subFixedMap[sub.id]) subFixedMap[sub.id] = {};
+                if (sub.Items && sub.Items.length > 0) {
+                    sub.Items.forEach(item => {
+                        if (item.is_fixed) {
+                            subFixedMap[sub.id][item.product_id] = parseFloat(item.qty_gm || 0);
+                        }
+                    });
+                }
                 if (!packageStats[pkg.id]) {
                     const margin = parseFloat(pkg.margin_percent || 0);
                     const packagePrice = parseFloat(pkg.price || sub.price || 0);
@@ -562,14 +622,13 @@ export const getUserAnalytics = async (req, res) => {
         deliverySchedules.forEach(schedule => {
             if (schedule.DeliveryItems && schedule.DeliveryItems.length > 0) {
                 schedule.DeliveryItems.forEach(item => {
-                    if (item.Product) {
+                    if (item.Product && parseFloat(item.qty_gm || 0) > 0) {
                         addProductStat(item.Product, parseFloat(item.qty_gm || 0), 'package');
                     }
                 });
-            }
-            if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
+            } else if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
                 schedule.SeasonalSelections.forEach(sel => {
-                    if (sel.Product) {
+                    if (sel.Product && parseFloat(sel.qty_gm || 0) > 0) {
                         addProductStat(sel.Product, parseFloat(sel.qty_gm || 0), 'package');
                     }
                 });
@@ -580,25 +639,85 @@ export const getUserAnalytics = async (req, res) => {
             if (schedule.Subscription && schedule.Subscription.package_id) {
                 const pkgId = schedule.Subscription.package_id;
                 if (packageStats[pkgId]) {
-                    const fixedList = (schedule.DeliveryItems && schedule.DeliveryItems.length > 0)
-                        ? schedule.DeliveryItems.map(di => ({
-                            product_id: di.product_id,
-                            name: di.Product?.name || 'Item',
-                            hindi_name: di.Product?.hindi_name,
-                            qty_gm: parseFloat(di.qty_gm || 0),
-                            unit: di.Product?.unit || 'gm',
-                            purchase_price_per_gm: di.Product?.purchase_price_per_gm
-                        }))
-                        : (packageStats[pkgId]?.seasonal_config?.fixed_items || []);
+                    const templateFixedItems = packageStats[pkgId]?.seasonal_config?.fixed_items || [];
+                    const fixedProductIds = new Set(templateFixedItems.map(fi => fi.product_id));
 
-                    const seasonalList = (schedule.SeasonalSelections || []).map(sel => ({
-                        product_id: sel.product_id,
-                        name: sel.Product?.name || 'Seasonal Item',
-                        hindi_name: sel.Product?.hindi_name,
-                        qty_gm: parseFloat(sel.qty_gm || 0),
-                        unit: sel.Product?.unit || 'gm',
-                        purchase_price_per_gm: sel.Product?.purchase_price_per_gm
-                    }));
+                    let fixedList = [];
+                    let seasonalList = [];
+
+                    if (schedule.DeliveryItems && schedule.DeliveryItems.length > 0) {
+                        fixedList = templateFixedItems.map(tfi => {
+                            const match = schedule.DeliveryItems.find(di => di.product_id === tfi.product_id);
+                            return {
+                                product_id: tfi.product_id,
+                                name: match?.Product?.name || tfi.name || 'Item',
+                                hindi_name: match?.Product?.hindi_name || tfi.hindi_name,
+                                qty_gm: match ? parseFloat(match.qty_gm || 0) : 0,
+                                unit: match?.Product?.unit || tfi.unit || 'gm',
+                                purchase_price_per_gm: match?.Product?.purchase_price_per_gm ?? tfi.purchase_price_per_gm
+                            };
+                        });
+
+                        seasonalList = schedule.DeliveryItems
+                            .filter(di => !fixedProductIds.has(di.product_id) && parseFloat(di.qty_gm || 0) > 0)
+                            .map(di => ({
+                                product_id: di.product_id,
+                                name: di.Product?.name || 'Seasonal Item',
+                                hindi_name: di.Product?.hindi_name,
+                                qty_gm: parseFloat(di.qty_gm || 0),
+                                unit: di.Product?.unit || 'gm',
+                                purchase_price_per_gm: di.Product?.purchase_price_per_gm
+                            }));
+                    } else if (schedule.SeasonalSelections && schedule.SeasonalSelections.length > 0) {
+                        const selMap = {};
+                        schedule.SeasonalSelections.forEach(s => {
+                            selMap[s.product_id] = parseFloat(s.qty_gm || 0);
+                        });
+
+                        fixedList = templateFixedItems.map(tfi => {
+                            let qty = tfi.qty_gm;
+                            if (selMap[tfi.product_id] !== undefined) {
+                                qty = selMap[tfi.product_id];
+                            } else if (subFixedMap[schedule.subscription_id]?.[tfi.product_id] !== undefined) {
+                                qty = subFixedMap[schedule.subscription_id][tfi.product_id];
+                            }
+                            return {
+                                product_id: tfi.product_id,
+                                name: tfi.name || 'Item',
+                                hindi_name: tfi.hindi_name,
+                                qty_gm: qty,
+                                unit: tfi.unit || 'gm',
+                                purchase_price_per_gm: tfi.purchase_price_per_gm
+                            };
+                        });
+
+                        seasonalList = schedule.SeasonalSelections
+                            .filter(sel => !fixedProductIds.has(sel.product_id) && parseFloat(sel.qty_gm || 0) > 0)
+                            .map(sel => ({
+                                product_id: sel.product_id,
+                                name: sel.Product?.name || 'Seasonal Item',
+                                hindi_name: sel.Product?.hindi_name,
+                                qty_gm: parseFloat(sel.qty_gm || 0),
+                                unit: sel.Product?.unit || 'gm',
+                                purchase_price_per_gm: sel.Product?.purchase_price_per_gm
+                            }));
+                    } else {
+                        fixedList = templateFixedItems.map(tfi => {
+                            let qty = tfi.qty_gm;
+                            if (subFixedMap[schedule.subscription_id]?.[tfi.product_id] !== undefined) {
+                                qty = subFixedMap[schedule.subscription_id][tfi.product_id];
+                            }
+                            return {
+                                product_id: tfi.product_id,
+                                name: tfi.name || 'Item',
+                                hindi_name: tfi.hindi_name,
+                                qty_gm: qty,
+                                unit: tfi.unit || 'gm',
+                                purchase_price_per_gm: tfi.purchase_price_per_gm
+                            };
+                        });
+                        seasonalList = [];
+                    }
 
                     if (!packageStats[pkgId].servings) {
                         packageStats[pkgId].servings = [];
