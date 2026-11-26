@@ -126,6 +126,19 @@ export const getTodayDeliveries = async (req, res) => {
                 addressStr = `${defaultAddr.address_line}${defaultAddr.landmark ? ', ' + defaultAddr.landmark : ''}, ${defaultAddr.city} - ${defaultAddr.pincode}`;
             }
 
+            let lat = null;
+            let lng = null;
+            if (sched.Subscription?.Address) {
+                lat = sched.Subscription.Address.latitude || null;
+                lng = sched.Subscription.Address.longitude || null;
+            } else if (sched.WaterSubscription?.Address) {
+                lat = sched.WaterSubscription.Address.latitude || null;
+                lng = sched.WaterSubscription.Address.longitude || null;
+            } else if (defaultAddr) {
+                lat = defaultAddr.latitude || null;
+                lng = defaultAddr.longitude || null;
+            }
+
             if (!userMap[user.id]) {
                 userMap[user.id] = {
                     user: {
@@ -133,7 +146,9 @@ export const getTodayDeliveries = async (req, res) => {
                         name: user.name,
                         phone: user.phone,
                         address: addressStr,
-                        address_id: address_id
+                        address_id: address_id,
+                        latitude: lat,
+                        longitude: lng
                     },
                     schedules: []
                 };
@@ -207,16 +222,23 @@ export const getTodayDeliveries = async (req, res) => {
             userMap[user.id].schedules.push({
                 schedule_id: sched.id,
                 type: 'package',
+                status: sched.status,
+                time_slot: sched.delivery_time_slot || null,
                 package: package_name,
                 items: items
                     .filter(i => i.packed_qty === null || parseFloat(i.packed_qty) > 0)
                     .map(i => ({
+                        delivery_item_id: i.id,
+                        product_id: i.product_id,
                         product: i.Product?.name,
                         hindi_name: i.Product?.hindi_name,
                         qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.qty_gm),
                         unit: i.Product?.unit,
                         image_url: i.Product?.image_url || null,
-                        image: i.Product?.image_url || null
+                        image: i.Product?.image_url || null,
+                        return_status: i.return_status || 'none',
+                        return_qty: i.return_qty !== null && i.return_qty !== undefined ? parseFloat(i.return_qty) : null,
+                        return_reason: i.return_reason || null
                     }))
             });
         }
@@ -227,9 +249,13 @@ export const getTodayDeliveries = async (req, res) => {
 
             let addressStr = "No address provided";
             let address_id = null;
+            let lat = null;
+            let lng = null;
             if (ro.Address) {
                 address_id = ro.Address.id;
                 addressStr = `${ro.Address.address_line}${ro.Address.landmark ? ', ' + ro.Address.landmark : ''}, ${ro.Address.city} - ${ro.Address.pincode}`;
+                lat = ro.Address.latitude || null;
+                lng = ro.Address.longitude || null;
             }
 
             if (!userMap[user.id]) {
@@ -239,7 +265,9 @@ export const getTodayDeliveries = async (req, res) => {
                         name: user.name,
                         phone: user.phone,
                         address: addressStr,
-                        address_id: address_id
+                        address_id: address_id,
+                        latitude: lat,
+                        longitude: lng
                     },
                     schedules: []
                 };
@@ -248,10 +276,17 @@ export const getTodayDeliveries = async (req, res) => {
             userMap[user.id].schedules.push({
                 schedule_id: ro.id,
                 type: 'retail',
+                status: ro.delivery_status,
+                time_slot: ro.delivery_time_slot || null,
                 package: "Retail Order",
+                total_amount: ro.total_amount,
+                payment_method: ro.payment_method,
+                payment_status: ro.payment_status,
                 items: ro.Items
                     .filter(i => i.packed_qty === null || parseFloat(i.packed_qty) > 0)
                     .map(i => ({
+                        item_id: i.id,
+                        product_id: i.product_id,
                         product: i.Product?.name,
                         hindi_name: i.Product?.hindi_name,
                         qty_gm: i.packed_qty !== null ? parseFloat(i.packed_qty) : parseFloat(i.quantity),
@@ -272,8 +307,10 @@ export const getTodayDeliveries = async (req, res) => {
 export const markDelivered = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { schedule_id, type, remark } = req.body;
+        const { schedule_id, type, remark, latitude, longitude } = req.body;
         const photo_url = req.file ? `/uploads/${req.file.filename}` : null;
+        const delivery_lat = (latitude !== undefined && latitude !== null && latitude !== '') ? parseFloat(latitude) : null;
+        const delivery_lng = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : null;
 
         if (!photo_url && !remark) {
             await t.rollback();
@@ -287,7 +324,7 @@ export const markDelivered = async (req, res) => {
                 return res.status(400).json({ success: false, message: "Retail Delivery not found or already processed" });
             }
 
-            const per_service_amount = parseFloat(ro.total_price);
+            const per_service_amount = parseFloat(ro.total_price || ro.total_amount || 0);
             const user = ro.User;
 
             let newBalance = parseFloat(user.wallet_balance) - per_service_amount;
@@ -310,7 +347,9 @@ export const markDelivered = async (req, res) => {
                 actual_delivery_date: new Date().toISOString().split('T')[0],
                 delivered_at: new Date(),
                 delivery_photo_url: photo_url,
-                delivery_remark: remark
+                delivery_remark: remark || null,
+                delivery_latitude: delivery_lat,
+                delivery_longitude: delivery_lng
             }, { transaction: t });
 
             await t.commit();
@@ -531,7 +570,9 @@ export const markDelivered = async (req, res) => {
             delivered_at: new Date(),
             delivery_boy_id: req.user.id,
             delivery_remark: remark || null,
-            delivery_photo_url: photo_url || null
+            delivery_photo_url: photo_url || null,
+            delivery_latitude: delivery_lat,
+            delivery_longitude: delivery_lng
         }, { transaction: t });
 
         const newCompleted = sub.services_completed + 1;
@@ -2834,12 +2875,13 @@ export const boyReturnItem = async (req, res) => {
             transaction: t
         });
 
-        if (!item || item.DeliverySchedule?.status !== 'delivered') {
+        const allowedStatuses = ['pending', 'ready_for_delivery', 'delivered'];
+        if (!item || !allowedStatuses.includes(item.DeliverySchedule?.status)) {
             await t.rollback();
-            return res.status(400).json({ success: false, message: "Item not found or schedule not delivered" });
+            return res.status(400).json({ success: false, message: "Item not found or schedule not in deliverable state" });
         }
 
-        if (item.DeliverySchedule.delivery_boy_id !== req.user.id) {
+        if (item.DeliverySchedule.delivery_boy_id && item.DeliverySchedule.delivery_boy_id !== req.user.id) {
             await t.rollback();
             return res.status(403).json({ success: false, message: "You are not authorized to return this item" });
         }
@@ -3009,12 +3051,58 @@ export const adminReturnOrder = async (req, res) => {
 export const boyReturnOrder = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { schedule_id, return_reason } = req.body;
+        const { schedule_id, return_reason, type, latitude, longitude } = req.body;
         const return_photo_url = req.file ? `/uploads/${req.file.filename}` : null;
+        const delivery_lat = (latitude !== undefined && latitude !== null && latitude !== '') ? parseFloat(latitude) : null;
+        const delivery_lng = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : null;
 
         if (!return_photo_url) {
             await t.rollback();
             return res.status(400).json({ success: false, message: 'Image is required for full order return' });
+        }
+
+        if (type === 'retail') {
+            const ro = await RetailOrder.findByPk(schedule_id, {
+                include: [{ model: User }, { model: RetailOrderItem, as: 'Items' }],
+                transaction: t
+            });
+            if (!ro || !['pending', 'ready_for_delivery', 'delivered'].includes(ro.delivery_status)) {
+                await t.rollback();
+                return res.status(400).json({ success: false, message: 'Retail order not found or invalid status for return' });
+            }
+            if (ro.delivery_boy_id && ro.delivery_boy_id !== req.user.id) {
+                await t.rollback();
+                return res.status(403).json({ success: false, message: 'Unauthorized: This order is not assigned to you' });
+            }
+
+            const wasDelivered = ro.delivery_status === 'delivered';
+
+            await ro.update({
+                delivery_status: 'returned',
+                delivery_remark: return_reason || 'Delivery Boy returned entire order',
+                delivery_photo_url: return_photo_url,
+                delivery_latitude: delivery_lat,
+                delivery_longitude: delivery_lng
+            }, { transaction: t });
+
+            if (wasDelivered) {
+                const per_service_amount = parseFloat(ro.total_price || ro.total_amount || 0);
+                const user = ro.User;
+                if (user && per_service_amount > 0) {
+                    let newBalance = parseFloat(user.wallet_balance) + per_service_amount;
+                    await user.update({ wallet_balance: newBalance }, { transaction: t });
+                    await WalletTransaction.create({
+                        user_id: user.id,
+                        amount: per_service_amount,
+                        type: 'credit',
+                        reason: `Refund for returned retail order #${ro.id}`,
+                        reference_id: ro.id
+                    }, { transaction: t });
+                }
+            }
+
+            await t.commit();
+            return res.status(200).json({ success: true, message: 'Retail order returned successfully' });
         }
 
         const schedule = await DeliverySchedule.findByPk(schedule_id, {
@@ -3026,9 +3114,15 @@ export const boyReturnOrder = async (req, res) => {
             transaction: t
         });
 
-        if (!schedule || schedule.status !== 'delivered' || schedule.delivery_boy_id !== req.user.id) {
+        const allowedStatuses = ['pending', 'ready_for_delivery', 'delivered'];
+        if (!schedule || !allowedStatuses.includes(schedule.status)) {
             await t.rollback();
-            return res.status(400).json({ success: false, message: 'Schedule not found, not delivered, or unauthorized' });
+            return res.status(400).json({ success: false, message: 'Schedule not found or not in deliverable state' });
+        }
+
+        if (schedule.delivery_boy_id && schedule.delivery_boy_id !== req.user.id) {
+            await t.rollback();
+            return res.status(403).json({ success: false, message: 'Unauthorized: This delivery is not assigned to you' });
         }
 
         const user = schedule.Subscription?.User || schedule.WaterSubscription?.User;
@@ -3037,7 +3131,7 @@ export const boyReturnOrder = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found or order not supported for return' });
         }
 
-        for (const item of schedule.DeliveryItems) {
+        for (const item of (schedule.DeliveryItems || [])) {
             if (item.return_status === 'none') {
                 await item.update({
                     return_status: 'requested',
@@ -3049,10 +3143,19 @@ export const boyReturnOrder = async (req, res) => {
             }
         }
 
-        // Scheduling new order and stock updates will be handled by Admin upon approval.
+        // If returned before delivery, update status to 'returned' so it's not pending anymore
+        if (['pending', 'ready_for_delivery'].includes(schedule.status)) {
+            await schedule.update({
+                status: 'returned',
+                delivery_remark: return_reason || 'Delivery Boy returned entire order before delivery',
+                delivery_photo_url: return_photo_url,
+                delivery_latitude: delivery_lat,
+                delivery_longitude: delivery_lng
+            }, { transaction: t });
+        }
 
         await t.commit();
-        res.status(200).json({ success: true, message: 'Order returned successfully and pushed to new schedule' });
+        res.status(200).json({ success: true, message: 'Order returned successfully and queued for review' });
     } catch (error) {
         await t.rollback();
         res.status(500).json({ success: false, message: error.message });
@@ -3667,5 +3770,304 @@ export const deductServingWallet = async (req, res) => {
         await t.rollback();
         console.error("deductServingWallet error:", error);
         return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/delivery/dashboard OR /api/boy-dashboard (delivery role)
+export const getDeliveryBoyDashboard = async (req, res) => {
+    try {
+        const deliveryBoyId = req.user.id;
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 330); // IST
+        const defaultDate = now.toISOString().split('T')[0];
+        const date = req.query.date || defaultDate;
+
+        // Fetch all assigned schedules for this boy for the date (any status)
+        const schedules = await DeliverySchedule.findAll({
+            where: {
+                scheduled_date: date,
+                delivery_boy_id: deliveryBoyId
+            },
+            include: [
+                {
+                    model: Subscription,
+                    include: [
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
+                        { model: Package, attributes: ['id', 'name'] },
+                        { model: Address }
+                    ]
+                },
+                {
+                    model: WaterSubscription,
+                    include: [
+                        { model: User, attributes: ['id', 'name', 'phone', 'status'] },
+                        { model: Address },
+                        { model: Product, as: 'Product' }
+                    ]
+                },
+                {
+                    model: DeliveryItem,
+                    as: 'DeliveryItems',
+                    include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit', 'category', 'image_url'] }]
+                }
+            ],
+            order: [['id', 'ASC']]
+        });
+
+        // Fetch all assigned retail orders for this boy for the date
+        const retailOrders = await RetailOrder.findAll({
+            where: {
+                delivery_date: date,
+                delivery_boy_id: deliveryBoyId
+            },
+            include: [
+                { model: User, attributes: ['id', 'name', 'phone', 'status'] },
+                { model: Address },
+                { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
+            ],
+            order: [['id', 'ASC']]
+        });
+
+        const pending = [];
+        const delivered = [];
+        const returned = [];
+        let returnedItemsCount = 0;
+
+        const formatScheduleData = async (sched) => {
+            let user = sched.Subscription?.User || sched.WaterSubscription?.User;
+            let packageName = sched.Subscription?.Package?.name || (sched.WaterSubscription?.Product ? sched.WaterSubscription.Product.name : `${sched.WaterSubscription?.water_type} Water`);
+            if (sched.is_returned_serving) packageName = `Return Order (${packageName})`;
+
+            let addrObj = sched.Subscription?.Address || sched.WaterSubscription?.Address;
+            if (!addrObj && user) {
+                addrObj = await Address.findOne({ where: { user_id: user.id, is_default: true } });
+            }
+
+            const items = (sched.DeliveryItems || []).map(i => {
+                if (i.return_status && i.return_status !== 'none') {
+                    returnedItemsCount++;
+                }
+                return {
+                    delivery_item_id: i.id,
+                    product_id: i.product_id,
+                    product_name: i.Product?.name || 'Product',
+                    hindi_name: i.Product?.hindi_name || '',
+                    qty: i.packed_qty !== null && i.packed_qty !== undefined ? parseFloat(i.packed_qty) : parseFloat(i.qty_gm || 0),
+                    unit: i.Product?.unit || 'gm',
+                    image_url: i.Product?.image_url || null,
+                    return_status: i.return_status || 'none',
+                    return_qty: i.return_qty !== null && i.return_qty !== undefined ? parseFloat(i.return_qty) : null,
+                    return_reason: i.return_reason || null,
+                    return_photo_url: i.return_photo_url || null
+                };
+            });
+
+            return {
+                id: sched.id,
+                delivery_id: sched.id,
+                type: 'package',
+                status: sched.status,
+                delivery_date: sched.scheduled_date,
+                actual_delivery_date: sched.actual_delivery_date || null,
+                delivered_at: sched.delivered_at || null,
+                time_slot: sched.delivery_time_slot || null,
+                delivery_photo_url: sched.delivery_photo_url || null,
+                delivery_remark: sched.delivery_remark || null,
+                delivery_latitude: sched.delivery_latitude || null,
+                delivery_longitude: sched.delivery_longitude || null,
+                customer: {
+                    id: user?.id,
+                    name: user?.name,
+                    phone: user?.phone,
+                    address: addrObj ? `${addrObj.address_line}${addrObj.landmark ? ', ' + addrObj.landmark : ''}, ${addrObj.city} - ${addrObj.pincode}` : 'No address provided',
+                    landmark: addrObj?.landmark || null,
+                    city: addrObj?.city || null,
+                    pincode: addrObj?.pincode || null,
+                    latitude: addrObj?.latitude || null,
+                    longitude: addrObj?.longitude || null
+                },
+                order_details: {
+                    package_name: packageName,
+                    total_items: items.length,
+                    items
+                }
+            };
+        };
+
+        const formatRetailData = (ro) => {
+            const user = ro.User;
+            const addrObj = ro.Address;
+            const items = (ro.Items || []).map(i => ({
+                item_id: i.id,
+                product_id: i.product_id,
+                product_name: i.Product?.name || 'Product',
+                hindi_name: i.Product?.hindi_name || '',
+                qty: i.packed_qty !== null && i.packed_qty !== undefined ? parseFloat(i.packed_qty) : parseFloat(i.quantity || 0),
+                unit: i.Product?.unit || 'gm',
+                image_url: i.Product?.image_url || null
+            }));
+
+            return {
+                id: ro.id,
+                delivery_id: ro.id,
+                type: 'retail',
+                status: ro.delivery_status,
+                delivery_date: ro.delivery_date,
+                actual_delivery_date: ro.actual_delivery_date || null,
+                delivered_at: ro.delivered_at || null,
+                time_slot: ro.delivery_time_slot || null,
+                delivery_photo_url: ro.delivery_photo_url || null,
+                delivery_remark: ro.delivery_remark || null,
+                delivery_latitude: ro.delivery_latitude || null,
+                delivery_longitude: ro.delivery_longitude || null,
+                customer: {
+                    id: user?.id,
+                    name: user?.name,
+                    phone: user?.phone,
+                    address: addrObj ? `${addrObj.address_line}${addrObj.landmark ? ', ' + addrObj.landmark : ''}, ${addrObj.city} - ${addrObj.pincode}` : 'No address provided',
+                    landmark: addrObj?.landmark || null,
+                    city: addrObj?.city || null,
+                    pincode: addrObj?.pincode || null,
+                    latitude: addrObj?.latitude || null,
+                    longitude: addrObj?.longitude || null
+                },
+                order_details: {
+                    package_name: 'Retail Order',
+                    total_amount: ro.total_amount,
+                    payment_method: ro.payment_method,
+                    payment_status: ro.payment_status,
+                    total_items: items.length,
+                    items
+                }
+            };
+        };
+
+        for (const s of schedules) {
+            const formatted = await formatScheduleData(s);
+            if (s.status === 'delivered') {
+                delivered.push(formatted);
+                const hasReturnedItems = (s.DeliveryItems || []).some(i => i.return_status && i.return_status !== 'none');
+                if (hasReturnedItems) {
+                    returned.push({
+                        ...formatted,
+                        return_type: 'partial_item_return'
+                    });
+                }
+            } else if (s.status === 'returned') {
+                returned.push({
+                    ...formatted,
+                    return_type: 'full_order_return'
+                });
+            } else {
+                pending.push(formatted);
+            }
+        }
+
+        for (const r of retailOrders) {
+            const formatted = formatRetailData(r);
+            if (r.delivery_status === 'delivered') {
+                delivered.push(formatted);
+            } else if (r.delivery_status === 'returned') {
+                returned.push({
+                    ...formatted,
+                    return_type: 'full_order_return'
+                });
+            } else {
+                pending.push(formatted);
+            }
+        }
+
+        const totalAssigned = pending.length + delivered.length + returned.filter(r => r.return_type === 'full_order_return').length;
+
+        res.status(200).json({
+            success: true,
+            date,
+            summary: {
+                total_assigned: totalAssigned,
+                pending_deliveries_count: pending.length,
+                delivered_count: delivered.length,
+                returned_orders_count: returned.filter(r => r.return_type === 'full_order_return' || r.status === 'returned').length,
+                returned_items_count: returnedItemsCount
+            },
+            deliveries: {
+                pending,
+                delivered,
+                returned
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// GET /api/delivery/boy-returns (delivery role)
+export const getDeliveryBoyReturns = async (req, res) => {
+    try {
+        const deliveryBoyId = req.user.id;
+        const { date, from_date, to_date, status } = req.query;
+
+        let scheduleWhere = { delivery_boy_id: deliveryBoyId };
+        let itemWhere = { return_status: { [Op.ne]: 'none' } };
+
+        if (status && status !== 'all') {
+            itemWhere.return_status = status;
+        }
+
+        if (date) {
+            scheduleWhere[Op.or] = [
+                { actual_delivery_date: date },
+                { scheduled_date: date }
+            ];
+        } else if (from_date && to_date) {
+            scheduleWhere[Op.or] = [
+                { actual_delivery_date: { [Op.between]: [from_date, to_date] } },
+                { scheduled_date: { [Op.between]: [from_date, to_date] } }
+            ];
+        }
+
+        const returnedItems = await DeliveryItem.findAll({
+            where: itemWhere,
+            include: [
+                {
+                    model: DeliverySchedule,
+                    where: scheduleWhere,
+                    include: [
+                        { model: Subscription, include: [{ model: User, attributes: ['id', 'name', 'phone'] }, { model: Package }] },
+                        { model: WaterSubscription, include: [{ model: User, attributes: ['id', 'name', 'phone'] }] }
+                    ]
+                },
+                {
+                    model: Product,
+                    attributes: ['id', 'name', 'hindi_name', 'unit', 'image_url']
+                }
+            ],
+            order: [['id', 'DESC']]
+        });
+
+        let retailWhere = { delivery_boy_id: deliveryBoyId, delivery_status: 'returned' };
+        if (date) {
+            retailWhere.delivery_date = date;
+        } else if (from_date && to_date) {
+            retailWhere.delivery_date = { [Op.between]: [from_date, to_date] };
+        }
+        const returnedRetail = await RetailOrder.findAll({
+            where: retailWhere,
+            include: [
+                { model: User, attributes: ['id', 'name', 'phone'] },
+                { model: Address },
+                { model: RetailOrderItem, as: 'Items', include: [{ model: Product }] }
+            ],
+            order: [['id', 'DESC']]
+        });
+
+        res.status(200).json({
+            success: true,
+            total_returned_items: returnedItems.length,
+            total_returned_retail_orders: returnedRetail.length,
+            returned_subscription_items: returnedItems,
+            returned_retail_orders: returnedRetail
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };

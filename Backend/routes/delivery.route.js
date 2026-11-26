@@ -7,7 +7,7 @@ import {
     assignDeliveryBoy, getDeliveryBoyHistory, adminReturnItem, boyReturnItem,
     adminReturnOrder, boyReturnOrder, getTodayIncoming, updateRequestedTime,
     updateDeliveryScheduleStatus, updateDeliveryScheduleItems, rescheduleDeliverySchedule,
-    deductServingWallet, getPresentDeliveryBoys
+    deductServingWallet, getPresentDeliveryBoys, getDeliveryBoyDashboard, getDeliveryBoyReturns
 } from "../controllers/delivery.controller.js";
 import { requireAuth, requireRole, optionalAuth } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.js";
@@ -15,6 +15,9 @@ import { upload } from "../middlewares/multer.js";
 const router = express.Router();
 
 router.get("/today-deliveries", requireAuth, requireRole(["delivery"]), getTodayDeliveries);
+router.get("/delivery-dashboard", requireAuth, requireRole(["delivery"]), getDeliveryBoyDashboard);
+router.get("/boy-dashboard", requireAuth, requireRole(["delivery"]), getDeliveryBoyDashboard);
+router.get("/boy-returns", requireAuth, requireRole(["delivery"]), getDeliveryBoyReturns);
 router.post("/mark-delivered", requireAuth, requireRole(["delivery"]), upload.single("photo"), markDelivered);
 router.post("/return-item", requireAuth, requireRole(["user"]), upload.single("photo"), requestReturn);
 router.patch("/return-item/:id/review", requireAuth, requireRole(["admin"]), reviewReturn);
