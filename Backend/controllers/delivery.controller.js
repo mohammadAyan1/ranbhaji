@@ -2310,8 +2310,9 @@ export const packOrders = async (req, res) => {
                                         subscription_id: schedule.subscription_id,
                                         scheduled_date: tomorrowStr,
                                         status: 'pending',
-                                        is_locked: false,
-                                        is_returned_serving: false
+                                        is_locked: true,
+                                        is_returned_serving: false,
+                                        is_missing_delivery: true
                                     });
                                 }
 
@@ -2379,8 +2380,9 @@ export const packOrders = async (req, res) => {
                                     subscription_id: schedule.subscription_id,
                                     scheduled_date: tomorrowStr,
                                     status: 'pending',
-                                    is_locked: false,
-                                    is_returned_serving: false
+                                    is_locked: true,
+                                    is_returned_serving: false,
+                                    is_missing_delivery: true
                                 });
                             }
 

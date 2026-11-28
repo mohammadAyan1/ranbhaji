@@ -203,6 +203,7 @@ const DeliverySchedule = sequelize.define('DeliverySchedule', {
   batch_id: { type: DataTypes.INTEGER, allowNull: true },
   delivery_time_slot: { type: DataTypes.STRING(100), allowNull: true },
   is_returned_serving: { type: DataTypes.BOOLEAN, defaultValue: false },
+  is_missing_delivery: { type: DataTypes.BOOLEAN, defaultValue: false },
   delivered_at: { type: DataTypes.DATE, allowNull: true }
 }, { tableName: 'delivery_schedule', timestamps: false });
 

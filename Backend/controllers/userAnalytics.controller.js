@@ -1,4 +1,4 @@
-import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction, UserWaterDiscount, PackageFixedItem, PackageSeasonalPool, PackageSeasonalConfig } from "../models/index.js";
+import { User, Subscription, SubscriptionItem, Package, RetailOrder, RetailOrderItem, Product, WaterSubscription, DeliverySchedule, DeliveryItem, ScheduleSeasonalSelection, Batch, Address, WalletTransaction, UserWaterDiscount, PackageFixedItem, PackageSeasonalPool, PackageSeasonalConfig, MissedProductLog } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcryptjs";
 import { invalidateBatchDemandCache } from "./batch.controller.js";
@@ -600,6 +600,11 @@ export const getUserAnalytics = async (req, res) => {
 
         // To get accurate "Package Quantity" ever ordered by this user, we must check DeliveryItems and ScheduleSeasonalSelections
         // attached to this user's DeliverySchedules.
+        const userMissedLogs = await MissedProductLog.findAll({
+            where: { user_id: userId },
+            include: [{ model: Product, attributes: ['id', 'name', 'hindi_name', 'unit'] }]
+        });
+
         const deliverySchedules = await DeliverySchedule.findAll({
             where: {
                 [Op.or]: [
@@ -620,6 +625,12 @@ export const getUserAnalytics = async (req, res) => {
         });
 
         deliverySchedules.forEach(schedule => {
+            const matchingMissedLog = userMissedLogs.find(l => 
+                l.next_schedule_date === schedule.scheduled_date || 
+                l.source_id === schedule.id
+            );
+            const isMissingDelivery = Boolean(schedule.is_missing_delivery) || !!matchingMissedLog;
+
             if (schedule.DeliveryItems && schedule.DeliveryItems.length > 0) {
                 schedule.DeliveryItems.forEach(item => {
                     if (item.Product && parseFloat(item.qty_gm || 0) > 0) {
@@ -730,7 +741,17 @@ export const getUserAnalytics = async (req, res) => {
                         actual_delivery_date: schedule.actual_delivery_date,
                         date: schedule.scheduled_date || deliveryDate,
                         status: schedule.status,
-                        is_locked: schedule.is_locked,
+                        is_locked: isMissingDelivery ? true : schedule.is_locked,
+                        is_missing_delivery: isMissingDelivery,
+                        is_returned_serving: Boolean(schedule.is_returned_serving),
+                        delivery_type: isMissingDelivery ? 'missing_delivery' : (schedule.is_returned_serving ? 'returned_serving' : 'regular'),
+                        missed_items_details: isMissingDelivery ? (schedule.DeliveryItems || []).filter(di => parseFloat(di.qty_gm || 0) > 0).map(di => ({
+                            product_id: di.product_id,
+                            name: di.Product?.name || 'Item',
+                            hindi_name: di.Product?.hindi_name,
+                            qty_gm: parseFloat(di.qty_gm || 0),
+                            unit: di.Product?.unit || 'gm'
+                        })) : [],
                         delivery_time_slot: schedule.delivery_time_slot,
                         fixed_items: fixedList,
                         seasonal_items: seasonalList,
@@ -754,7 +775,10 @@ export const getUserAnalytics = async (req, res) => {
                         actual_delivery_date: schedule.actual_delivery_date,
                         date: schedule.scheduled_date || deliveryDate,
                         status: schedule.status,
-                        is_locked: schedule.is_locked,
+                        is_locked: isMissingDelivery ? true : schedule.is_locked,
+                        is_missing_delivery: isMissingDelivery,
+                        is_returned_serving: Boolean(schedule.is_returned_serving),
+                        delivery_type: isMissingDelivery ? 'missing_delivery' : (schedule.is_returned_serving ? 'returned_serving' : 'regular'),
                         delivery_time_slot: schedule.delivery_time_slot,
                         is_debited: !!debitedInfo,
                         debited_amount: debitedInfo ? debitedInfo.amount : null,

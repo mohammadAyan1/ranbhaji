@@ -347,6 +347,11 @@ export const getMySubscriptions = async (req, res) => {
                             model: ScheduleSeasonalSelection,
                             as: 'SeasonalSelections',
                             include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'selling_price_per_gm', 'purchase_price_per_gm', 'status', 'is_package_active'] }]
+                        },
+                        {
+                            model: DeliveryItem,
+                            as: 'DeliveryItems',
+                            include: [{ model: Product, attributes: ['id', 'name', 'unit', 'category', 'image_url'] }]
                         }
                     ]
                 }
@@ -361,6 +366,18 @@ export const getMySubscriptions = async (req, res) => {
             const obj = s.toJSON();
             if (obj.Package) {
                 delete obj.Package.margin_percent;
+            }
+            if (obj.Schedules) {
+                obj.Schedules = obj.Schedules.map(sched => {
+                    const isMissing = Boolean(sched.is_missing_delivery);
+                    return {
+                        ...sched,
+                        is_missing_delivery: isMissing,
+                        can_edit: !isMissing && !sched.is_locked && sched.status === 'pending',
+                        is_locked: isMissing ? true : sched.is_locked,
+                        delivery_type: isMissing ? 'missing_delivery' : (sched.is_returned_serving ? 'returned_serving' : 'regular')
+                    };
+                });
             }
             return obj;
         });
@@ -1197,13 +1214,19 @@ export const getUpcomingSelections = async (req, res) => {
                 }
             });
 
+            const isMissing = Boolean(s.is_missing_delivery);
+            const canEdit = !isMissing && isWindowOpen && !s.is_locked;
             return {
                 id: s.id,
                 scheduled_date: s.scheduled_date,
                 status: s.status,
                 actual_delivery_date: s.actual_delivery_date || null,
-                is_locked: s.is_locked,
-                is_window_open: isWindowOpen,
+                is_locked: isMissing ? true : s.is_locked,
+                is_window_open: isMissing ? false : isWindowOpen,
+                can_edit: canEdit,
+                is_missing_delivery: isMissing,
+                delivery_type: isMissing ? 'missing_delivery' : (s.is_returned_serving ? 'returned_serving' : 'regular'),
+                lock_reason: isMissing ? "This delivery is for previously missed items and cannot be modified." : (!isWindowOpen ? "Selection window closed" : null),
                 cutoff_time: cutoffTime,
                 selections: finalSelections
             };
@@ -1270,6 +1293,11 @@ export const saveScheduleSeasonal = async (req, res) => {
         if (!schedule) {
             await t.rollback();
             return res.status(404).json({ success: false, message: "Schedule not found or doesn't belong to this subscription" });
+        }
+
+        if (schedule.is_missing_delivery) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: "Missing item delivery schedule cannot be modified." });
         }
 
         if (schedule.status !== 'pending' || schedule.is_locked) {

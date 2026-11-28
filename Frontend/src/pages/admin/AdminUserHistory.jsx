@@ -308,6 +308,10 @@ export default function AdminUserHistory() {
   };
 
   const openRescheduleModal = (pkg, serving, sIdx) => {
+    if (serving?.is_missing_delivery) {
+      alert("Missing order deliveries cannot be rescheduled directly.");
+      return;
+    }
     setRescheduleModal({
       isOpen: true,
       serving,
@@ -407,6 +411,10 @@ export default function AdminUserHistory() {
   };
 
   const openEditServingModal = (pkg, serving) => {
+    if (serving?.is_missing_delivery) {
+      alert("Missing item delivery cannot be edited.");
+      return;
+    }
     setEditingPackage(pkg);
     setEditingServing(serving);
     setServingItemsError("");
@@ -1992,13 +2000,22 @@ export default function AdminUserHistory() {
                                 return (
                                   <div
                                     key={serving.id || sIdx}
-                                    className="p-3 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-white hover:border-gray-300 transition-all space-y-2"
+                                    className={`p-3 rounded-xl border transition-all space-y-2 ${
+                                      serving.is_missing_delivery
+                                        ? 'border-amber-300 bg-amber-50/50 hover:bg-amber-50/70 shadow-2xs'
+                                        : 'border-gray-200 bg-gray-50/70 hover:bg-white hover:border-gray-300'
+                                    }`}
                                   >
                                     <div className="flex items-center justify-between flex-wrap gap-2">
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-xs font-bold text-gray-800 bg-gray-200/80 px-2 py-0.5 rounded">
                                           Serving #{sIdx + 1}
                                         </span>
+                                        {serving.is_missing_delivery && (
+                                          <span className="text-xs font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                                            <span>⚠️</span> Missing Order Delivery
+                                          </span>
+                                        )}
                                         <span className="text-xs font-medium text-gray-700">
                                           📅 {formattedDate}
                                         </span>
@@ -2007,17 +2024,27 @@ export default function AdminUserHistory() {
                                             🕒 {serving.delivery_time_slot}
                                           </span>
                                         )}
-                                        <button
-                                          type="button"
-                                          onClick={() => openRescheduleModal(pkg, serving, sIdx)}
-                                          className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
-                                          title="Reschedule this serving and subsequent deliveries"
-                                        >
-                                          <span>📅</span> Reschedule
-                                        </button>
+                                        {serving.is_missing_delivery ? (
+                                          <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1" title="Missing items auto carried-over delivery">
+                                            <span>📦</span> Auto Carried-Over
+                                          </span>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => openRescheduleModal(pkg, serving, sIdx)}
+                                            className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                                            title="Reschedule this serving and subsequent deliveries"
+                                          >
+                                            <span>📅</span> Reschedule
+                                          </button>
+                                        )}
 
                                         {/* Wallet Deduct button */}
-                                        {serving.is_debited ? (
+                                        {serving.is_missing_delivery ? (
+                                          <span className="text-[11px] font-bold text-amber-800 bg-amber-100/60 border border-amber-200 px-2.5 py-0.5 rounded-md flex items-center gap-1" title="Already accounted for in original delivery; no separate deduction.">
+                                            <span>🆓</span> Pre-paid (Missed Item)
+                                          </span>
+                                        ) : serving.is_debited ? (
                                           <button
                                             type="button"
                                             disabled={deductingServingId === serving.id}
@@ -2061,48 +2088,89 @@ export default function AdminUserHistory() {
                                         </select>
 
                                         {/* Edit Sabji button */}
-                                        <button
-                                          type="button"
-                                          onClick={() => openEditServingModal(pkg, serving)}
-                                          className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 border-fresh-300 text-fresh-700 bg-fresh-50 hover:bg-fresh-100 cursor-pointer"
-                                        >
-                                          <span>🥦</span> Edit Sabji
-                                        </button>
+                                        {serving.is_missing_delivery ? (
+                                          <span
+                                            className="text-[11px] py-1 px-2.5 rounded-lg border border-amber-300 text-amber-800 bg-amber-100/80 font-bold flex items-center gap-1 cursor-not-allowed shadow-2xs"
+                                            title="Missing order deliveries cannot be edited or modified"
+                                          >
+                                            <span>🔒</span> Missed Items Fixed
+                                          </span>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => openEditServingModal(pkg, serving)}
+                                            className="btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 border-fresh-300 text-fresh-700 bg-fresh-50 hover:bg-fresh-100 cursor-pointer"
+                                          >
+                                            <span>🥦</span> Edit Sabji
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
 
                                     {/* Products in this serving */}
                                     <div className="pt-1.5 border-t border-gray-200/60">
                                       <div className="flex flex-wrap gap-1.5 items-center">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Products:</span>
-                                        {/* Fixed items */}
-                                        {serving.fixed_items && serving.fixed_items.length > 0 ? (
-                                          serving.fixed_items.map((fi, fIdx) => {
-                                            const isZero = parseFloat(fi.qty_gm || 0) === 0;
-                                            return (
-                                              <span
-                                                key={`fi_${fIdx}`}
-                                                className={`border text-[10px] px-2 py-0.5 rounded-md font-medium ${isZero ? 'bg-gray-100 border-gray-200 text-gray-400 line-through' : 'bg-white border-gray-200 text-gray-700'}`}
-                                                title={isZero ? 'Quantity set to 0g by user/admin' : ''}
-                                              >
-                                                {fi.name} <strong className={isZero ? 'text-gray-400' : 'text-gray-900'}>{isZero ? '0g' : (fi.qty_gm >= 1000 ? `${(fi.qty_gm / 1000).toFixed(2)}kg` : `${fi.qty_gm}${fi.unit || 'g'}`)}</strong>
-                                              </span>
-                                            );
-                                          })
-                                        ) : null}
-
-                                        {/* Seasonal items */}
-                                        {serving.seasonal_items && serving.seasonal_items.length > 0 ? (
-                                          serving.seasonal_items.map((si, sIdx2) => (
-                                            <span
-                                              key={`si_${sIdx2}`}
-                                              className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] px-2 py-0.5 rounded-md font-medium flex items-center gap-1"
-                                            >
-                                              <span className="text-emerald-500">🌿</span> {si.name} <strong className="text-emerald-900">{si.qty_gm >= 1000 ? `${(si.qty_gm / 1000).toFixed(2)}kg` : `${si.qty_gm}${si.unit || 'g'}`}</strong>
+                                        {serving.is_missing_delivery ? (
+                                          <>
+                                            <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider mr-1 flex items-center gap-1">
+                                              <span>📦</span> Missed Items To Deliver:
                                             </span>
-                                          ))
+                                            {(() => {
+                                              const activeFixed = (serving.fixed_items || []).filter(fi => parseFloat(fi.qty_gm || 0) > 0);
+                                              const activeSeasonal = (serving.seasonal_items || []).filter(si => parseFloat(si.qty_gm || 0) > 0);
+                                              const allActive = [...activeFixed, ...activeSeasonal];
+
+                                              if (allActive.length === 0) {
+                                                return (
+                                                  <span className="text-[10px] text-amber-700 font-medium italic">
+                                                    No items pending in this missing delivery
+                                                  </span>
+                                                );
+                                              }
+
+                                              return allActive.map((item, idx) => (
+                                                <span
+                                                  key={`missed_${idx}`}
+                                                  className="bg-amber-100 border border-amber-300 text-amber-950 text-[11px] px-2.5 py-0.5 rounded-md font-bold flex items-center gap-1.5 shadow-2xs"
+                                                >
+                                                  <span className="text-amber-600">✨</span> {item.name} <strong className="text-amber-950">{item.qty_gm >= 1000 ? `${(item.qty_gm / 1000).toFixed(2)}kg` : `${item.qty_gm}${item.unit || 'g'}`}</strong>
+                                                </span>
+                                              ));
+                                            })()}
+                                          </>
                                         ) : (
-                                          <span className="text-[10px] text-gray-400 italic">No seasonal items selected yet</span>
+                                          <>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Products:</span>
+                                            {/* Fixed items */}
+                                            {serving.fixed_items && serving.fixed_items.length > 0 ? (
+                                              serving.fixed_items.map((fi, fIdx) => {
+                                                const isZero = parseFloat(fi.qty_gm || 0) === 0;
+                                                return (
+                                                  <span
+                                                    key={`fi_${fIdx}`}
+                                                    className={`border text-[10px] px-2 py-0.5 rounded-md font-medium ${isZero ? 'bg-gray-100 border-gray-200 text-gray-400 line-through' : 'bg-white border-gray-200 text-gray-700'}`}
+                                                    title={isZero ? 'Quantity set to 0g by user/admin' : ''}
+                                                  >
+                                                    {fi.name} <strong className={isZero ? 'text-gray-400' : 'text-gray-900'}>{isZero ? '0g' : (fi.qty_gm >= 1000 ? `${(fi.qty_gm / 1000).toFixed(2)}kg` : `${fi.qty_gm}${fi.unit || 'g'}`)}</strong>
+                                                  </span>
+                                                );
+                                              })
+                                            ) : null}
+
+                                            {/* Seasonal items */}
+                                            {serving.seasonal_items && serving.seasonal_items.length > 0 ? (
+                                              serving.seasonal_items.map((si, sIdx2) => (
+                                                <span
+                                                  key={`si_${sIdx2}`}
+                                                  className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] px-2 py-0.5 rounded-md font-medium flex items-center gap-1"
+                                                >
+                                                  <span className="text-emerald-500">🌿</span> {si.name} <strong className="text-emerald-900">{si.qty_gm >= 1000 ? `${(si.qty_gm / 1000).toFixed(2)}kg` : `${si.qty_gm}${si.unit || 'g'}`}</strong>
+                                                </span>
+                                              ))
+                                            ) : (
+                                              <span className="text-[10px] text-gray-400 italic">No seasonal items selected yet</span>
+                                            )}
+                                          </>
                                         )}
                                       </div>
                                     </div>
